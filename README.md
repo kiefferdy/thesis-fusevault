@@ -6,9 +6,9 @@ Instructions to run:
 - Create a virtual environment with `python -m venv .venv`
 - Activate the virtual environment by running `.venv/Scripts/activate`
 - Install dependencies with `pip install -r requirements.txt`
-- Create a `.env` file in the root project folder, then add the `MONGODB_URI` variable.
+- Create a `.env` file in the root project folder, then add the `MONGODB_URI` variable
 - Run the FastAPI server with `uvicorn app.main:app --reload`
-- The server is hosted on `http://127.0.0.1:8000/` by default
+- Access the server on `http://127.0.0.1:8000/` (default setting)
 - Once finished, run `deactivate` to exit the virtual environment
 
 To add dependencies:
