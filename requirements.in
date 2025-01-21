@@ -1,6 +1,10 @@
+# FastAPI dependencies
+fastapi
+uvicorn[standard]
+
+# MongoDB driver
+motor
+
+# Dependency management
 pip-tools
-Flask
-pymongo 
-Flask-PyMongo 
-Flask-WTF
-pymongo[srv]
+python-dotenv
