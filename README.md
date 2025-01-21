@@ -11,6 +11,9 @@ Instructions to run:
 - Access the server on `http://127.0.0.1:8000/` (default setting)
 - Once finished, run `deactivate` to exit the virtual environment
 
+To view API documentation and execute operation methods:
+- Access the server on default url:`http://127.0.0.1:8000/docs` 
+
 To add dependencies:
 - Add the new dependency in a new line to `requirements.in`
 - Run `pip-compile requirements.in` (ensure you are in the virtual environment)
