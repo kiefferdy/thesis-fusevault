@@ -1,3 +1,6 @@
 pip-tools
 Flask
-pymongo
+pymongo 
+Flask-PyMongo 
+Flask-WTF
+pymongo[srv]
