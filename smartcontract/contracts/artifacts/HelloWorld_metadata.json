@@ -1,0 +1,59 @@
+{
+	"compiler": {
+		"version": "0.8.26+commit.8a97fa7a"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [],
+				"name": "sayHello",
+				"outputs": [
+					{
+						"internalType": "string",
+						"name": "",
+						"type": "string"
+					}
+				],
+				"stateMutability": "pure",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/1_Storage.sol": "HelloWorld"
+		},
+		"evmVersion": "cancun",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"contracts/1_Storage.sol": {
+			"keccak256": "0xadfc4e9a1683cc2c2c318e6c29daf06ddf3e080c5581591cd019cf23cab1312e",
+			"license": "Apache-2.0",
+			"urls": [
+				"bzz-raw://4cb7175721ef94cfe8b285827474662653b3624ec36f86730c620d0aae2999dc",
+				"dweb:/ipfs/QmNvcesDzRmJFQcTMn56oNgZTVJ4Ns58DcptwT6trFHyg7"
+			]
+		}
+	},
+	"version": 1
+}

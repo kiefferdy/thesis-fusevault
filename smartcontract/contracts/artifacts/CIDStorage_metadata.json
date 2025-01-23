@@ -1,0 +1,166 @@
+{
+	"compiler": {
+		"version": "0.8.26+commit.8a97fa7a"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "address",
+						"name": "user",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "bytes32",
+						"name": "digestHash",
+						"type": "bytes32"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "timestamp",
+						"type": "uint256"
+					}
+				],
+				"name": "CIDStored",
+				"type": "event"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "user",
+						"type": "address"
+					}
+				],
+				"name": "fetchCIDsDigestByAddress",
+				"outputs": [
+					{
+						"internalType": "bytes32[]",
+						"name": "digestHashes",
+						"type": "bytes32[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "fetchMyCIDsDigest",
+				"outputs": [
+					{
+						"internalType": "bytes32[]",
+						"name": "digestHashes",
+						"type": "bytes32[]"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "user",
+						"type": "address"
+					}
+				],
+				"name": "getCIDDigestCountByAddress",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "count",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "string",
+						"name": "cid",
+						"type": "string"
+					}
+				],
+				"name": "storeCIDDigest",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {
+				"fetchCIDsDigestByAddress(address)": {
+					"details": "Fetch all CID digest hashes associated with a specific address",
+					"params": {
+						"user": "The address to query"
+					},
+					"returns": {
+						"digestHashes": "Array of CID digest hashes linked to the address"
+					}
+				},
+				"fetchMyCIDsDigest()": {
+					"details": "Fetch all CID digest hashes associated with the caller's address",
+					"returns": {
+						"digestHashes": "Array of CID digest hashes linked to the caller's address"
+					}
+				},
+				"getCIDDigestCountByAddress(address)": {
+					"details": "Get the total number of CID digest hashes associated with an address",
+					"params": {
+						"user": "The address to query"
+					},
+					"returns": {
+						"count": "The number of CID digest hashes"
+					}
+				},
+				"storeCIDDigest(string)": {
+					"details": "Store a CID digest hash associated with the caller's address",
+					"params": {
+						"cid": "The Content Identifier (CID) to hash and store"
+					}
+				}
+			},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/storeCid.sol": "CIDStorage"
+		},
+		"evmVersion": "cancun",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"contracts/storeCid.sol": {
+			"keccak256": "0x7bcb0ccac2d7ca7934471d5eefef6c65f891a364891630da66150942ff242c66",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://2b426aaa018999d0c40c84fc6568c9c4364f83f533a074287118ce0197e69574",
+				"dweb:/ipfs/QmUu16zy9jspoRAt6NzVsebLrfvjfL25EEoFFZNjRAwWkN"
+			]
+		}
+	},
+	"version": 1
+}
