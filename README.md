@@ -3,8 +3,8 @@
 Instructions to run for Windows:
 
 - Make sure Python is installed on your computer
-- Create a virtual environment with `python -m venv .venv`
-- Activate the virtual environment by running `.venv/Scripts/activate`
+- Create a virtual environment with `python -m venv venv`
+- Activate the virtual environment by running `venv/Scripts/activate`
 - Install dependencies with `pip install -r requirements.txt`
 - Create a `.env` file in the root project folder, then add the `MONGODB_URI` variable
 - Run the FastAPI server with `uvicorn app.main:app --reload`
@@ -14,8 +14,8 @@ Instructions to run for Windows:
 Instructions to run for macOS:
 
 - Make sure Python is installed on your computer
-- Create a virtual environment with `python3 -m venv .venv`
-- Activate the virtual environment by running `.venv/bin/activate`
+- Create a virtual environment with `python3 -m venv venv`
+- Activate the virtual environment by running `source venv/bin/activate`
 - Install dependencies with `pip install -r requirements.txt`
 - Create a `.env` file in the root project folder, then add the `MONGODB_URI` variable
 - Install SSL certificates on your system using `/Applications/Python\ 3.x/Install\ Certificates.command` (replace 3.x with your Python version)
