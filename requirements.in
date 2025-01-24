@@ -8,3 +8,6 @@ motor
 # Dependency management
 pip-tools
 python-dotenv
+
+# Ethereum blockchain interaction
+web3
