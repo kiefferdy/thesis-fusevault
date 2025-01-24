@@ -3,8 +3,15 @@ from contextlib import asynccontextmanager
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.routes.routes import router as main_router
 from app import MONGO_URI
+from web3 import Web3
+from fastapi import FastAPI
+from app.routes.contract_routes import router as contract_router
 
-@asynccontextmanager
+# Initialize the FastAPI app
+app = FastAPI()
+
+# Include the contract router
+app.include_router(contract_router)
 async def lifespan(app: FastAPI):
     # Create and store the MongoDB client in app.state
     app.state.client = AsyncIOMotorClient(MONGO_URI)
