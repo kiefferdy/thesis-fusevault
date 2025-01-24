@@ -1,12 +1,24 @@
 # FuseVault API
 
-Instructions to run:
+Instructions to run for Windows:
 
 - Make sure Python is installed on your computer
 - Create a virtual environment with `python -m venv .venv`
 - Activate the virtual environment by running `.venv/Scripts/activate`
 - Install dependencies with `pip install -r requirements.txt`
 - Create a `.env` file in the root project folder, then add the `MONGODB_URI` variable
+- Run the FastAPI server with `uvicorn app.main:app --reload`
+- Access the server on `http://127.0.0.1:8000/` (default setting)
+- Once finished, run `deactivate` to exit the virtual environment
+
+Instructions to run for macOS:
+
+- Make sure Python is installed on your computer
+- Create a virtual environment with `python3 -m venv .venv`
+- Activate the virtual environment by running `.venv/bin/activate`
+- Install dependencies with `pip install -r requirements.txt`
+- Create a `.env` file in the root project folder, then add the `MONGODB_URI` variable
+- Install SSL certificates on your system using `/Applications/Python\ 3.x/Install\ Certificates.command` (replace 3.x with your Python version)
 - Run the FastAPI server with `uvicorn app.main:app --reload`
 - Access the server on `http://127.0.0.1:8000/` (default setting)
 - Once finished, run `deactivate` to exit the virtual environment
