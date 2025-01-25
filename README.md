@@ -9,7 +9,7 @@ Instructions to run for Windows:
 - Activate the virtual environment by running `venv/Scripts/activate`
 - Install dependencies with `pip install -r requirements.txt`
 - Create a `.env` file in the root project folder, then add the `MONGODB_URI` variable
-- Run the FastAPI server with `uvicorn main:app --reload`
+- Run the FastAPI server with `uvicorn app.main:app --reload`
 - Access the server on `http://127.0.0.1:8000/` (default setting)
 - Once finished, run `deactivate` to exit the virtual environment
 
@@ -21,7 +21,7 @@ Instructions to run for macOS:
 - Install dependencies with `pip install -r requirements.txt`
 - Create a `.env` file in the root project folder, then add the `MONGODB_URI` variable
 - Install SSL certificates on your system using `/Applications/Python\ 3.x/Install\ Certificates.command` (replace 3.x with your Python version)
-- Run the FastAPI server with `uvicorn main:app --reload`
+- Run the FastAPI server with `uvicorn app.main:app --reload`
 - Access the server on `http://127.0.0.1:8000/` (default setting)
 - Once finished, run `deactivate` to exit the virtual environment
 
@@ -44,7 +44,7 @@ PRIVATE_KEY=d3e25b3f050f2c669e47c23bbfed8a141c532ed0fd1ca5f13b055e716414a997
 INFURA_URL=https://sepolia.infura.io/v3/d08109f8a361490d8222169780f7aaa1
 CONTRACT_ADDRESS=0x369ca86929735eb467c6abcf51b98542b4671b62
 ```
-- Start the server `uvicorn main:app --reload`
+- Start the server `uvicorn app.main:app --reload`
   
 # Smart Contract Developers
 - Deploying the Smart Contract Yourself
@@ -72,4 +72,4 @@ CONTRACT_ADDRESS=[INSERT CONTRACT ADDRESS]
 6. Open CIDstorage.sol and save it then deploy.
 - Retrieve the Contract Address (After deployment, expand the deployed contract in the Remix IDE.)
 7. Copy the contract address and paste it into your .env file
-- Start the server `uvicorn main:app --reload`
+- Start the server `uvicorn app.main:app --reload`
