@@ -55,6 +55,7 @@ Follow these steps to deploy the smart contract:
    - Export your private key:
    - Go to your wallet settings → Security & Privacy → Export Private Key.
    - Copy your private key.
+     
 4. Set Up the .env File:
 ```
 MONGO_URI=mongodb+srv://admin:admin@fusevault.4viqu.mongodb.net/?retryWrites=true&w=majority&appName=Fusevault
@@ -63,11 +64,12 @@ PRIVATE_KEY=[PASTE YOUR PRIVATE KEY]
 INFURA_URL=https://sepolia.infura.io/v3/d08109f8a361490d8222169780f7aaa1
 CONTRACT_ADDRESS=[INSERT CONTRACT ADDRESS]
 ```
+
 5. Open Remix IDE
 - In the Deploy & Run Transactions panel:
   - Choose Injected Provider - MetaMask as your environment.
   - Ensure your MetaMask wallet is connected.
-- Open CIDstorage.sol and save it then deploy.
+6. Open CIDstorage.sol and save it then deploy.
 - Retrieve the Contract Address (After deployment, expand the deployed contract in the Remix IDE.)
-- Copy the contract address and paste it into your .env file
+7. Copy the contract address and paste it into your .env file
 - Start the server `uvicorn main:app --reload`
