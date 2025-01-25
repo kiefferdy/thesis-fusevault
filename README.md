@@ -35,8 +35,7 @@ To add dependencies:
 
 
 # Using the Pre-Deployed Contract
-- If you do not want to deploy your own instance of the contract, you can use the pre-deployed contract instance.
-- IF YOU NEED TO DEPLOY YOUR OWN INSTANCE OF THE CONTRACT SCROLL TO THE NEXT SECTION.
+(IF YOU NEED TO DEPLOY YOUR OWN INSTANCE OF THE CONTRACT SCROLL TO THE NEXT SECTION.)
 - Update your .env file with the following details:
 ```
 MONGO_URI=mongodb+srv://admin:admin@fusevault.4viqu.mongodb.net/?retryWrites=true&w=majority&appName=Fusevault
