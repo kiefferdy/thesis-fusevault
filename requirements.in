@@ -1,0 +1,13 @@
+# FastAPI dependencies
+fastapi
+uvicorn[standard]
+
+# Ethereum blockchain interaction
+web3
+
+# MongoDB driver
+pymongo
+
+# Dependency management
+pip-tools
+python-dotenv
