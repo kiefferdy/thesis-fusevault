@@ -1,5 +1,7 @@
 # FuseVault API
 
+**Note**: This repository is no longer being used in favor of the [new one](https://github.com/hubzhooba/thesis-fusevault-sc).
+
 Instructions to run for Windows:
 
 - Make sure Python is installed on your computer
