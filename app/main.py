@@ -106,7 +106,14 @@ async def fetch_cids(user_address: str):
         # Convert user_address to checksum format
         user_address = Web3.to_checksum_address(user_address)
         cids = contract.functions.fetchCIDsDigestByAddress(user_address).call()
-        return {"user_address": user_address, "cids": cids}
+        formatted_cids = []
+        for cid in cids:
+            if isinstance(cid, bytes):
+                formatted_cids.append(cid.hex())  # Convert bytes to hexadecimal string
+            else:
+                formatted_cids.append(cid)  # Leave as is if not bytes
+
+        return {"user_address": user_address, "cids": formatted_cids}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
