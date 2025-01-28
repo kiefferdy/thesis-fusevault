@@ -100,7 +100,7 @@ pydantic==2.10.6
     #   web3
 pydantic-core==2.27.2
     # via pydantic
-pymongo==3.11.0
+pymongo>=4.5.0,<5.0.0
     # via -r requirements.in
 python-dotenv==1.0.1
     # via -r requirements.in
@@ -142,3 +142,4 @@ websockets==13.1
     # via web3
 yarl==1.18.3
     # via aiohttp
+motor>=3.3.2,<4.0.0

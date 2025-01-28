@@ -1,6 +1,8 @@
 import sys
 import os
 import asyncio
+from bson import ObjectId
+from motor.motor_asyncio import AsyncIOMotorClient
 
 # Add the parent directory to Python path to allow imports from app folder
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -10,8 +12,11 @@ from app.mongodb_client import MongoDBClient
 async def cleanup_test_data(db):
     """Delete test data before running the tests"""
     try:
-        await db.domain_collection.delete_one({"assetId": "test_asset_001"})
-        print("Cleanup: Deleted test document")
+        result = await db.domain_collection.delete_one({"assetId": "test_asset_001"})
+        if result.deleted_count:
+            print("Cleanup: Deleted test document")
+        else:
+            print("Cleanup: No test document found to delete")
     except Exception as e:
         print(f"Cleanup: Error deleting test document: {str(e)}")
 
@@ -19,9 +24,9 @@ async def test_mongodb_operations():
     """Test all major MongoDB operations"""
     
     # Initialize MongoDB client
-    db = MongoDBClient()
-    
     try:
+        db = MongoDBClient()
+        
         print("\n=== Starting MongoDB Tests ===\n")
         
         await cleanup_test_data(db)
@@ -91,9 +96,9 @@ async def test_mongodb_operations():
     except Exception as e:
         print(f"\n❌ Error during testing: {str(e)}")
     finally:
-        db.close_connection()
-        print("MongoDB connection closed")
+        if 'db' in locals():
+            await db.close_connection()
+            print("MongoDB connection closed")
 
 if __name__ == "__main__":
-    # Run the tests
     asyncio.run(test_mongodb_operations())
