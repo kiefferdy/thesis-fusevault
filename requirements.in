@@ -1,5 +1,0 @@
-uvicorn
-web3
-fastapi
-python-dotenv
-pymongo==3.11.0
