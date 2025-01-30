@@ -1,4 +1,4 @@
-import { uploadFile } from './index.js';
+import { uploadFile } from './backend.js';
 
 (async () => {
     try {

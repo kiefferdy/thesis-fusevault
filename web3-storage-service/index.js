@@ -1,61 +1,45 @@
-import dotenv from 'dotenv';
-import { create } from '@web3-storage/w3up-client';
-import { filesFromPaths } from 'files-from-path';
-import fetch from 'node-fetch';
+import express from 'express';
+import multer from 'multer';
+import { uploadFile, getFileUrl, displayFileContents } from './backend.js';
 
-async function initializeClient() {
-    dotenv.config({ path: '../.env' });
-    const DID_KEY = process.env.WEB3_STORAGE_DID_KEY;
-    const EMAIL = process.env.WEB3_STORAGE_EMAIL;
-    if (!DID_KEY) {
-        throw new Error('WEB3_STORAGE_DID_KEY is not defined in the environment variables.');
-    }
-    if (!EMAIL) {
-        throw new Error('WEB3_STORAGE_EMAIL is not defined in the environment variables.');
-    }
+const app = express();
+const PORT = 5000;
+const upload = multer({ dest: 'upload_queue/' });
 
-    const client = await create();
-    await client.login(EMAIL);
-    await client.setCurrentSpace(DID_KEY);
-
-    console.log('Space successfully set!');
-    return client;
-}
-
-async function uploadFile(filePath) {
+// Upload file endpoint
+app.post('/upload', upload.single('file'), async (req, res) => {
     try {
-        const client = await initializeClient();
-        const files = await filesFromPaths([filePath]);
-        const fileCid = await client.uploadFile(files[0]);
-        console.log(`File uploaded successfully. CID: ${fileCid}`);
-        console.log(`Access your file at: https://${fileCid}.ipfs.w3s.link`);
-        return fileCid;
-    } catch (error) {
-        console.error('Error uploading file:', error);
-    }
-}
-
-async function getFileUrl(cid) {
-    try {
-        return `https://${cid}.ipfs.w3s.link`;
-    } catch (error) {
-        console.error('Error retrieving file URL:', error);
-    }
-}
-
-async function displayFileContents(cid) {
-    try {
-        const fileUrl = await getFileUrl(cid);
-        const response = await fetch(fileUrl);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch file: ${response.statusText}`);
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
         }
-        const fileContents = await response.text();
-        console.log(`Contents of the file:
-${fileContents}`);
+        const result = await uploadFile(req.file.path);
+        res.json(result);
     } catch (error) {
-        console.error('Error displaying file contents:', error);
+        res.status(500).json({ error: error.message });
     }
-}
+});
 
-export { uploadFile, getFileUrl, displayFileContents };
+// Get file URL endpoint
+app.get('/file/:cid', async (req, res) => {
+    try {
+        const url = await getFileUrl(req.params.cid);
+        res.json({ url });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Fetch file contents
+app.get('/file/:cid/contents', async (req, res) => {
+    try {
+        const contents = await displayFileContents(req.params.cid);
+        res.send(contents);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Start Express server
+app.listen(PORT, () => {
+    console.log(`API server running on http://localhost:${PORT}`);
+});
