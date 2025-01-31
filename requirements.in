@@ -11,3 +11,8 @@ pymongo
 # Dependency management
 pip-tools
 python-dotenv
+
+# API Testing
+httpx
+pytest
+pytest-asyncio
