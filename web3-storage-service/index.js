@@ -3,7 +3,7 @@ import multer from 'multer';
 import { uploadFile, getFileUrl, displayFileContents } from './backend.js';
 
 const app = express();
-const PORT = 5000;
+const PORT = 8080;
 const upload = multer({ dest: 'upload_queue/' });
 
 // Upload file endpoint
