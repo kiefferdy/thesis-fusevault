@@ -1,0 +1,22 @@
+{
+    "asset_id": "DOC001",
+    "user_wallet_address": "0x00823FB00C2cDf1841d52bC91affB661Df39466F",
+    "smart_contract_tx_id": "0x369ca86929735eb467c6abcf51b98542b4671b62",
+    "ipfs_hash": "QmX4zdJ6TbhvGVYkhgMN7Wcy1TgMZ9rJvXyep6J4vwPHv1",
+    "critical_metadata": {
+        "title": "Personal Tax Return 2024",
+        "document_type": "tax_return",
+        "category": "financial",
+        "creation_date": "2024-01-31",
+        "document_id": "TAX-2024-001"
+    },
+    "non_critical_metadata": {
+        "description": "Annual tax return document for fiscal year 2024",
+        "tags": ["tax", "finance", "2024", "personal"],
+        "file_size": "2.4MB",
+        "file_type": "pdf",
+        "department": "Personal Finance",
+        "status": "final",
+        "retention_period": "7 years"
+    }
+}

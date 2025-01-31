@@ -1,0 +1,30 @@
+{
+    "asset_id": "DOC003",
+    "user_wallet_address": "0x00823FB00C2cDf1841d52bC91affB661Df39466F",
+    "smart_contract_tx_id": "0x369ca86929735eb467c6abcf51b98542b4671b62",
+    "ipfs_hash": "QmZ7zdJ6TbhvGVYkhgMN7Wcy1TgMZ9rJvXyep6J4vwPHv3",
+    "critical_metadata": {
+        "title": "Property Deed - 123 Blockchain Street",
+        "document_type": "property_deed",
+        "category": "real_estate",
+        "creation_date": "2024-01-25",
+        "document_id": "DEED-2024-001",
+        "property_id": "PROP-123-456"
+    },
+    "non_critical_metadata": {
+        "description": "Property deed for residential property at 123 Blockchain Street",
+        "tags": ["real estate", "property", "deed", "legal"],
+        "file_size": "1.8MB",
+        "file_type": "pdf",
+        "department": "Real Estate",
+        "status": "registered",
+        "retention_period": "permanent",
+        "last_updated": "2024-01-25",
+        "property_details": {
+            "address": "123 Blockchain Street",
+            "city": "Crypto City",
+            "state": "DC",
+            "zip": "12345"
+        }
+    }
+}

@@ -1,0 +1,24 @@
+{
+    "asset_id": "DOC002",
+    "user_wallet_address": "0x00823FB00C2cDf1841d52bC91affB661Df39466F",
+    "smart_contract_tx_id": "0x369ca86929735eb467c6abcf51b98542b4671b62",
+    "ipfs_hash": "QmY7zdJ6TbhvGVYkhgMN7Wcy1TgMZ9rJvXyep6J4vwPHv2",
+    "critical_metadata": {
+        "title": "Medical Examination Report",
+        "document_type": "medical_record",
+        "category": "healthcare",
+        "creation_date": "2024-01-15",
+        "document_id": "MED-2024-001",
+        "provider": "City General Hospital"
+    },
+    "non_critical_metadata": {
+        "description": "Annual physical examination results and recommendations",
+        "tags": ["medical", "health", "examination", "confidential"],
+        "file_size": "3.1MB",
+        "file_type": "pdf",
+        "department": "Healthcare Records",
+        "status": "verified",
+        "retention_period": "10 years",
+        "last_reviewed": "2024-01-20"
+    }
+}
