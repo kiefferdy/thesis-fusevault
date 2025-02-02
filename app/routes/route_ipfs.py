@@ -1,30 +1,42 @@
+from typing import List
 from fastapi import APIRouter, File, UploadFile, HTTPException
 import httpx
 
 router = APIRouter(prefix="/ipfs", tags=["ipfs"])
 
-# Base URL of Node.js web3-storage service
 WEB3_STORAGE_SERVICE_URL = "http://localhost:8080"
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_files(files: List[UploadFile] = File(...)):
     """
-    Receives a file upload from the client, forwards it to the web3-storage service,
-    and returns the resulting CID.
+    Receive multiple file uploads from the client, forward them to the Node web3-storage service,
+    and return the resulting CIDs.
     """
     try:
-        file_content = await file.read()
-        # Prepare the files payload for the POST request to Node.js
-        files = {"file": (file.filename, file_content, file.content_type)}
-        async with httpx.AsyncClient() as client:
-            response = await client.post(f"{WEB3_STORAGE_SERVICE_URL}/upload", files=files)
+        # Prepare multipart form data for multiple files
+        # Each file is a tuple: (form_field_name, (filename, file_bytes, content_type))
+        # The form_field_name must match what Node expects ("files" if using upload.array('files')).
+        multipart_data = []
+        for f in files:
+            file_content = await f.read()
+            multipart_data.append(
+                ("files", (f.filename, file_content, f.content_type))
+            )
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{WEB3_STORAGE_SERVICE_URL}/upload",
+                files=multipart_data
+            )
             response.raise_for_status()
+
+        return response.json()  # e.g. { "cids": [ {"filename": "...", "cid": "..."} ] }
+
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=exc.response.status_code if exc.response else 500,
-            detail=f"Error uploading file: {str(exc)}"
+            detail=f"Error uploading file(s): {str(exc)}"
         )
-    return response.json()
 
 @router.get("/file/{cid}")
 async def get_file_url(cid: str):
@@ -36,12 +48,12 @@ async def get_file_url(cid: str):
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{WEB3_STORAGE_SERVICE_URL}/file/{cid}")
             response.raise_for_status()
+        return response.json()
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=exc.response.status_code if exc.response else 500,
             detail=f"Error retrieving file URL: {str(exc)}"
         )
-    return response.json()
 
 @router.get("/file/{cid}/contents")
 async def get_file_contents(cid: str):
@@ -52,9 +64,9 @@ async def get_file_contents(cid: str):
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{WEB3_STORAGE_SERVICE_URL}/file/{cid}/contents")
             response.raise_for_status()
+        return response.text
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=exc.response.status_code if exc.response else 500,
             detail=f"Error retrieving file contents: {str(exc)}"
         )
-    return response.text
