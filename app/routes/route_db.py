@@ -1,6 +1,13 @@
+import logging
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any, Optional
 from app.mongodb_client import MongoDBClient
+
+# Set pymongo's logging level to WARNING to reduce verbosity
+logging.getLogger('pymongo').setLevel(logging.WARNING)
+
+# Set FastAPI logging level to WARNING
+logging.basicConfig(level=logging.WARNING)
 
 router = APIRouter(prefix="/db", tags=["mongodb"])
 
