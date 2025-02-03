@@ -51,6 +51,16 @@ CONTRACT_ABI = [
         "stateMutability": "view",
         "type": "function",
     },
+    {
+        "anonymous": False,
+        "inputs": [
+            {"indexed": True, "internalType": "address", "name": "user", "type": "address"},
+            {"indexed": False, "internalType": "bytes32", "name": "digestHash", "type": "bytes32"},
+            {"indexed": False, "internalType": "uint256", "name": "timestamp", "type": "uint256"},
+        ],
+        "name": "CIDStored",
+        "type": "event",
+    },
 ]
 
 # Initialize contract
@@ -123,3 +133,46 @@ async def fetch_my_cids():
         return {"cids": cids}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/fetch_cid_by_tx_hash/")
+async def fetch_cid_by_tx_hash(tx_hash: str):
+    try:
+        # Fetch the transaction receipt using the transaction hash
+        receipt = web3.eth.get_transaction_receipt(tx_hash)
+
+        if not receipt:
+            raise HTTPException(status_code=404, detail="Transaction receipt not found")
+
+        # Loop through the logs to find the CIDStored event
+        for log in receipt['logs']:
+            if log['address'].lower() == CONTRACT_ADDRESS.lower():
+                try:
+                    # Manually decode the event log data (data field contains the encoded data)
+                    data = log['data'].hex()  # Convert HexBytes to hex string
+                    topics = log['topics']
+
+                    # Decode the address (indexed)
+                    user_address = '0x' + topics[1].hex()[26:]  # Remove leading zeros and prepend '0x'
+
+                    # Decode the CID (non-indexed)
+                    cid = bytes.fromhex(data[2:66])  # Convert hex string to bytes, skipping the '0x' prefix
+
+                    # Decode the timestamp (non-indexed)
+                    timestamp = int(data[66:130], 16)  # timestamp is in the data after the cid
+
+                    return {
+                        "transaction_hash": tx_hash,
+                        "user_address": user_address,
+                        "encoded_cid": cid.hex(),  # Return the CID as a hexadecimal string
+                        "timestamp": timestamp,
+                    }
+
+                except Exception as e:
+                    # Handle potential errors in decoding
+                    raise HTTPException(status_code=500, detail=f"Error decoding event log: {str(e)}")
+
+        # If no CID was found in the logs
+        raise HTTPException(status_code=404, detail="CID not found in the transaction logs")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
