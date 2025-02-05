@@ -15,7 +15,7 @@ router = APIRouter(prefix="/db", tags=["mongodb"])
 db_client = MongoDBClient()
 
 @router.post("/documents/")
-def create_document(
+async def create_document(
     asset_id: str,
     user_wallet_address: str,
     smart_contract_tx_id: str,
@@ -38,7 +38,7 @@ def create_document(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/documents/{document_id}")
-def get_document(document_id: str):
+async def get_document(document_id: str):
     """Retrieve a document by its ID"""
     try:
         document = db_client.get_document_by_id(document_id)
@@ -49,7 +49,7 @@ def get_document(document_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/documents/wallet/{wallet_address}")
-def get_documents_by_wallet(wallet_address: str):
+async def get_documents_by_wallet(wallet_address: str):
     """Retrieve all documents associated with a wallet address"""
     try:
         documents = db_client.get_documents_by_wallet(wallet_address)
@@ -58,7 +58,7 @@ def get_documents_by_wallet(wallet_address: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/documents/{document_id}")
-def update_document(
+async def update_document(
     document_id: str,
     smart_contract_tx_id: str,
     ipfs_hash: str,
@@ -81,7 +81,7 @@ def update_document(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/documents/{document_id}/verify")
-def verify_document(document_id: str):
+async def verify_document(document_id: str):
     """Verify a document"""
     try:
         verified = db_client.verify_document(document_id)
@@ -92,7 +92,7 @@ def verify_document(document_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/documents/{document_id}")
-def delete_document(document_id: str):
+async def delete_document(document_id: str):
     """Soft delete a document"""
     try:
         deleted = db_client.soft_delete(document_id)
