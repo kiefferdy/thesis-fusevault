@@ -36,12 +36,6 @@ click==8.1.8
     # via
     #   pip-tools
     #   uvicorn
-colorama==0.4.6
-    # via
-    #   build
-    #   click
-    #   pytest
-    #   uvicorn
 cytoolz==1.0.1
     # via eth-utils
 dnspython==2.7.0
@@ -157,8 +151,6 @@ python-multipart==0.0.20
     # via -r requirements.in
 pyunormalize==16.0.0
     # via web3
-pywin32==308
-    # via web3
 pyyaml==6.0.2
     # via uvicorn
 regex==2024.11.6
@@ -191,6 +183,8 @@ urllib3==2.3.0
     #   types-requests
 uvicorn[standard]==0.34.0
     # via -r requirements.in
+uvloop==0.21.0
+    # via uvicorn
 watchfiles==1.0.4
     # via uvicorn
 web3==7.7.0
