@@ -1,17 +1,21 @@
 import express from 'express';
 import multer from 'multer';
-import fs from 'fs/promises';
+import fs from 'fs';
 import { uploadFile, getFileUrl, displayFileContents } from './backend.js';
 
 const app = express();
 const PORT = 8080;
+const UPLOAD_DIR = 'upload_queue';
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
 
 /**
  * Configure multer for disk storage in 'upload_queue/'.
  */
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'upload_queue/');
+    cb(null, UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
     const uniqueName = `${Date.now()}-${file.originalname}`;
@@ -50,7 +54,7 @@ app.post('/upload', upload.array('files'), async (req, res) => {
       } finally {
         // Remove the file from local disk whether upload succeeds or fails
         try {
-          await fs.unlink(filePath);
+          await fs.promises.unlink(filePath);
         } catch (err) {
           console.error('Error deleting local file:', file.originalname, err);
         }

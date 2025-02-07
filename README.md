@@ -31,7 +31,7 @@ FuseVault API combines the power of blockchain, IPFS, and traditional storage to
 ### To add dependencies:
 - Add the new dependency in a new line to `requirements.in`
 - Run `pip-compile requirements.in` (ensure you are in the virtual environment)
-- Rerun `pip-sync requirements.txt`
+- Run `pip-sync requirements.txt`
 
 ## Running the Web3.Storage Microservice
 - Make sure Node.js is installed on your computer
