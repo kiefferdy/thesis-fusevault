@@ -13,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "@web3-storage/w3up-client": "^17.1.2",
+    "axios": "^1.7.9",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "fetch-blob": "^4.0.0",
