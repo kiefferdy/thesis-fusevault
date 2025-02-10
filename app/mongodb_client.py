@@ -38,6 +38,11 @@ class MongoDBClient:
             # Initialize database and collections
             self.db = self.client.get_database("fusevault")
             self.domain_collection = self.db["domain"]
+            self.auth_collection = self.db["auth"]
+            self.transaction_collection = self.db["transaction_history"]
+            
+            # Create indexes
+            self._create_indexes()
             
             self._initialized = True
             logger.info("Successfully connected to MongoDB")
@@ -46,12 +51,68 @@ class MongoDBClient:
             logger.error(f"Failed to connect to MongoDB: {str(e)}")
             raise ConnectionError(f"Failed to connect to MongoDB: {str(e)}")
 
+    def _create_indexes(self):
+        """Create necessary indexes for collections"""
+        try:
+            # Domain collection indexes
+            self.domain_collection.create_index([("assetId", 1), ("userWalletAddress", 1)])
+            self.domain_collection.create_index([("ipfsHash", 1)])
+            self.domain_collection.create_index([("smartContractTxId", 1)])
+            
+            # Auth collection indexes
+            self.auth_collection.create_index([("walletAddress", 1)], unique=True)
+            self.auth_collection.create_index([("email", 1)], unique=True)
+            
+            # Transaction history indexes
+            self.transaction_collection.create_index([("documentId", 1)])
+            self.transaction_collection.create_index([("timestamp", -1)])
+            
+            logger.info("Successfully created indexes")
+        except Exception as e:
+            logger.error(f"Failed to create indexes: {str(e)}")
+            raise
+
+    # Auth Methods
+    def create_user(self, wallet_address: str, email: str, role: str = "user") -> str:
+        """Create a new user"""
+        try:
+            user = {
+                "walletAddress": wallet_address,
+                "email": email,
+                "role": role,
+                "createdAt": datetime.utcnow(),
+                "lastLogin": None,
+                "isActive": True
+            }
+            result = self.auth_collection.insert_one(user)
+            return str(result.inserted_id)
+        except Exception as e:
+            logger.error(f"Error creating user: {str(e)}")
+            raise
+
+    def get_user_by_wallet(self, wallet_address: str) -> Optional[Dict]:
+        """Retrieve user by wallet address"""
+        try:
+            user = self.auth_collection.find_one({"walletAddress": wallet_address})
+            if user:
+                user['_id'] = str(user['_id'])
+            return user
+        except Exception as e:
+            logger.error(f"Error retrieving user: {str(e)}")
+            raise
+
+    # Document Methods
     def insert_document(self, asset_id: str, user_wallet_address: str,
                        smart_contract_tx_id: str, ipfs_hash: str,
                        critical_metadata: Dict[str, Any],
                        non_critical_metadata: Optional[Dict[str, Any]] = None) -> str:
         """Insert a new document into MongoDB"""
         try:
+            # First verify user exists
+            user = self.get_user_by_wallet(user_wallet_address)
+            if not user:
+                raise ValueError("User not found")
+
             document = {
                 "assetId": asset_id,
                 "userWalletAddress": user_wallet_address,
@@ -68,7 +129,12 @@ class MongoDBClient:
             }
             
             result = self.domain_collection.insert_one(document)
-            return str(result.inserted_id)
+            doc_id = str(result.inserted_id)
+            
+            # Record transaction
+            self._record_transaction(doc_id, "CREATE", user_wallet_address)
+            
+            return doc_id
             
         except Exception as e:
             logger.error(f"Error inserting document: {str(e)}")
@@ -138,7 +204,12 @@ class MongoDBClient:
                 }
             )
             
-            return update_result.modified_count > 0
+            if update_result.modified_count > 0:
+                # Record transaction
+                self._record_transaction(document_id, "UPDATE", current_doc["userWalletAddress"])
+                return True
+                
+            return False
             
         except Exception as e:
             logger.error(f"Error updating document: {str(e)}")
@@ -161,28 +232,40 @@ class MongoDBClient:
         """Soft delete a document"""
         try:
             obj_id = ObjectId(document_id)
+            document = self.domain_collection.find_one({"_id": obj_id})
+            if not document:
+                return False
+                
             update_result = self.domain_collection.update_one(
                 {"_id": obj_id},
                 {"$set": {"isDeleted": True}}
             )
-            return update_result.modified_count > 0
+            
+            if update_result.modified_count > 0:
+                # Record transaction
+                self._record_transaction(document_id, "DELETE", document["userWalletAddress"])
+                return True
+                
+            return False
+            
         except Exception as e:
             logger.error(f"Error soft deleting document: {str(e)}")
             raise
 
-    def ensure_indexes(self):
-        """Create necessary indexes"""
+    def _record_transaction(self, document_id: str, action: str, wallet_address: str):
+        """Record a transaction in the transaction history"""
         try:
-            self.domain_collection.create_index(
-                [("assetId", 1), ("userWalletAddress", 1)],
-                unique=True
-            )
-            self.domain_collection.create_index([("ipfsHash", 1)])
-            self.domain_collection.create_index([("smartContractTxId", 1)])
-            logger.info("Successfully created indexes")
+            transaction = {
+                "documentId": document_id,
+                "action": action,
+                "walletAddress": wallet_address,
+                "timestamp": datetime.utcnow()
+            }
+            self.transaction_collection.insert_one(transaction)
         except Exception as e:
-            logger.error(f"Failed to create indexes: {str(e)}")
-            raise
+            logger.error(f"Error recording transaction: {str(e)}")
+            # Don't raise the error as this is a secondary operation
+            pass
 
     def close_connection(self):
         """Close the MongoDB connection"""
