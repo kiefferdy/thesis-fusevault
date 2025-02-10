@@ -1,6 +1,7 @@
 import logging
-from fastapi import APIRouter, HTTPException
-from typing import Dict, Any, Optional
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from typing import Dict, Any, Optional, List
+import json
 from app.mongodb_client import MongoDBClient
 
 # Set pymongo's logging level to WARNING to reduce verbosity
@@ -13,6 +14,58 @@ router = APIRouter(prefix="/db", tags=["mongodb"])
 
 # Initialize MongoDB client
 db_client = MongoDBClient()
+
+@router.post("/upload")
+async def upload_json_file(file: UploadFile = File(...)):
+    """Upload and process a JSON file"""
+    try:
+        # Verify file type
+        if not file.filename.endswith('.json'):
+            raise HTTPException(status_code=400, detail="File must be JSON format")
+            
+        # Read and parse JSON content
+        content = await file.read()
+        json_data = json.loads(content.decode('utf-8'))
+        
+        # Extract required fields
+        required_fields = [
+            'asset_id', 
+            'user_wallet_address', 
+            'smart_contract_tx_id',
+            'ipfs_hash', 
+            'critical_metadata',
+            'non_critical_metadata'
+        ]
+        
+        # Validate all required fields are present
+        for field in required_fields:
+            if field not in json_data:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Missing required field: {field}"
+                )
+        
+        # Store in MongoDB
+        doc_id = db_client.insert_document(
+            asset_id=json_data['asset_id'],
+            user_wallet_address=json_data['user_wallet_address'],
+            smart_contract_tx_id=json_data['smart_contract_tx_id'],
+            ipfs_hash=json_data['ipfs_hash'],
+            critical_metadata=json_data['critical_metadata'],
+            non_critical_metadata=json_data['non_critical_metadata']
+        )
+        
+        return {
+            "status": "success",
+            "message": "File uploaded and stored successfully",
+            "document_id": doc_id
+        }
+        
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format")
+    except Exception as e:
+        logging.error(f"Error processing file: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/documents/")
 async def create_document(
