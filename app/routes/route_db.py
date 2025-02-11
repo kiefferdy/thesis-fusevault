@@ -1,6 +1,6 @@
 import logging
-from fastapi import APIRouter, HTTPException, UploadFile, File
-from typing import Dict, Any, Optional, List
+from fastapi import APIRouter, HTTPException
+from typing import Dict, Any, Optional
 import json
 from app.mongodb_client import MongoDBClient
 
@@ -16,16 +16,10 @@ router = APIRouter(prefix="/db", tags=["mongodb"])
 db_client = MongoDBClient()
 
 @router.post("/upload")
-async def upload_json_file(file: UploadFile = File(...)):
-    """Upload and process a JSON file"""
+async def upload_json_file(json_text: str):
+    """Upload and process a JSON text file"""
     try:
-        # Verify file type
-        if not file.filename.endswith('.json'):
-            raise HTTPException(status_code=400, detail="File must be JSON format")
-            
-        # Read and parse JSON content
-        content = await file.read()
-        json_data = json.loads(content.decode('utf-8'))
+        json_data = json.loads(json_text)
         
         # Extract required fields
         required_fields = [

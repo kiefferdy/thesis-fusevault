@@ -11,12 +11,12 @@ class UserCreate(BaseModel):
     email: EmailStr
 
 @router.post("/register")
-async def register_user(user: UserCreate):
+async def register_user(wallet_adr: str, user_email: str):
     """Register a new user"""
     try:
         user_id = db_client.create_user(
-            wallet_address=user.wallet_address,
-            email=user.email
+            wallet_address=wallet_adr,
+            email=user_email
         )
         return {"status": "success", "user_id": user_id}
     except Exception as e:

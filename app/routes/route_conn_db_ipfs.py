@@ -4,16 +4,10 @@ import app.routes.route_ipfs as ipfs
 
 router = APIRouter(prefix="/conn", tags=["conn_db_ipfs"])
 
-@router.post("/test/{document_id}")
-async def receive_doc_db(document_id: str):
+@router.post("/upload")
+async def upload_content(cid: str):
     """
-    Testing parameter passing between Connection Router and MongoDB Router.
+    Upload retrieved file contents from web3-storage service to MongoDB database.
     """
-    return await db.get_document(document_id)
-
-@router.post("/test2/{cid}")
-async def receive_url_ipfs(cid: str):
-    """
-    Testing parameter passing between Connection Router and IPFS Router.
-    """
-    return await ipfs.get_file_contents(cid)
+    text = await ipfs.get_file_contents(cid)
+    return await db.upload_json_file(text)
