@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, HTTPException
-from app.mongodb_client import MongoDBClient
+from app.core.mongodb_client import MongoDBClient
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 db_client = MongoDBClient()

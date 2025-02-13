@@ -1,11 +1,11 @@
 from fastapi import FastAPI
-from app.routes.route_sc import router as sc_router
-from app.routes.route_db import router as db_router
-from app.routes.route_ipfs import router as ipfs_router
-from app.routes.route_conn_db_ipfs import router as db_ipfs_router
-from app.routes.route_conn_sc_ipfs import router as sc_ipfs_route
-from app.routes.route_auth import router as auth_router
-from app.routes.route_transactions import router as transactions_router
+from app.core.route_sc import router as sc_router
+from app.core.route_db import router as db_router
+from app.core.route_ipfs import router as ipfs_router
+from app.connectors.route_conn_db_ipfs import router as db_ipfs_router
+from app.connectors.route_conn_sc_ipfs import router as sc_ipfs_route
+from app.external.route_auth import router as auth_router
+from app.external.route_transactions import router as transactions_router
 
 app = FastAPI(title="FuseVault API")
 

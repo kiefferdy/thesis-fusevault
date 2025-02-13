@@ -1,8 +1,6 @@
 # conftest.py
 import pytest
-
-# Set default fixture loop scope to function
-pytest_plugins = ["pytest_asyncio"]
+import pytest_asyncio
 
 @pytest.fixture(scope="session")
 def event_loop():

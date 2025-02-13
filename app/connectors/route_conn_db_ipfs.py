@@ -1,6 +1,6 @@
 from fastapi import APIRouter
-import app.routes.route_db as db
-import app.routes.route_ipfs as ipfs
+import app.core.route_db as db
+import app.core.route_ipfs as ipfs
 
 router = APIRouter(prefix="/conn", tags=["conn_db_ipfs"])
 

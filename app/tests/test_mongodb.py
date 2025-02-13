@@ -6,13 +6,13 @@ from unittest.mock import patch, MagicMock
 
 # Import app directly from app directory
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from app.main import app
 
 @pytest.fixture
 def test_data():
     """Load sample test data"""
-    test_data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'test_data'))
+    test_data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..', 'test_data'))
     samples = {}
     for i in range(1, 4):
         with open(os.path.join(test_data_dir, f'sample{i}.json')) as f:
@@ -33,7 +33,7 @@ def test_upload_json_file(mock_mongo, client, test_data):
     mock_mongo.return_value = mock_instance
     
     # Get the path to sample1.json
-    test_data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'test_data'))
+    test_data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..', 'test_data'))
     sample_file_path = os.path.join(test_data_dir, 'sample1.json')
     
     # Create file to upload
