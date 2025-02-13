@@ -8,7 +8,7 @@ FuseVault API combines the power of blockchain, IPFS, and traditional storage to
 - Make sure Python is installed on your computer
 - Create a virtual environment with `python -m venv venv`
 - Activate the virtual environment by running `venv/Scripts/activate`
-- Install dependencies with `pip install -r requirements.txt`
+- Install dependencies with `pip install -r requirements_windows.txt`
 - Create a `.env` file in the root project folder, then add the [required environment variables](#required-environment-variables)
 - Run the FastAPI server with `uvicorn app.main:app --reload`
 - Access the server on `http://127.0.0.1:8000/` (default setting)
@@ -18,20 +18,21 @@ FuseVault API combines the power of blockchain, IPFS, and traditional storage to
 - Make sure Python is installed on your computer
 - Create a virtual environment with `python3 -m venv venv`
 - Activate the virtual environment by running `source venv/bin/activate`
-- Install dependencies with `pip install -r requirements.txt`
+- Install dependencies with `pip install -r requirements_mac.txt`
 - Create a `.env` file in the root project folder, then add the [required environment variables](#required-environment-variables)
 - Install SSL certificates on your system using `/Applications/Python\ 3.x/Install\ Certificates.command` (replace 3.x with your Python version)
 - Run the FastAPI server with `uvicorn app.main:app --reload`
 - Access the server on `http://127.0.0.1:8000/` (default setting)
 - Once finished, run `deactivate` to exit the virtual environment
 
-### To view API documentation and execute operation methods:
+### To view API documentation and test routes:
 - Access the server on default URL: `http://127.0.0.1:8000/docs`
 
-### To add dependencies:
+### To add and install dependencies:
 - Add the new dependency in a new line to `requirements.in`
-- Run `pip-compile requirements.in` (ensure you are in the virtual environment)
-- Run `pip-sync requirements.txt`
+- If you are on Windows, run `pip-compile requirements.in -o requirements_windows.txt` (ensure you are in the virtual environment)
+- If you are on macOS, run `pip-compile requirements.in -o requirements_mac.txt` (ensure you are in the virtual environment)
+- Run `pip-sync requirements_windows.txt` or `pip-sync requirements_mac.txt` depending on your OS
 
 ## Running the Web3.Storage Microservice
 - Make sure Node.js is installed on your computer

@@ -3,6 +3,7 @@ fastapi
 uvicorn[standard]
 python-multipart
 httpx
+email-validator
 
 # Ethereum blockchain interaction
 web3
