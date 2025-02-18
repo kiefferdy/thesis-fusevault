@@ -19,5 +19,5 @@ python-dotenv
 pytest
 pytest-asyncio
 
-# csv
+# Utilities
 pandas

@@ -2,6 +2,7 @@ import express from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import { uploadFile, getFileUrl, displayFileContents } from './backend.js';
+import { computeCID } from './utilities.js';
 
 const app = express();
 const PORT = 8080;
@@ -101,4 +102,29 @@ app.get('/file/:cid/contents', async (req, res) => {
 // Start Express server
 app.listen(PORT, () => {
   console.log(`API server running on http://localhost:${PORT}`);
+});
+
+/**
+ * POST /calculate-cid
+ * New endpoint that calculates the exact IPFS CID for a given file using ipfs-only-hash.
+ */
+app.post('/calculate-cid', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+  
+  const filePath = req.file.path;
+  try {
+    const cid = await computeCID(filePath);
+    res.json({ computed_cid: cid });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  } finally {
+    // Clean up the uploaded file
+    try {
+      await fs.promises.unlink(filePath);
+    } catch (err) {
+      console.error('Error deleting uploaded file:', err);
+    }
+  }
 });
