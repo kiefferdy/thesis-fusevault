@@ -1,152 +1,268 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
+from typing import List, Dict, Any, Optional
+from io import BytesIO, StringIO
 import pandas as pd
 import json
 import logging
 import os
-from io import BytesIO, StringIO
 from dotenv import load_dotenv
-from typing import List, Dict, Any
 
 from app.core.mongodb_client import MongoDBClient
 from app.core.route_ipfs import upload_files as ipfs_upload_files
 from app.core.route_sc import store_cid as blockchain_store_cid, CIDRequest
 
-# Initialize logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create unified router with prefix /storage
 router = APIRouter(prefix="/storage", tags=["storage"])
 
-# Initialize MongoDB client and load environment variables
 db_client = MongoDBClient()
 load_dotenv()
 
-
 @router.post("/store")
 async def store_data(
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     user_wallet_address: str = Form(...),
-    file_type: str = Form(..., description="Specify file type: 'json' or 'csv'"),
-    critical_metadata_fields: List[str] = Query(..., description="Comma-separated list of critical metadata fields"),
+    critical_metadata_fields: Optional[List[str]] = Query(
+        None, 
+        description="List of CSV columns that represent 'critical' metadata (only used if uploading a CSV)."
+    )
 ):
     """
-    Handles both JSON and CSV file uploads:
-      - If JSON, extracts critical and non-critical metadata, then uploads it to IPFS & Blockchain.
-      - If CSV, prompts user to specify critical metadata fields, validates them, and converts to JSON before proceeding.
+    Accepts multiple uploaded files (JSON or CSV).
+    
+    - For each JSON file:
+       * Must have: asset_id, critical_metadata, optional non_critical_metadata.
+    - For each CSV file:
+       * Must supply 'critical_metadata_fields' to know which columns are critical.
+       * Each row is treated as a distinct record with a unique asset_id.
+         The first row found for an asset_id is used; duplicates for that ID are discarded.
+         
+    All records are individually:
+      - Uploaded to IPFS (only asset_id, user_wallet_address, critical_metadata).
+      - Stored on-chain (CID).
+      - Inserted into MongoDB (full metadata).
+      
+    Duplicate asset IDs across all files are discarded (we only take the first occurrence).
     """
+    # A memory of all asset_ids we've handled to skip duplicates
+    seen_asset_ids = set()
 
-    # Read the file content
-    try:
-        file_content = await file.read()
-    except Exception as e:
-        logger.error(f"Error reading file: {e}")
-        raise HTTPException(status_code=400, detail="Error reading uploaded file.")
+    # We'll accumulate the results
+    results = []
 
-    if file_type.lower() == "json":
-        # Handle JSON file upload
-        try:
-            json_data = json.loads(file_content.decode("utf-8"))
-        except Exception as e:
-            logger.error(f"Error parsing JSON file: {e}")
-            raise HTTPException(status_code=400, detail="Invalid JSON file.")
-
-        # Extract required fields
-        asset_id = json_data.get("asset_id")
-        critical_metadata = json_data.get("critical_metadata")
-        non_critical_metadata = json_data.get("non_critical_metadata")
-
-        if not asset_id or not critical_metadata or not non_critical_metadata:
-            raise HTTPException(
-                status_code=400,
-                detail="Missing required fields in JSON: asset_id, critical_metadata, or non_critical_metadata."
-            )
-
-    elif file_type.lower() == "csv":
-        # Handle CSV file upload
-        try:
-            csv_data = pd.read_csv(StringIO(file_content.decode("utf-8")))
-        except Exception as e:
-            logger.error(f"Error parsing CSV file: {e}")
-            raise HTTPException(status_code=400, detail="Invalid CSV file.")
-
-        # Validate that user-specified critical metadata fields exist in the CSV
-        missing_fields = [field for field in critical_metadata_fields if field not in csv_data.columns]
-        if missing_fields:
-            raise HTTPException(
-                status_code=400,
-                detail=f"The following critical metadata fields are missing from the CSV: {missing_fields}"
-            )
-
-        # Convert CSV rows into JSON format
-        json_records = csv_data.to_dict(orient="records")
-
-        # Create a structured JSON payload
-        asset_id = "AUTO-GENERATED-ID"  # Can be dynamically generated or provided by the user
-        critical_metadata = {field: json_records[0][field] for field in critical_metadata_fields}
-        non_critical_metadata = {
-            key: value for key, value in json_records[0].items() if key not in critical_metadata_fields
+    # Helper function to store a single record (doc)
+    async def store_single_document(
+        asset_id: str,
+        user_wallet: str,
+        critical_md: Dict[str, Any],
+        non_critical_md: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Takes a single doc's data, uploads it to IPFS,
+        stores the CID on the blockchain, and inserts into MongoDB.
+        Returns a dict with success info or error.
+        """
+        # 1) Minimal IPFS payload
+        ipfs_payload = {
+            "asset_id": asset_id,
+            "user_wallet_address": user_wallet,
+            "critical_metadata": critical_md,
         }
 
-    else:
-        raise HTTPException(status_code=400, detail="Invalid file type. Use 'json' or 'csv'.")
-
-    # Construct JSON payload for IPFS
-    ipfs_payload = {
-        "asset_id": asset_id,
-        "user_wallet_address": user_wallet_address,
-        "critical_metadata": critical_metadata,
-        "non_critical_metadata": non_critical_metadata,
-    }
-
-    # Convert to JSON and prepare for IPFS upload
-    ipfs_file_content = json.dumps(ipfs_payload).encode("utf-8")
-    ipfs_upload_file = UploadFile(
-        filename="ipfs_payload.json",
-        file=BytesIO(ipfs_file_content)
-    )
-
-    # Upload JSON to IPFS
-    try:
-        ipfs_data = await ipfs_upload_files(files=[ipfs_upload_file])
-        if "cids" not in ipfs_data or not ipfs_data["cids"]:
-            raise HTTPException(status_code=500, detail="Failed to obtain CID from IPFS.")
-        cid_dict = ipfs_data["cids"][0]["cid"]
-        cid = cid_dict["/"] if isinstance(cid_dict, dict) and "/" in cid_dict else str(cid_dict)
-        logger.info(f"IPFS upload successful, CID: {cid}")
-    except Exception as e:
-        logger.error(f"IPFS upload error: {e}")
-        raise HTTPException(status_code=500, detail=f"IPFS upload error: {str(e)}")
-
-    # Store CID on the blockchain
-    try:
-        blockchain_response = await blockchain_store_cid(CIDRequest(cid=str(cid)))
-        blockchain_tx_hash = blockchain_response.get("tx_hash")
-        if not blockchain_tx_hash:
-            raise HTTPException(status_code=500, detail="Failed to store CID on blockchain.")
-        logger.info(f"Blockchain storage successful, tx hash: {blockchain_tx_hash}")
-    except Exception as e:
-        logger.error(f"Blockchain error: {e}")
-        raise HTTPException(status_code=500, detail=f"Blockchain error: {str(e)}")
-
-    # Insert document into MongoDB
-    try:
-        doc_id = db_client.insert_document(
-            asset_id=asset_id,
-            user_wallet_address=user_wallet_address,
-            smart_contract_tx_id=blockchain_tx_hash,
-            ipfs_hash=cid,
-            critical_metadata=critical_metadata,
-            non_critical_metadata=non_critical_metadata
+        # 2) Upload to IPFS
+        ipfs_file_content = json.dumps(ipfs_payload).encode("utf-8")
+        ipfs_upload_file = UploadFile(
+            filename=f"ipfs_payload_{asset_id}.json",
+            file=BytesIO(ipfs_file_content)
         )
-        logger.info(f"Document inserted into MongoDB with id: {doc_id}")
-    except Exception as e:
-        logger.error(f"Database error: {e}")
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        try:
+            ipfs_data = await ipfs_upload_files(files=[ipfs_upload_file])
+            if "cids" not in ipfs_data or not ipfs_data["cids"]:
+                return {"asset_id": asset_id, "status": "error", "detail": "Failed to obtain CID from IPFS."}
+            cid_dict = ipfs_data["cids"][0]["cid"]
+            cid = cid_dict["/"] if isinstance(cid_dict, dict) and "/" in cid_dict else str(cid_dict)
+        except Exception as e:
+            return {"asset_id": asset_id, "status": "error", "detail": f"IPFS upload error: {str(e)}"}
+
+        # 3) Store on the blockchain
+        try:
+            blockchain_response = await blockchain_store_cid(CIDRequest(cid=str(cid)))
+            blockchain_tx_hash = blockchain_response.get("tx_hash")
+            if not blockchain_tx_hash:
+                return {"asset_id": asset_id, "status": "error", "detail": "Failed to store CID on blockchain."}
+        except Exception as e:
+            return {"asset_id": asset_id, "status": "error", "detail": f"Blockchain error: {str(e)}"}
+
+        # 4) Insert into MongoDB
+        try:
+            doc_id = db_client.insert_document(
+                asset_id=asset_id,
+                user_wallet_address=user_wallet,
+                smart_contract_tx_id=blockchain_tx_hash,
+                ipfs_hash=cid,
+                critical_metadata=critical_md,
+                non_critical_metadata=non_critical_md
+            )
+            return {
+                "asset_id": asset_id,
+                "status": "success",
+                "document_id": doc_id,
+                "ipfs_cid": cid,
+                "blockchain_tx_hash": blockchain_tx_hash,
+            }
+        except Exception as e:
+            return {"asset_id": asset_id, "status": "error", "detail": f"Database error: {str(e)}"}
+
+    # Helper to parse CSV rows into doc dicts
+    def parse_csv(file_content: bytes, critical_fields: List[str]) -> List[Dict[str, Any]]:
+        """
+        Reads CSV bytes, returns a list of dicts each with:
+            asset_id, critical_metadata, non_critical_metadata.
+        Expects 'asset_id' column to exist or otherwise you might generate one.
+        """
+        csv_df = pd.read_csv(StringIO(file_content.decode("utf-8")))
+
+        if "asset_id" not in csv_df.columns:
+            raise ValueError("CSV file must contain an 'asset_id' column.")
+
+        # Ensure critical fields exist
+        missing = [col for col in critical_fields if col not in csv_df.columns]
+        if missing:
+            raise ValueError(f"Missing critical columns {missing} in CSV.")
+
+        records = []
+        for _, row in csv_df.iterrows():
+            row_dict = row.to_dict()
+
+            asset_id = str(row_dict["asset_id"])
+            critical_md = {c: row_dict[c] for c in critical_fields}
+            # Everything else is non-critical (besides asset_id)
+            non_critical_md = {
+                k: v for k, v in row_dict.items()
+                if k not in critical_fields and k != "asset_id"
+            }
+            records.append({
+                "asset_id": asset_id,
+                "critical_metadata": critical_md,
+                "non_critical_metadata": non_critical_md
+            })
+        return records
+
+    # Process each uploaded file
+    for file_obj in files:
+        filename_lower = file_obj.filename.lower()
+        try:
+            content = await file_obj.read()
+        except Exception as e:
+            # If we can't even read the file, skip it
+            logger.error(f"Could not read file {file_obj.filename}: {str(e)}")
+            results.append({
+                "filename": file_obj.filename,
+                "status": "error",
+                "detail": f"Could not read file: {str(e)}"
+            })
+            continue
+
+        # Decide how to parse this file (JSON or CSV)
+        if filename_lower.endswith(".json"):
+            # Parse JSON
+            try:
+                data = json.loads(content.decode("utf-8"))
+            except Exception as e:
+                results.append({
+                    "filename": file_obj.filename,
+                    "status": "error",
+                    "detail": f"Invalid JSON file: {str(e)}"
+                })
+                continue
+
+            # Check required fields
+            asset_id = data.get("asset_id")
+            critical_metadata = data.get("critical_metadata")
+            non_critical_metadata = data.get("non_critical_metadata") or {}
+
+            if not asset_id or not critical_metadata:
+                results.append({
+                    "filename": file_obj.filename,
+                    "status": "error",
+                    "detail": "Missing 'asset_id' or 'critical_metadata' in JSON."
+                })
+                continue
+
+            # If we have not seen asset_id, proceed; else skip
+            if asset_id in seen_asset_ids:
+                results.append({
+                    "asset_id": asset_id,
+                    "filename": file_obj.filename,
+                    "status": "skipped",
+                    "detail": "Duplicate asset_id; ignoring subsequent file."
+                })
+                continue
+
+            # Mark it as seen
+            seen_asset_ids.add(asset_id)
+
+            # Now store it
+            store_result = await store_single_document(
+                asset_id, user_wallet_address, critical_metadata, non_critical_metadata
+            )
+            # Attach filename to the store result for clarity
+            store_result["filename"] = file_obj.filename
+            results.append(store_result)
+
+        elif filename_lower.endswith(".csv"):
+            # Parse CSV
+            if not critical_metadata_fields:
+                results.append({
+                    "filename": file_obj.filename,
+                    "status": "error",
+                    "detail": "No 'critical_metadata_fields' provided for CSV."
+                })
+                continue
+            try:
+                row_docs = parse_csv(content, critical_metadata_fields)
+            except Exception as e:
+                results.append({
+                    "filename": file_obj.filename,
+                    "status": "error",
+                    "detail": f"CSV parse error: {str(e)}"
+                })
+                continue
+
+            # For each row, store if not duplicate
+            for row_doc in row_docs:
+                asset_id = row_doc["asset_id"]
+                # Check duplicates
+                if asset_id in seen_asset_ids:
+                    results.append({
+                        "asset_id": asset_id,
+                        "filename": file_obj.filename,
+                        "status": "skipped",
+                        "detail": "Duplicate asset_id found in CSV; ignoring this row."
+                    })
+                    continue
+
+                seen_asset_ids.add(asset_id)
+
+                store_result = await store_single_document(
+                    asset_id,
+                    user_wallet_address,
+                    row_doc["critical_metadata"],
+                    row_doc["non_critical_metadata"]
+                )
+                # Attach file name for clarity
+                store_result["filename"] = file_obj.filename
+                results.append(store_result)
+        else:
+            # Unrecognized file extension
+            results.append({
+                "filename": file_obj.filename,
+                "status": "error",
+                "detail": "Unsupported file type. Use .json or .csv."
+            })
 
     return {
-        "status": "success",
-        "document_id": doc_id,
-        "ipfs_cid": cid,
-        "blockchain_tx_hash": blockchain_tx_hash,
+        "upload_count": len(results),
+        "results": results
     }
