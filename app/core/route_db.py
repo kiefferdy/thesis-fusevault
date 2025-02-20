@@ -1,3 +1,4 @@
+import datetime
 import logging
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any, Optional
@@ -139,12 +140,37 @@ async def verify_document(document_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/documents/{document_id}")
-async def delete_document(document_id: str):
-    """Soft delete a document"""
+async def delete_document(
+    document_id: str,
+    user_wallet_address: str,  
+    reason: Optional[str] = None 
+):
+    """Soft delete a document with additional metadata"""
     try:
-        deleted = db_client.soft_delete(document_id)
+        # First verify the document exists and user has permission
+        document = db_client.get_document_by_id(document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+            
+        # Check if  has permission (document owner)
+        if document["userWalletAddress"] != user_wallet_address:
+            raise HTTPException(status_code=403, detail="Not authorized to delete this document")
+
+        deleted = db_client.soft_delete(
+            document_id=document_id,
+            deleted_by=user_wallet_address,
+            deletion_reason=reason
+        )
+        
         if not deleted:
             raise HTTPException(status_code=404, detail="Document not found")
-        return {"status": "success", "message": "Document deleted successfully"}
+            
+        return {
+            "status": "success",
+            "message": "Document marked as deleted",
+            "document_id": document_id,
+            "deletion_timestamp": datetime.utcnow().isoformat()
+        }
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

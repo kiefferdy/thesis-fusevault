@@ -228,26 +228,43 @@ class MongoDBClient:
             logger.error(f"Error verifying document: {str(e)}")
             raise
 
-    def soft_delete(self, document_id: str) -> bool:
-        """Soft delete a document"""
+    def soft_delete(self, document_id: str, deleted_by: str, deletion_reason: Optional[str] = None) -> bool:
         try:
             obj_id = ObjectId(document_id)
+            
+            # Get current document
             document = self.domain_collection.find_one({"_id": obj_id})
             if not document:
                 return False
                 
+            # Update document with deletion metadata
             update_result = self.domain_collection.update_one(
                 {"_id": obj_id},
-                {"$set": {"isDeleted": True}}
+                {
+                    "$set": {
+                        "isDeleted": True,
+                        "deletedAt": datetime.utcnow(),
+                        "deletedBy": deleted_by,
+                        "deletionReason": deletion_reason,
+                    }
+                }
             )
             
             if update_result.modified_count > 0:
-                # Record transaction
-                self._record_transaction(document_id, "DELETE", document["userWalletAddress"])
+                # Record transaction with additional metadata
+                self._record_transaction(
+                    document_id,
+                    "DELETE",
+                    deleted_by,
+                    metadata={
+                        "reason": deletion_reason,
+                        "originalOwner": document["userWalletAddress"]
+                    }
+                )
                 return True
                 
             return False
-            
+                
         except Exception as e:
             logger.error(f"Error soft deleting document: {str(e)}")
             raise
