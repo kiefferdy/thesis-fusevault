@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 import logging
 from fastapi import APIRouter, HTTPException
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import json
 from app.core.mongodb_client import MongoDBClient
+from app.core.version_control import VersionControl
 
 # Set pymongo's logging level to WARNING to reduce verbosity
 logging.getLogger('pymongo').setLevel(logging.WARNING)
@@ -13,8 +14,9 @@ logging.basicConfig(level=logging.WARNING)
 
 router = APIRouter(prefix="/db", tags=["mongodb"])
 
-# Initialize MongoDB client
+# Initialize MongoDB client and version control
 db_client = MongoDBClient()
+version_control = VersionControl(db_client)
 
 @router.post("/upload")
 async def upload_json_file(json_text: str):
@@ -96,6 +98,92 @@ async def get_document(document_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/documents/{document_id}/version")
+async def create_new_version(
+    document_id: str,
+    smart_contract_tx_id: str,
+    ipfs_hash: str,
+    critical_metadata: Dict[str, Any],
+    non_critical_metadata: Dict[str, Any],
+    user_wallet_address: str
+):
+    """Create a new version of an existing document"""
+    try:
+        new_doc_id = await version_control.create_new_version(
+            document_id=document_id,
+            smart_contract_tx_id=smart_contract_tx_id,
+            ipfs_hash=ipfs_hash,
+            critical_metadata=critical_metadata,
+            non_critical_metadata=non_critical_metadata,
+            user_wallet_address=user_wallet_address
+        )
+        
+        return {
+            "status": "success",
+            "message": "New version created successfully",
+            "new_document_id": new_doc_id,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/documents/asset/{asset_id}/versions")
+async def get_version_history(asset_id: str):
+    """Get complete version history for an asset"""
+    try:
+        versions = await version_control.get_version_history(asset_id)
+        return {
+            "asset_id": asset_id,
+            "version_count": len(versions),
+            "versions": versions
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/documents/asset/{asset_id}/version/{version_number}")
+async def get_specific_version(asset_id: str, version_number: int):
+    """Get a specific version of a document"""
+    try:
+        version = await version_control.get_specific_version(
+            asset_id,
+            version_number
+        )
+        if not version:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Version {version_number} not found for asset {asset_id}"
+            )
+        return version
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/documents/asset/{asset_id}/compare")
+async def compare_versions(
+    asset_id: str,
+    version1: int,
+    version2: int
+):
+    """Compare two versions of a document"""
+    try:
+        differences = await version_control.compare_versions(
+            asset_id,
+            version1,
+            version2
+        )
+        return {
+            "asset_id": asset_id,
+            "version1": version1,
+            "version2": version2,
+            "differences": differences
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Keep existing routes...
 @router.get("/documents/wallet/{wallet_address}")
 async def get_documents_by_wallet(wallet_address: str):
     """Retrieve all documents associated with a wallet address"""
