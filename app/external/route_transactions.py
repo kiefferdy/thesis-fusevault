@@ -13,12 +13,20 @@ async def get_document_history(document_id: str):
             {"documentId": document_id}
         ).sort("timestamp", -1)
         
-        # Convert ObjectId to string and format the response
         transaction_list = []
         for tx in transactions:
-            tx['_id'] = str(tx['_id'])
-            tx['timestamp'] = tx['timestamp'].isoformat()
-            transaction_list.append(tx)
+            formatted_tx = {
+                "id": str(tx['_id']),
+                "action": tx['action'],
+                "walletAddress": tx['walletAddress'],
+                "timestamp": tx['timestamp'].isoformat(),
+                "documentId": tx['documentId']
+            }
+            
+            if 'metadata' in tx:
+                formatted_tx['metadata'] = tx['metadata']
+                
+            transaction_list.append(formatted_tx)
             
         return {"transactions": transaction_list}
     except Exception as e:

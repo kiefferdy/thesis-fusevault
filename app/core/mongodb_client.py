@@ -1,7 +1,7 @@
 import os
 import logging
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from pymongo import MongoClient
 from bson import ObjectId
 from dotenv import load_dotenv
@@ -50,6 +50,21 @@ class MongoDBClient:
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {str(e)}")
             raise ConnectionError(f"Failed to connect to MongoDB: {str(e)}")
+        
+        try:
+            collections = self.db.list_collection_names()
+            logger.info(f"Available collections: {collections}")
+            
+            # Verify transaction collection exists
+            if "transaction_history" not in collections:
+                logger.warning("Transaction collection not found, creating it...")
+                self.db.create_collection("transaction_history")
+                
+            # Log collection info
+            logger.info(f"Transaction collection info: {self.transaction_collection.find_one()}")
+        
+        except Exception as e:
+            logger.error(f"Error verifying collections: {str(e)}")
 
     def _create_indexes(self):
         """Create necessary indexes for collections"""
@@ -80,7 +95,7 @@ class MongoDBClient:
                 "walletAddress": wallet_address,
                 "email": email,
                 "role": role,
-                "createdAt": datetime.utcnow(),
+                "createdAt": datetime.now(timezone.utc),
                 "lastLogin": None,
                 "isActive": True
             }
@@ -118,8 +133,8 @@ class MongoDBClient:
                 "userWalletAddress": user_wallet_address,
                 "smartContractTxId": smart_contract_tx_id,
                 "ipfsHash": ipfs_hash,
-                "lastVerified": datetime.utcnow(),
-                "lastUpdated": datetime.utcnow(),
+                "lastVerified": datetime.now(timezone.utc),
+                "lastUpdated": datetime.now(timezone.utc),
                 "criticalMetadata": critical_metadata,
                 "nonCriticalMetadata": non_critical_metadata or {},
                 "isCurrent": True,
@@ -198,7 +213,7 @@ class MongoDBClient:
                         "ipfsHash": ipfs_hash,
                         "criticalMetadata": critical_metadata,
                         "nonCriticalMetadata": non_critical_metadata or {},
-                        "lastUpdated": datetime.utcnow(),
+                        "lastUpdated": datetime.now(timezone.utc),
                         "version": current_doc.get("version", 1) + 1
                     }
                 }
@@ -221,68 +236,73 @@ class MongoDBClient:
             obj_id = ObjectId(document_id)
             update_result = self.domain_collection.update_one(
                 {"_id": obj_id},
-                {"$set": {"lastVerified": datetime.utcnow()}}
+                {"$set": {"lastVerified": datetime.now(timezone.utc)}}
             )
             return update_result.modified_count > 0
         except Exception as e:
             logger.error(f"Error verifying document: {str(e)}")
             raise
 
-    def soft_delete(self, document_id: str, deleted_by: str, deletion_reason: Optional[str] = None) -> bool:
+    def soft_delete(self, document_id: str, deleted_by: str) -> bool:
+        """Soft delete with transaction recording"""
         try:
             obj_id = ObjectId(document_id)
             
-            # Get current document
+            # Get current document first
             document = self.domain_collection.find_one({"_id": obj_id})
             if not document:
                 return False
                 
-            # Update document with deletion metadata
+            # Update document
             update_result = self.domain_collection.update_one(
                 {"_id": obj_id},
                 {
                     "$set": {
                         "isDeleted": True,
-                        "deletedAt": datetime.utcnow(),
-                        "deletedBy": deleted_by,
-                        "deletionReason": deletion_reason,
+                        "deletedAt": datetime.now(timezone.utc),
+                        "deletedBy": deleted_by
                     }
                 }
             )
             
             if update_result.modified_count > 0:
-                # Record transaction with additional metadata
+                # Record the transaction
                 self._record_transaction(
-                    document_id,
+                    str(document["_id"]),  # Convert ObjectId to string
                     "DELETE",
                     deleted_by,
-                    metadata={
-                        "reason": deletion_reason,
-                        "originalOwner": document["userWalletAddress"]
-                    }
+                    metadata={"originalOwner": document["userWalletAddress"]}
                 )
                 return True
                 
             return False
-                
+            
         except Exception as e:
             logger.error(f"Error soft deleting document: {str(e)}")
             raise
 
-    def _record_transaction(self, document_id: str, action: str, wallet_address: str):
-        """Record a transaction in the transaction history"""
+    def _record_transaction(self, document_id: str, action: str, wallet_address: str, metadata: dict = None):
+        """Record a transaction in the transaction history with optional metadata"""
         try:
             transaction = {
                 "documentId": document_id,
                 "action": action,
                 "walletAddress": wallet_address,
-                "timestamp": datetime.utcnow()
+                "timestamp": datetime.now(timezone.utc)
             }
-            self.transaction_collection.insert_one(transaction)
+            
+            if metadata:
+                transaction["metadata"] = metadata
+                
+            logger.info(f"Attempting to record transaction: {transaction}")
+            
+            result = self.transaction_collection.insert_one(transaction)
+            
+            logger.info(f"Transaction recorded successfully with id: {result.inserted_id}")
+            
         except Exception as e:
             logger.error(f"Error recording transaction: {str(e)}")
-            # Don't raise the error as this is a secondary operation
-            pass
+            logger.exception("Full traceback:")  
 
     def close_connection(self):
         """Close the MongoDB connection"""
