@@ -6,6 +6,7 @@ from app.utilities.route_verify import router as verify_router
 from app.connectors.route_storage import router as storage_router
 from app.external.route_auth import router as auth_router
 from app.external.route_transactions import router as transactions_router
+from app.external.route_sessions import router as session_router
 
 app = FastAPI(title="FuseVault API")
 
@@ -16,7 +17,8 @@ routers = [
     verify_router,
     storage_router,
     auth_router,
-    transactions_router
+    transactions_router,
+    session_router
 ]
 
 for router in routers:

@@ -2,6 +2,7 @@ import os
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
+from uuid import uuid4
 from pymongo import MongoClient
 from bson import ObjectId
 from dotenv import load_dotenv
@@ -40,6 +41,7 @@ class MongoDBClient:
             self.domain_collection = self.db["domain"]
             self.auth_collection = self.db["auth"]
             self.transaction_collection = self.db["transaction_history"]
+            self.sessions_collection = self.db["sessions"]
             
             # Create indexes
             self._create_indexes()
@@ -81,6 +83,9 @@ class MongoDBClient:
             # Transaction history indexes
             self.transaction_collection.create_index([("documentId", 1)])
             self.transaction_collection.create_index([("timestamp", -1)])
+
+            # Session collection indexes
+            self.sessions_collection.create_index([("created_at", -1)], expireAfterSeconds=60)
             
             logger.info("Successfully created indexes")
         except Exception as e:
@@ -115,6 +120,32 @@ class MongoDBClient:
         except Exception as e:
             logger.error(f"Error retrieving user: {str(e)}")
             raise
+
+    # Session Management Methods
+    def create_session(self, walletAddress: str) -> str:
+        """Create a new session"""
+        try:
+            session_id = str(uuid4())
+            session_data = {
+                "_id": session_id,
+                "walletAddress": walletAddress,
+                "created_at": datetime.now(timezone.utc)
+            }
+            self.sessions_collection.delete_one({"walletAddress": walletAddress})
+            result = self.sessions_collection.insert_one(session_data)
+            return str(result.inserted_id)
+        except Exception as e:
+            logger.error(f"Error creating session: {str(e)}")
+            raise
+    
+    def get_session(self, session_id: str):
+        """Retrieve session id"""
+        return self.sessions_collection.find_one({"_id": session_id})
+    
+    def delete_session(self, session_id: str):
+        """Delete an existing session"""
+        self.sessions_collection.delete_one({"_id": session_id})
+         
 
     # Document Methods
     def insert_document(self, asset_id: str, user_wallet_address: str,
