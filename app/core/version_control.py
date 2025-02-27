@@ -5,36 +5,41 @@ from bson import ObjectId
 class VersionControl:
     def __init__(self, db_client):
         self.db_client = db_client
-        self.domain_collection = db_client.domain_collection
+        self.assets_collection = db_client.assets_collection
         
     async def create_new_version(
-        self,
-        document_id: str,
-        smart_contract_tx_id: str,
-        ipfs_hash: str,
-        critical_metadata: Dict[str, Any],
-        non_critical_metadata: Dict[str, Any],
-        user_wallet_address: str
+    self,
+    asset_id: str,
+    smart_contract_tx_id: str,
+    ipfs_hash: str,
+    critical_metadata: Dict[str, Any],
+    non_critical_metadata: Dict[str, Any],
+    wallet_address: str
     ) -> str:
         """
         Creates a new version of a document while preserving the version history.
-        Returns the new document ID.
+        Uses Asset ID as the primary identifier.
         """
         # Get the current document
-        current_doc = self.domain_collection.find_one({"_id": ObjectId(document_id)})
+        current_doc = self.assets_collection.find_one({"assetId": asset_id, "isCurrent": True})
         if not current_doc:
-            raise ValueError(f"Document {document_id} not found")
+            raise ValueError(f"Current document for Asset ID {asset_id} not found")
             
+        # Get current version number and increment
+        current_version = current_doc.get("versionNumber", 1)
+        new_version_number = current_version + 1
+        
         # Mark the current version as not current
-        self.domain_collection.update_one(
-            {"_id": ObjectId(document_id)},
+        self.assets_collection.update_one(
+            {"assetId": asset_id, "isCurrent": True},
             {"$set": {"isCurrent": False}}
         )
         
-        # Create new version document
+        # Create new version document with new schema
         new_doc = {
-            "assetId": current_doc["assetId"],
-            "userWalletAddress": user_wallet_address,
+            "assetId": asset_id,
+            "versionNumber": new_version_number,  # Explicitly set version
+            "walletAddress": wallet_address,
             "smartContractTxId": smart_contract_tx_id,
             "ipfsHash": ipfs_hash,
             "lastVerified": datetime.now(timezone.utc),
@@ -43,23 +48,20 @@ class VersionControl:
             "nonCriticalMetadata": non_critical_metadata,
             "isCurrent": True,
             "isDeleted": False,
-            "documentHistory": [*current_doc.get("documentHistory", []), str(current_doc["_id"])],
-            "version": current_doc.get("version", 1) + 1,
-            "previousVersion": str(current_doc["_id"])
+            "documentHistory": [*current_doc.get("documentHistory", []), str(current_doc["_id"])]
         }
         
         # Insert new version
-        result = self.domain_collection.insert_one(new_doc)
+        result = self.assets_collection.insert_one(new_doc)
         new_doc_id = str(result.inserted_id)
         
         # Record the version creation in transaction history
-        self.db_client._record_transaction(
-            document_id=new_doc_id,
+        self.db_client.record_transaction(
+            asset_id=asset_id,
             action="VERSION_CREATE",
-            wallet_address=user_wallet_address,
+            wallet_address=wallet_address,
             metadata={
-                "previousVersion": document_id,
-                "version": new_doc["version"]
+                "previousId": str(current_doc["_id"])
             }
         )
         
@@ -68,18 +70,17 @@ class VersionControl:
     async def get_version_history(self, asset_id: str) -> List[Dict[str, Any]]:
         """
         Retrieves the complete version history for an asset.
-        Returns list of versions ordered from newest to oldest.
+        Returns list of versions ordered from newest to oldest based on lastUpdated.
         """
         # Find all documents with this asset_id
-        versions = self.domain_collection.find(
+        versions = self.assets_collection.find(
             {"assetId": asset_id}
-        ).sort("version", -1)
+        ).sort("lastUpdated", -1)
         
         version_list = []
         for version in versions:
             version_info = {
                 "documentId": str(version["_id"]),
-                "version": version.get("version", 1),
                 "timestamp": version["lastUpdated"],
                 "ipfsHash": version["ipfsHash"],
                 "smartContractTxId": version["smartContractTxId"],
@@ -89,17 +90,17 @@ class VersionControl:
             
         return version_list
         
-    async def get_specific_version(
+    async def get_specific_version_by_id(
         self,
         asset_id: str,
-        version_number: int
+        document_id: str
     ) -> Optional[Dict[str, Any]]:
         """
-        Retrieves a specific version of a document.
+        Retrieves a specific version of a document by its document ID.
         """
-        version_doc = self.domain_collection.find_one({
+        version_doc = self.assets_collection.find_one({
             "assetId": asset_id,
-            "version": version_number
+            "_id": ObjectId(document_id)
         })
         
         if version_doc:
@@ -110,14 +111,14 @@ class VersionControl:
     async def compare_versions(
         self,
         asset_id: str,
-        version1: int,
-        version2: int
+        document_id1: str,
+        document_id2: str
     ) -> Dict[str, Any]:
         """
         Compares two versions of a document and returns the differences.
         """
-        v1_doc = await self.get_specific_version(asset_id, version1)
-        v2_doc = await self.get_specific_version(asset_id, version2)
+        v1_doc = await self.get_specific_version_by_id(asset_id, document_id1)
+        v2_doc = await self.get_specific_version_by_id(asset_id, document_id2)
         
         if not v1_doc or not v2_doc:
             raise ValueError("One or both versions not found")

@@ -1,10 +1,9 @@
 from datetime import datetime, timezone
 import logging
 from fastapi import APIRouter, HTTPException
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 import json
 from app.core.mongodb_client import MongoDBClient
-from app.core.version_control import VersionControl
 
 # Set pymongo's logging level to WARNING to reduce verbosity
 logging.getLogger('pymongo').setLevel(logging.WARNING)
@@ -14,9 +13,8 @@ logging.basicConfig(level=logging.WARNING)
 
 router = APIRouter(prefix="/db", tags=["mongodb"])
 
-# Initialize MongoDB client and version control
+# Initialize MongoDB client
 db_client = MongoDBClient()
-version_control = VersionControl(db_client)
 
 @router.post("/upload")
 async def upload_json_file(json_text: str):
@@ -27,7 +25,7 @@ async def upload_json_file(json_text: str):
         # Extract required fields
         required_fields = [
             'asset_id', 
-            'user_wallet_address', 
+            'wallet_address',
             'smart_contract_tx_id',
             'ipfs_hash', 
             'critical_metadata',
@@ -45,7 +43,7 @@ async def upload_json_file(json_text: str):
         # Store in MongoDB
         doc_id = db_client.insert_document(
             asset_id=json_data['asset_id'],
-            user_wallet_address=json_data['user_wallet_address'],
+            wallet_address=json_data['wallet_address'],
             smart_contract_tx_id=json_data['smart_contract_tx_id'],
             ipfs_hash=json_data['ipfs_hash'],
             critical_metadata=json_data['critical_metadata'],
@@ -55,7 +53,9 @@ async def upload_json_file(json_text: str):
         return {
             "status": "success",
             "message": "File uploaded and stored successfully",
-            "document_id": doc_id
+            "document_id": doc_id,
+            "asset_id": json_data['asset_id'],
+            "version": 1  # Initial version
         }
         
     except json.JSONDecodeError:
@@ -67,7 +67,7 @@ async def upload_json_file(json_text: str):
 @router.post("/documents/")
 async def create_document(
     asset_id: str,
-    user_wallet_address: str,
+    wallet_address: str,
     smart_contract_tx_id: str,
     ipfs_hash: str,
     critical_metadata: Dict[str, Any],
@@ -77,51 +77,65 @@ async def create_document(
     try:
         doc_id = db_client.insert_document(
             asset_id=asset_id,
-            user_wallet_address=user_wallet_address,
+            wallet_address=wallet_address,
             smart_contract_tx_id=smart_contract_tx_id,
             ipfs_hash=ipfs_hash,
             critical_metadata=critical_metadata,
             non_critical_metadata=non_critical_metadata
         )
-        return {"status": "success", "document_id": doc_id}
+        return {
+            "status": "success", 
+            "document_id": doc_id,
+            "asset_id": asset_id,
+            "version": 1  # Initial version
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/documents/{document_id}")
-async def get_document(document_id: str):
-    """Retrieve a document by its ID"""
+@router.get("/documents/asset/{asset_id}")
+async def get_document(asset_id: str, version: Optional[int] = None):
+    """
+    Retrieve a document by its Asset ID and optionally its version.
+    If version is not provided, returns the current version.
+    """
     try:
-        document = db_client.get_document_by_id(document_id)
+        document = db_client.get_document_by_id(asset_id, version)
         return document
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/documents/{document_id}/version")
+@router.post("/documents/asset/{asset_id}/version")
 async def create_new_version(
-    document_id: str,
+    asset_id: str,
+    wallet_address: str,
     smart_contract_tx_id: str,
     ipfs_hash: str,
     critical_metadata: Dict[str, Any],
-    non_critical_metadata: Dict[str, Any],
-    user_wallet_address: str
+    non_critical_metadata: Dict[str, Any] = None
 ):
     """Create a new version of an existing document"""
     try:
-        new_doc_id = await version_control.create_new_version(
-            document_id=document_id,
+        new_doc_id = db_client.create_new_version(
+            asset_id=asset_id,
+            wallet_address=wallet_address,
             smart_contract_tx_id=smart_contract_tx_id,
             ipfs_hash=ipfs_hash,
             critical_metadata=critical_metadata,
-            non_critical_metadata=non_critical_metadata,
-            user_wallet_address=user_wallet_address
+            non_critical_metadata=non_critical_metadata
         )
+        
+        # Get the new version number
+        new_doc = db_client.get_document_by_id(asset_id)
+        version_number = new_doc.get("versionNumber", 0)
         
         return {
             "status": "success",
             "message": "New version created successfully",
+            "asset_id": asset_id,
             "new_document_id": new_doc_id,
+            "version_number": version_number,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except ValueError as e:
@@ -133,29 +147,12 @@ async def create_new_version(
 async def get_version_history(asset_id: str):
     """Get complete version history for an asset"""
     try:
-        versions = await version_control.get_version_history(asset_id)
+        versions = db_client.get_version_history(asset_id)
         return {
             "asset_id": asset_id,
             "version_count": len(versions),
             "versions": versions
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/documents/asset/{asset_id}/version/{version_number}")
-async def get_specific_version(asset_id: str, version_number: int):
-    """Get a specific version of a document"""
-    try:
-        version = await version_control.get_specific_version(
-            asset_id,
-            version_number
-        )
-        if not version:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Version {version_number} not found for asset {asset_id}"
-            )
-        return version
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -167,7 +164,7 @@ async def compare_versions(
 ):
     """Compare two versions of a document"""
     try:
-        differences = await version_control.compare_versions(
+        differences = db_client.compare_versions(
             asset_id,
             version1,
             version2
@@ -183,28 +180,36 @@ async def compare_versions(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Keep existing routes...
 @router.get("/documents/wallet/{wallet_address}")
-async def get_documents_by_wallet(wallet_address: str):
-    """Retrieve all documents associated with a wallet address"""
+async def get_documents_by_wallet(
+    wallet_address: str, 
+    include_all_versions: bool = False
+):
+    """
+    Retrieve all documents associated with a wallet address.
+    By default, only returns current versions unless include_all_versions is True.
+    """
     try:
-        documents = db_client.get_documents_by_wallet(wallet_address)
+        documents = db_client.get_documents_by_wallet(
+            wallet_address, 
+            include_all_versions
+        )
         return {"documents": documents}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.put("/documents/{document_id}")
+@router.put("/documents/asset/{asset_id}")
 async def update_document(
-    document_id: str,
+    asset_id: str,
     smart_contract_tx_id: str,
     ipfs_hash: str,
     critical_metadata: Dict[str, Any],
     non_critical_metadata: Optional[Dict[str, Any]] = None
 ):
-    """Update an existing document"""
+    """Update the current version of an existing document"""
     try:
         updated = db_client.update_document(
-            document_id=document_id,
+            asset_id=asset_id,
             smart_contract_tx_id=smart_contract_tx_id,
             ipfs_hash=ipfs_hash,
             critical_metadata=critical_metadata,
@@ -216,32 +221,23 @@ async def update_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/documents/{document_id}/verify")
-async def verify_document(document_id: str):
-    """Verify a document"""
+@router.post("/documents/asset/{asset_id}/verify")
+async def verify_document(asset_id: str):
+    """Verify the current version of a document"""
     try:
-        verified = db_client.verify_document(document_id)
+        verified = db_client.verify_document(asset_id)
         if not verified:
             raise HTTPException(status_code=404, detail="Document not found")
         return {"status": "success", "message": "Document verified successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/documents/{document_id}")
-async def delete_document(document_id: str):
-    """Soft delete a document"""
+@router.delete("/documents/asset/{asset_id}")
+async def delete_document(asset_id: str, wallet_address: str):
+    """Soft delete the current version of a document"""
     try:
-        # First get the document to obtain the wallet address
-        document = db_client.get_document_by_id(document_id)
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
-        
-        # Get the wallet address from the document
-        wallet_address = document["userWalletAddress"]
-        
-        # Perform soft delete
         deleted = db_client.soft_delete(
-            document_id=document_id,
+            asset_id=asset_id,
             deleted_by=wallet_address
         )
         
@@ -251,7 +247,7 @@ async def delete_document(document_id: str):
         return {
             "status": "success", 
             "message": "Document marked as deleted",
-            "document_id": document_id,
+            "asset_id": asset_id,
             "deletion_timestamp": datetime.now(timezone.utc).isoformat()
         }
         

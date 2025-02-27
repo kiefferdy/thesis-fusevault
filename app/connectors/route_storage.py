@@ -22,7 +22,7 @@ load_dotenv()
 @router.post("/store")
 async def store_data(
     files: List[UploadFile] = File(...),
-    user_wallet_address: str = Form(...),
+    wallet_address: str = Form(...),
     critical_metadata_fields: Optional[List[str]] = Query(
         None, 
         description="List of CSV columns that represent 'critical' metadata (only used if uploading a CSV)."
@@ -39,7 +39,7 @@ async def store_data(
          The first row found for an asset_id is used; duplicates for that ID are discarded.
          
     All records are individually:
-      - Uploaded to IPFS (only asset_id, user_wallet_address, critical_metadata).
+      - Uploaded to IPFS (only asset_id, wallet_address, critical_metadata).
       - Stored on-chain (CID).
       - Inserted into MongoDB (full metadata).
       
@@ -54,7 +54,7 @@ async def store_data(
     # Helper function to store a single record (doc)
     async def store_single_document(
         asset_id: str,
-        user_wallet: str,
+        wallet_addr: str,
         critical_md: Dict[str, Any],
         non_critical_md: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -63,56 +63,117 @@ async def store_data(
         stores the CID on the blockchain, and inserts into MongoDB.
         Returns a dict with success info or error.
         """
-        # 1) Minimal IPFS payload
-        ipfs_payload = {
-            "asset_id": asset_id,
-            "user_wallet_address": user_wallet,
-            "critical_metadata": critical_md,
-        }
-
-        # 2) Upload to IPFS
-        ipfs_file_content = json.dumps(ipfs_payload).encode("utf-8")
-        ipfs_upload_file = UploadFile(
-            filename=f"ipfs_payload_{asset_id}.json",
-            file=BytesIO(ipfs_file_content)
-        )
+        # Check if this asset_id already exists
+        existing_doc = None
         try:
-            ipfs_data = await ipfs_upload_files(files=[ipfs_upload_file])
-            if "cids" not in ipfs_data or not ipfs_data["cids"]:
-                return {"asset_id": asset_id, "status": "error", "detail": "Failed to obtain CID from IPFS."}
-            cid_dict = ipfs_data["cids"][0]["cid"]
-            cid = cid_dict["/"] if isinstance(cid_dict, dict) and "/" in cid_dict else str(cid_dict)
+            existing_doc = db_client.get_document_by_id(asset_id)
+        except ValueError:
+            # Document doesn't exist which is fine for new documents
+            pass
         except Exception as e:
-            return {"asset_id": asset_id, "status": "error", "detail": f"IPFS upload error: {str(e)}"}
+            return {"asset_id": asset_id, "status": "error", "detail": f"Error checking for existing document: {str(e)}"}
+        
+        if existing_doc:
+            # If document already exists, create a new version
+            try:
+                # 1) Minimal IPFS payload for new version
+                ipfs_payload = {
+                    "asset_id": asset_id,
+                    "wallet_address": wallet_addr,
+                    "critical_metadata": critical_md,
+                }
 
-        # 3) Store on the blockchain
-        try:
-            blockchain_response = await blockchain_store_cid(CIDRequest(cid=str(cid)))
-            blockchain_tx_hash = blockchain_response.get("tx_hash")
-            if not blockchain_tx_hash:
-                return {"asset_id": asset_id, "status": "error", "detail": "Failed to store CID on blockchain."}
-        except Exception as e:
-            return {"asset_id": asset_id, "status": "error", "detail": f"Blockchain error: {str(e)}"}
+                # 2) Upload to IPFS
+                ipfs_file_content = json.dumps(ipfs_payload).encode("utf-8")
+                ipfs_upload_file = UploadFile(
+                    filename=f"ipfs_payload_{asset_id}.json",
+                    file=BytesIO(ipfs_file_content)
+                )
+                ipfs_data = await ipfs_upload_files(files=[ipfs_upload_file])
+                if "cids" not in ipfs_data or not ipfs_data["cids"]:
+                    return {"asset_id": asset_id, "status": "error", "detail": "Failed to obtain CID from IPFS."}
+                cid_dict = ipfs_data["cids"][0]["cid"]
+                cid = cid_dict["/"] if isinstance(cid_dict, dict) and "/" in cid_dict else str(cid_dict)
 
-        # 4) Insert into MongoDB
-        try:
-            doc_id = db_client.insert_document(
-                asset_id=asset_id,
-                user_wallet_address=user_wallet,
-                smart_contract_tx_id=blockchain_tx_hash,
-                ipfs_hash=cid,
-                critical_metadata=critical_md,
-                non_critical_metadata=non_critical_md
-            )
-            return {
-                "asset_id": asset_id,
-                "status": "success",
-                "document_id": doc_id,
-                "ipfs_cid": cid,
-                "blockchain_tx_hash": blockchain_tx_hash,
-            }
-        except Exception as e:
-            return {"asset_id": asset_id, "status": "error", "detail": f"Database error: {str(e)}"}
+                # 3) Store on the blockchain
+                blockchain_response = await blockchain_store_cid(CIDRequest(cid=str(cid)))
+                blockchain_tx_hash = blockchain_response.get("tx_hash")
+                if not blockchain_tx_hash:
+                    return {"asset_id": asset_id, "status": "error", "detail": "Failed to store CID on blockchain."}
+
+                # 4) Create new version in MongoDB
+                new_doc_id = db_client.create_new_version(
+                    asset_id=asset_id,
+                    wallet_address=wallet_addr,
+                    smart_contract_tx_id=blockchain_tx_hash,
+                    ipfs_hash=cid,
+                    critical_metadata=critical_md,
+                    non_critical_metadata=non_critical_md
+                )
+                
+                # Get version number of new document
+                new_doc = db_client.get_document_by_id(asset_id)
+                version_number = new_doc.get("versionNumber", 0)
+                
+                return {
+                    "asset_id": asset_id,
+                    "status": "success",
+                    "message": "New version created",
+                    "document_id": new_doc_id,
+                    "version": version_number,
+                    "ipfs_cid": cid,
+                    "blockchain_tx_hash": blockchain_tx_hash,
+                }
+            except Exception as e:
+                return {"asset_id": asset_id, "status": "error", "detail": f"Error creating new version: {str(e)}"}
+        else:
+            # New document - proceed with normal flow
+            try:
+                # 1) Minimal IPFS payload
+                ipfs_payload = {
+                    "asset_id": asset_id,
+                    "wallet_address": wallet_addr,
+                    "critical_metadata": critical_md,
+                }
+
+                # 2) Upload to IPFS
+                ipfs_file_content = json.dumps(ipfs_payload).encode("utf-8")
+                ipfs_upload_file = UploadFile(
+                    filename=f"ipfs_payload_{asset_id}.json",
+                    file=BytesIO(ipfs_file_content)
+                )
+                ipfs_data = await ipfs_upload_files(files=[ipfs_upload_file])
+                if "cids" not in ipfs_data or not ipfs_data["cids"]:
+                    return {"asset_id": asset_id, "status": "error", "detail": "Failed to obtain CID from IPFS."}
+                cid_dict = ipfs_data["cids"][0]["cid"]
+                cid = cid_dict["/"] if isinstance(cid_dict, dict) and "/" in cid_dict else str(cid_dict)
+
+                # 3) Store on the blockchain
+                blockchain_response = await blockchain_store_cid(CIDRequest(cid=str(cid)))
+                blockchain_tx_hash = blockchain_response.get("tx_hash")
+                if not blockchain_tx_hash:
+                    return {"asset_id": asset_id, "status": "error", "detail": "Failed to store CID on blockchain."}
+
+                # 4) Insert into MongoDB
+                doc_id = db_client.insert_document(
+                    asset_id=asset_id,
+                    wallet_address=wallet_addr,
+                    smart_contract_tx_id=blockchain_tx_hash,
+                    ipfs_hash=cid,
+                    critical_metadata=critical_md,
+                    non_critical_metadata=non_critical_md
+                )
+                return {
+                    "asset_id": asset_id,
+                    "status": "success",
+                    "message": "Document created",
+                    "document_id": doc_id,
+                    "version": 1,  # First version
+                    "ipfs_cid": cid,
+                    "blockchain_tx_hash": blockchain_tx_hash,
+                }
+            except Exception as e:
+                return {"asset_id": asset_id, "status": "error", "detail": f"Database error: {str(e)}"}
 
     # Helper to parse CSV rows into doc dicts
     def parse_csv(file_content: bytes, critical_fields: List[str]) -> List[Dict[str, Any]]:
@@ -203,9 +264,9 @@ async def store_data(
             # Mark it as seen
             seen_asset_ids.add(asset_id)
 
-            # Now store it
+            # Now store it - this will handle both new documents and new versions
             store_result = await store_single_document(
-                asset_id, user_wallet_address, critical_metadata, non_critical_metadata
+                asset_id, wallet_address, critical_metadata, non_critical_metadata
             )
             # Attach filename to the store result for clarity
             store_result["filename"] = file_obj.filename
@@ -245,9 +306,10 @@ async def store_data(
 
                 seen_asset_ids.add(asset_id)
 
+                # This will handle both new documents and new versions
                 store_result = await store_single_document(
                     asset_id,
-                    user_wallet_address,
+                    wallet_address,
                     row_doc["critical_metadata"],
                     row_doc["non_critical_metadata"]
                 )

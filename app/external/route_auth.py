@@ -1,34 +1,51 @@
 import logging
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, EmailStr
 from app.core.mongodb_client import MongoDBClient
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/transactions", tags=["transactions"])
 db_client = MongoDBClient()
 
-class UserCreate(BaseModel):
-    wallet_address: str
-    email: EmailStr
-
-@router.post("/register")
-async def register_user(wallet_adr: str, user_email: str):
-    """Register a new user"""
+@router.get("/document/{document_id}")
+async def get_document_history(document_id: str):
+    """Get transaction history for a specific document"""
     try:
-        user_id = db_client.create_user(
-            wallet_address=wallet_adr,
-            email=user_email
-        )
-        return {"status": "success", "user_id": user_id}
+        transactions = db_client.transaction_collection.find(
+            {"documentId": document_id}
+        ).sort("timestamp", -1)
+        
+        transaction_list = []
+        for tx in transactions:
+            formatted_tx = {
+                "id": str(tx['_id']),
+                "action": tx['action'],
+                "walletAddress": tx['walletAddress'],
+                "timestamp": tx['timestamp'].isoformat(),
+                "documentId": tx['documentId']
+            }
+            
+            if 'metadata' in tx:
+                formatted_tx['metadata'] = tx['metadata']
+                
+            transaction_list.append(formatted_tx)
+            
+        return {"transactions": transaction_list}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/user/{wallet_address}")
-async def get_user(wallet_address: str):
-    """Get user by wallet address"""
+@router.get("/wallet/{wallet_address}")
+async def get_wallet_history(wallet_address: str):
+    """Get transaction history for a specific wallet"""
     try:
-        user = db_client.get_user_by_wallet(wallet_address)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        return user
+        transactions = db_client.transaction_collection.find(
+            {"walletAddress": wallet_address}
+        ).sort("timestamp", -1)
+        
+        transaction_list = []
+        for tx in transactions:
+            tx['_id'] = str(tx['_id'])
+            tx['timestamp'] = tx['timestamp'].isoformat()
+            transaction_list.append(tx)
+            
+        return {"transactions": transaction_list}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

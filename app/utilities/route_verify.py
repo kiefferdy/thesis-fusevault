@@ -7,7 +7,7 @@ router = APIRouter(prefix="/verify", tags=["verify"])
 
 class MetadataPayload(BaseModel):
     asset_id: str
-    user_wallet_address: str
+    wallet_address: str  # Changed from user_wallet_address
     critical_metadata: dict
 
     class Config:
@@ -16,7 +16,7 @@ class MetadataPayload(BaseModel):
 @router.post("/calculate-cid")
 async def calculate_cid(metadata: MetadataPayload):
     """
-    Accepts a JSON payload containing metadata. Only the asset_id, user_wallet_address, 
+    Accepts a JSON payload containing metadata. Only the asset_id, wallet_address, 
     and critical_metadata fields are used. The filtered payload is converted to a JSON file 
     and forwarded to the Node.js /calculate-cid endpoint.
     """
@@ -24,7 +24,7 @@ async def calculate_cid(metadata: MetadataPayload):
         # Filter out only the fields that go on IPFS
         ipfs_payload = {
             "asset_id": metadata.asset_id,
-            "user_wallet_address": metadata.user_wallet_address,
+            "wallet_address": metadata.wallet_address,  # Changed from user_wallet_address
             "critical_metadata": metadata.critical_metadata
         }
 
