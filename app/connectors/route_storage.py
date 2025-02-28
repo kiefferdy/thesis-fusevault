@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from app.core.mongodb_client import MongoDBClient
 from app.core.route_ipfs import upload_files as ipfs_upload_files
 from app.core.route_sc import store_cid as blockchain_store_cid, CIDRequest
+from app.utilities.route_verify import MetadataPayload
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -59,10 +60,13 @@ async def store_data(
         non_critical_md: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Takes a single doc's data, uploads it to IPFS,
-        stores the CID on the blockchain, and inserts into MongoDB.
-        Returns a dict with success info or error.
+        Takes a single doc's data, determines if critical metadata has changed using multiple methods,
+        and handles database updates accordingly.
         """
+        import logging
+        import hashlib
+        logger = logging.getLogger(__name__)
+        
         # Check if this asset_id already exists
         existing_doc = None
         try:
@@ -71,65 +75,146 @@ async def store_data(
             # Document doesn't exist which is fine for new documents
             pass
         except Exception as e:
+            logger.error(f"Error checking for existing document: {str(e)}")
             return {"asset_id": asset_id, "status": "error", "detail": f"Error checking for existing document: {str(e)}"}
         
         if existing_doc:
-            # If document already exists, create a new version
             try:
-                # 1) Minimal IPFS payload for new version
+                # Get existing critical metadata and IPFS hash
+                existing_critical_md = existing_doc.get("criticalMetadata", {})
+                existing_ipfs_hash = existing_doc.get("ipfsHash")
+                
+                logger.info(f"Processing document with asset_id: {asset_id}")
+                logger.info(f"Existing IPFS hash: {existing_ipfs_hash}")
+                
+                # Method 1: Direct hash comparison of critical metadata
+                # Normalize by sorting keys and removing whitespace differences
+                critical_md_json = json.dumps(critical_md, sort_keys=True).strip()
+                existing_critical_md_json = json.dumps(existing_critical_md, sort_keys=True).strip()
+                
+                new_hash = hashlib.sha256(critical_md_json.encode()).hexdigest()
+                existing_hash = hashlib.sha256(existing_critical_md_json.encode()).hexdigest()
+                
+                metadata_hash_match = new_hash == existing_hash
+                
+                logger.info(f"New critical metadata hash: {new_hash}")
+                logger.info(f"Existing critical metadata hash: {existing_hash}")
+                logger.info(f"Metadata hash match: {metadata_hash_match}")
+                
+                # Method 2: Upload to IPFS and compare CIDs
+                # Prepare the minimal IPFS payload (only critical metadata)
                 ipfs_payload = {
                     "asset_id": asset_id,
                     "wallet_address": wallet_addr,
                     "critical_metadata": critical_md,
                 }
-
-                # 2) Upload to IPFS
-                ipfs_file_content = json.dumps(ipfs_payload).encode("utf-8")
+                
+                # Serialize with consistent formatting
+                ipfs_file_content = json.dumps(ipfs_payload, sort_keys=True).encode("utf-8")
                 ipfs_upload_file = UploadFile(
                     filename=f"ipfs_payload_{asset_id}.json",
                     file=BytesIO(ipfs_file_content)
                 )
+                
+                # Upload to IPFS to get the new CID
                 ipfs_data = await ipfs_upload_files(files=[ipfs_upload_file])
                 if "cids" not in ipfs_data or not ipfs_data["cids"]:
+                    logger.error("Failed to obtain CID from IPFS")
                     return {"asset_id": asset_id, "status": "error", "detail": "Failed to obtain CID from IPFS."}
+                    
                 cid_dict = ipfs_data["cids"][0]["cid"]
-                cid = cid_dict["/"] if isinstance(cid_dict, dict) and "/" in cid_dict else str(cid_dict)
-
-                # 3) Store on the blockchain
-                blockchain_response = await blockchain_store_cid(CIDRequest(cid=str(cid)))
-                blockchain_tx_hash = blockchain_response.get("tx_hash")
-                if not blockchain_tx_hash:
-                    return {"asset_id": asset_id, "status": "error", "detail": "Failed to store CID on blockchain."}
-
-                # 4) Create new version in MongoDB
-                new_doc_id = db_client.create_new_version(
-                    asset_id=asset_id,
-                    wallet_address=wallet_addr,
-                    smart_contract_tx_id=blockchain_tx_hash,
-                    ipfs_hash=cid,
-                    critical_metadata=critical_md,
-                    non_critical_metadata=non_critical_md
-                )
+                new_cid = cid_dict["/"] if isinstance(cid_dict, dict) and "/" in cid_dict else str(cid_dict)
                 
-                # Get version number of new document
-                new_doc = db_client.get_document_by_id(asset_id)
-                version_number = new_doc.get("versionNumber", 0)
+                # Compare CIDs
+                cid_match = new_cid == existing_ipfs_hash
                 
-                return {
-                    "asset_id": asset_id,
-                    "status": "success",
-                    "message": "New version created",
-                    "document_id": new_doc_id,
-                    "version": version_number,
-                    "ipfs_cid": cid,
-                    "blockchain_tx_hash": blockchain_tx_hash,
-                }
+                logger.info(f"New IPFS CID: {new_cid}")
+                logger.info(f"CID match: {cid_match}")
+                
+                # Determine if critical metadata has changed - if EITHER method indicates unchanged, consider it unchanged
+                # This provides a more lenient check that can overcome slight formatting differences
+                critical_metadata_changed = not (metadata_hash_match or cid_match)
+                
+                logger.info(f"Final determination - Critical metadata changed: {critical_metadata_changed}")
+                
+                if critical_metadata_changed:
+                    # Critical metadata changed - use the new CID and create new blockchain entry
+                    try:
+                        # Already have the CID from earlier upload
+                        cid = new_cid
+                        
+                        # Store on the blockchain
+                        blockchain_response = await blockchain_store_cid(CIDRequest(cid=str(cid)))
+                        blockchain_tx_hash = blockchain_response.get("tx_hash")
+                        if not blockchain_tx_hash:
+                            logger.error("Failed to store CID on blockchain")
+                            return {"asset_id": asset_id, "status": "error", "detail": "Failed to store CID on blockchain."}
+
+                        # Create new version in MongoDB
+                        new_doc_id = db_client.create_new_version(
+                            asset_id=asset_id,
+                            wallet_address=wallet_addr,
+                            smart_contract_tx_id=blockchain_tx_hash,
+                            ipfs_hash=cid,
+                            critical_metadata=critical_md,
+                            non_critical_metadata=non_critical_md
+                        )
+                        
+                        # Get version number of new document
+                        new_doc = db_client.get_document_by_id(asset_id)
+                        version_number = new_doc.get("versionNumber", 0)
+                        
+                        return {
+                            "asset_id": asset_id,
+                            "status": "success",
+                            "message": "New version created with updated critical metadata",
+                            "document_id": new_doc_id,
+                            "version": version_number,
+                            "ipfs_cid": cid,
+                            "blockchain_tx_hash": blockchain_tx_hash,
+                        }
+                    except Exception as e:
+                        logger.error(f"Error creating new version: {str(e)}")
+                        return {"asset_id": asset_id, "status": "error", "detail": f"Error creating new version: {str(e)}"}
+                else:
+                    # Only non-critical metadata changed or no real changes - just update MongoDB
+                    try:
+                        # Use the existing IPFS hash and blockchain transaction ID
+                        existing_tx_hash = existing_doc.get("smartContractTxId")
+                        
+                        # Create new version in MongoDB only
+                        new_doc_id = db_client.create_new_version(
+                            asset_id=asset_id,
+                            wallet_address=wallet_addr,
+                            smart_contract_tx_id=existing_tx_hash,  # Reuse existing blockchain TX hash
+                            ipfs_hash=existing_ipfs_hash,  # Reuse existing IPFS hash
+                            critical_metadata=critical_md,  # Same as before (or with non-significant differences)
+                            non_critical_metadata=non_critical_md  # Updated non-critical metadata
+                        )
+                        
+                        # Get version number of new document
+                        new_doc = db_client.get_document_by_id(asset_id)
+                        version_number = new_doc.get("versionNumber", 0)
+                        
+                        return {
+                            "asset_id": asset_id,
+                            "status": "success",
+                            "message": "New version created with only non-critical metadata updates",
+                            "document_id": new_doc_id,
+                            "version": version_number,
+                            "ipfs_cid": existing_ipfs_hash,  # Reusing existing IPFS hash
+                            "blockchain_tx_hash": existing_tx_hash,  # Reusing existing blockchain hash
+                        }
+                    except Exception as e:
+                        logger.error(f"Error updating non-critical metadata: {str(e)}")
+                        return {"asset_id": asset_id, "status": "error", "detail": f"Error updating non-critical metadata: {str(e)}"}
             except Exception as e:
-                return {"asset_id": asset_id, "status": "error", "detail": f"Error creating new version: {str(e)}"}
+                logger.error(f"Error in document comparison: {str(e)}")
+                return {"asset_id": asset_id, "status": "error", "detail": f"Error in document comparison: {str(e)}"}
         else:
-            # New document - proceed with normal flow
+            # New document - proceed with normal flow (always upload to IPFS)
             try:
-                # 1) Minimal IPFS payload
+                # 1) Minimal IPFS payload - only includes critical metadata
                 ipfs_payload = {
                     "asset_id": asset_id,
                     "wallet_address": wallet_addr,
@@ -137,7 +222,7 @@ async def store_data(
                 }
 
                 # 2) Upload to IPFS
-                ipfs_file_content = json.dumps(ipfs_payload).encode("utf-8")
+                ipfs_file_content = json.dumps(ipfs_payload, sort_keys=True).encode("utf-8")
                 ipfs_upload_file = UploadFile(
                     filename=f"ipfs_payload_{asset_id}.json",
                     file=BytesIO(ipfs_file_content)
@@ -173,6 +258,7 @@ async def store_data(
                     "blockchain_tx_hash": blockchain_tx_hash,
                 }
             except Exception as e:
+                logger.error(f"Database error: {str(e)}")
                 return {"asset_id": asset_id, "status": "error", "detail": f"Database error: {str(e)}"}
 
     # Helper to parse CSV rows into doc dicts

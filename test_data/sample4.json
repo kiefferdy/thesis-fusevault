@@ -1,0 +1,27 @@
+{
+    "asset_id": "DOC004",
+    "wallet_address": "0x00823FB00C2cDf1841d52bC91affB661Df39466F",
+    "smart_contract_tx_id": "0x369ca86929735eb467c6abcf51b98542b4671b62",
+    "ipfs_hash": "QmZ7zdJ6TbhvGVYkhgMN7Wcy1TgMZ9rJvXyep6J4vwPHv4",
+    "critical_metadata": {
+        "title": "Employment Contract",
+        "document_type": "legal_agreement",
+        "category": "employment",
+        "creation_date": "2024-02-15",
+        "document_id": "EMP-2024-042",
+        "parties": ["Acme Corporation", "John Doe"],
+        "effective_date": "2024-03-01"
+    },
+    "non_critical_metadata": {
+        "description": "Standard employment contract for software engineers",
+        "tags": ["employment", "contract", "legal", "engineering"],
+        "file_size": "2.7MB",
+        "file_type": "pdf",
+        "department": "Human Resources",
+        "status": "active",
+        "retention_period": "7 years",
+        "last_reviewed": "2024-02-20",
+        "review_by": "Legal Department",
+        "confidentiality": "medium"
+    }
+}
