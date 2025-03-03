@@ -26,7 +26,7 @@ This will install:
 
 ## Running the Project
 
-To start the frontend in development mode:
+To start the frontend in development mode (make sure the backend is running simultaneously):
 
 ```sh
 npm start
