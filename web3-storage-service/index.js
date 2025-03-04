@@ -118,6 +118,7 @@ app.post('/calculate-cid', upload.single('file'), async (req, res) => {
     const cid = await computeCID(filePath);
     res.json({ computed_cid: cid });
   } catch (error) {
+    console.error('Error calculating CID:', error);
     res.status(500).json({ error: error.message });
   } finally {
     // Clean up the uploaded file
