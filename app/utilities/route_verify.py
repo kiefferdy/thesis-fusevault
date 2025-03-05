@@ -1,38 +1,31 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-import json
 import httpx
+from app.utilities.format import get_ipfs_metadata, format_json
 
 router = APIRouter(prefix="/verify", tags=["verify"])
 
 class MetadataPayload(BaseModel):
     asset_id: str
-    wallet_address: str  # Changed from user_wallet_address
+    wallet_address: str
     critical_metadata: dict
 
     class Config:
         extra = "allow"
 
-@router.post("/calculate-cid")
-async def calculate_cid(metadata: MetadataPayload):
+class CIDCheckPayload(BaseModel):
+    cid: str
+    metadata: dict
+
+@router.post("/compute-cid")
+async def compute_cid(metadata: dict):
     """
-    Accepts a JSON payload containing metadata. Only the asset_id, wallet_address, 
-    and critical_metadata fields are used. The filtered payload is converted to a JSON file 
-    and forwarded to the Node.js /calculate-cid endpoint.
+    Accepts a JSON payload containing metadata and forwards it as-is to the 
+    Node.js /calculate-cid endpoint.
     """
     try:
-        # Filter out only the fields that go on IPFS
-        ipfs_payload = {
-            "asset_id": metadata.asset_id,
-            "wallet_address": metadata.wallet_address,  # Changed from user_wallet_address
-            "critical_metadata": metadata.critical_metadata
-        }
-
-        # Serialize JSON with minimal separators (no extra spaces, no newlines).
-        ipfs_json_bytes = json.dumps(
-            ipfs_payload,
-            separators=(",", ":")
-        ).encode("utf-8")
+        # Format the metadata using the consistent format_json utility
+        ipfs_json_bytes = format_json(metadata)
 
         # Prepare the file upload for Node
         files = {
@@ -52,5 +45,44 @@ async def calculate_cid(metadata: MetadataPayload):
         response.raise_for_status()
         return response.json()
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/check-cid")
+async def check_cid(payload: CIDCheckPayload):
+    """
+    Verifies if a given CID matches the CID that would be generated from the provided metadata.
+    
+    Steps:
+    1. Extract IPFS-relevant metadata using get_ipfs_metadata
+    2. Compute the CID for the extracted metadata using /compute-cid
+    3. Compare the computed CID with the provided CID
+    
+    Args:
+        payload: Contains a CID to verify and metadata to check against
+        
+    Returns:
+        dict: Contains a boolean 'verified' field indicating if the CIDs match
+    """
+    try:
+        # Extract only the IPFS-relevant fields from the metadata
+        ipfs_metadata = get_ipfs_metadata(payload.metadata)
+        
+        # Calculate the CID based on the filtered metadata
+        calc_result = await compute_cid(ipfs_metadata)
+        computed_cid = calc_result.get("computed_cid")
+        
+        if not computed_cid:
+            raise HTTPException(status_code=500, detail="Failed to compute CID from metadata")
+        
+        # Compare the CIDs
+        verified = computed_cid == payload.cid
+        
+        return {
+            "verified": verified,
+            "provided_cid": payload.cid,
+            "computed_cid": computed_cid
+        }
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

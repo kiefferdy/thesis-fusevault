@@ -1,10 +1,44 @@
 from typing import List
 from fastapi import APIRouter, File, UploadFile, HTTPException
 import httpx
+from app.utilities.format import format_json
 
 router = APIRouter(prefix="/ipfs", tags=["ipfs"])
 
 WEB3_STORAGE_SERVICE_URL = "http://localhost:8080"
+
+@router.post("/upload-metadata")
+async def upload_metadata(metadata: dict):
+    """
+    Receive metadata as JSON, convert it to a file, and upload it to Web3.Storage.
+    Returns the resulting CID.
+    """
+    try:
+        # Format the metadata using the consistent format_json utility
+        metadata_json = format_json(metadata)
+        
+        # Create a file content for direct multipart upload
+        multipart_data = [
+            ("files", ("metadata.json", metadata_json, "application/json"))
+        ]
+        
+        # Send directly to the web3-storage service
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            response = await client.post(
+                f"{WEB3_STORAGE_SERVICE_URL}/upload",
+                files=multipart_data
+            )
+            response.raise_for_status()
+
+        return {
+            "message": "Metadata uploaded successfully",
+            "result": response.json()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error uploading metadata: {str(e)}"
+        )
 
 @router.post("/upload")
 async def upload_files(files: List[UploadFile] = File(...)):
@@ -23,7 +57,7 @@ async def upload_files(files: List[UploadFile] = File(...)):
                 ("files", (f.filename, file_content, f.content_type))
             )
         
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=90.0) as client:
             response = await client.post(
                 f"{WEB3_STORAGE_SERVICE_URL}/upload",
                 files=multipart_data
