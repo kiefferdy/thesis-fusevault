@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
-from app.repositories.mongodb_repo import MongoDBRepository
+from app.repositories.asset_repo import MongoDBRepository
 from app.schemas.asset_schema import (
     AssetCreateRequest,
     AssetUpdateRequest,
