@@ -182,10 +182,11 @@ class MongoDBClient:
             logger.error(f"Error retrieving documents: {str(e)}")
             raise
 
-    def update_document(self, asset_id: str, smart_contract_tx_id: str,
-                   ipfs_hash: str, critical_metadata: Dict[str, Any],
+    def update_document(self, asset_id: str, wallet_address: str, 
+                   smart_contract_tx_id: str, ipfs_hash: str, 
+                   critical_metadata: Dict[str, Any],
                    non_critical_metadata: Optional[Dict[str, Any]] = None) -> bool:
-        """Update the current version of a document"""
+        """Update the current version of a document with wallet address ownership check"""
         try:
             # Get the current document
             current_doc = self.assets_collection.find_one({
@@ -196,6 +197,11 @@ class MongoDBClient:
             if not current_doc:
                 return False
 
+            # Check if the provided wallet address matches the document owner
+            if current_doc["walletAddress"] != wallet_address:
+                # Not the document owner, return unauthorized
+                return False
+                
             # Update the document
             update_result = self.assets_collection.update_one(
                 {"_id": current_doc["_id"]},
@@ -212,7 +218,7 @@ class MongoDBClient:
             
             if update_result.modified_count > 0:
                 # Record transaction
-                self.record_transaction(asset_id, "UPDATE", current_doc["walletAddress"])
+                self.record_transaction(asset_id, "UPDATE", wallet_address)
                 return True
                 
             return False
@@ -222,10 +228,10 @@ class MongoDBClient:
             raise
 
     def create_new_version(self, asset_id: str, wallet_address: str,
-                      smart_contract_tx_id: str, ipfs_hash: str,
-                      critical_metadata: Dict[str, Any],
-                      non_critical_metadata: Dict[str, Any] = None) -> str:
-        """Create a new version of an existing document"""
+                    smart_contract_tx_id: str, ipfs_hash: str,
+                    critical_metadata: Dict[str, Any],
+                    non_critical_metadata: Dict[str, Any] = None) -> str:
+        """Create a new version of an existing document with ownership verification"""
         try:
             # Find the latest version
             latest_doc = self.assets_collection.find_one(
@@ -234,7 +240,11 @@ class MongoDBClient:
             
             if not latest_doc:
                 raise ValueError(f"Document with Asset ID {asset_id} not found")
-                
+            
+            # Check if the provided wallet address matches the document owner
+            if latest_doc["walletAddress"] != wallet_address:
+                raise ValueError(f"Unauthorized: Wallet address {wallet_address} is not the owner of this document")
+                    
             new_version_number = latest_doc.get("versionNumber", 1) + 1
             
             # Mark previous as not current FIRST
@@ -382,3 +392,12 @@ class MongoDBClient:
         if hasattr(self, 'client'):
             self.client.close()
             logger.info("MongoDB connection closed")
+
+    def get_user_by_wallet(self, wallet_address: str) -> Optional[Dict]:
+        """Retrieve a user by their wallet address."""
+        try:
+            user = self.users_collection.find_one({"walletAddress": wallet_address})
+            return user
+        except Exception as e:
+            logger.error(f"Error retrieving user by wallet: {str(e)}")
+            return None

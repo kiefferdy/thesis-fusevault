@@ -32,6 +32,7 @@ async def process_metadata(
     Core function to process metadata for an asset.
     
     - Checks if asset exists
+    - Checks if requesting wallet is the owner of the asset
     - Determines if critical metadata has changed using CID comparison
     - Handles IPFS/blockchain if needed
     - Updates MongoDB with new version or creates new document
@@ -56,6 +57,17 @@ async def process_metadata(
                 result.update(file_info)
             return result
         
+        # If document exists, verify wallet ownership
+        if existing_doc and existing_doc.get("walletAddress") != wallet_address:
+            result = {
+                "asset_id": asset_id, 
+                "status": "error", 
+                "detail": f"Unauthorized: Wallet {wallet_address} is not the owner of this document"
+            }
+            if file_info:
+                result.update(file_info)
+            return result
+            
         # Extract IPFS-relevant metadata using format.py utility
         ipfs_metadata = get_ipfs_metadata({
             "asset_id": asset_id,
@@ -104,14 +116,22 @@ async def process_metadata(
                     return result
                 
                 # 3) Create new version in MongoDB
-                new_doc_id = db_client.create_new_version(
-                    asset_id=asset_id,
-                    wallet_address=wallet_address,
-                    smart_contract_tx_id=blockchain_tx_hash,
-                    ipfs_hash=cid,
-                    critical_metadata=critical_metadata,
-                    non_critical_metadata=non_critical_metadata
-                )
+                try:
+                    new_doc_id = db_client.create_new_version(
+                        asset_id=asset_id,
+                        wallet_address=wallet_address,
+                        smart_contract_tx_id=blockchain_tx_hash,
+                        ipfs_hash=cid,
+                        critical_metadata=critical_metadata,
+                        non_critical_metadata=non_critical_metadata
+                    )
+                except ValueError as e:
+                    if "Unauthorized" in str(e):
+                        result = {"asset_id": asset_id, "status": "error", "detail": str(e)}
+                        if file_info:
+                            result.update(file_info)
+                        return result
+                    raise
                 
                 # 4) Get version number of new document
                 new_doc = db_client.get_document_by_id(asset_id)
@@ -135,14 +155,22 @@ async def process_metadata(
                 existing_tx_hash = existing_doc.get("smartContractTxId")
                 
                 # Create new version in MongoDB only
-                new_doc_id = db_client.create_new_version(
-                    asset_id=asset_id,
-                    wallet_address=wallet_address,
-                    smart_contract_tx_id=existing_tx_hash,  # Reuse existing blockchain TX hash
-                    ipfs_hash=existing_ipfs_hash,  # Reuse existing IPFS hash
-                    critical_metadata=critical_metadata,  # Same as before (or with non-significant differences)
-                    non_critical_metadata=non_critical_metadata  # Updated non-critical metadata
-                )
+                try:
+                    new_doc_id = db_client.create_new_version(
+                        asset_id=asset_id,
+                        wallet_address=wallet_address,
+                        smart_contract_tx_id=existing_tx_hash,  # Reuse existing blockchain TX hash
+                        ipfs_hash=existing_ipfs_hash,  # Reuse existing IPFS hash
+                        critical_metadata=critical_metadata,  # Same as before (or with non-significant differences)
+                        non_critical_metadata=non_critical_metadata  # Updated non-critical metadata
+                    )
+                except ValueError as e:
+                    if "Unauthorized" in str(e):
+                        result = {"asset_id": asset_id, "status": "error", "detail": str(e)}
+                        if file_info:
+                            result.update(file_info)
+                        return result
+                    raise
                 
                 # Get version number of new document
                 new_doc = db_client.assets_collection.find_one({
@@ -215,7 +243,6 @@ async def process_metadata(
         if file_info:
             result.update(file_info)
         return result
-
 @router.post("/metadata")
 async def upload_metadata(
     asset_id: str = Form(...),

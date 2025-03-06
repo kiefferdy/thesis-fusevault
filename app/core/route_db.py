@@ -115,7 +115,7 @@ async def create_new_version(
     critical_metadata: Dict[str, Any],
     non_critical_metadata: Dict[str, Any] = None
 ):
-    """Create a new version of an existing document"""
+    """Create a new version of an existing document with ownership verification"""
     try:
         new_doc_id = db_client.create_new_version(
             asset_id=asset_id,
@@ -139,6 +139,8 @@ async def create_new_version(
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except ValueError as e:
+        if "Unauthorized" in str(e):
+            raise HTTPException(status_code=403, detail=str(e))
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -201,24 +203,44 @@ async def get_documents_by_wallet(
 @router.put("/documents/asset/{asset_id}")
 async def update_document(
     asset_id: str,
+    wallet_address: str,
     smart_contract_tx_id: str,
     ipfs_hash: str,
     critical_metadata: Dict[str, Any],
     non_critical_metadata: Optional[Dict[str, Any]] = None
 ):
-    """Update the current version of an existing document"""
+    """Update the current version of an existing document with owner verification"""
     try:
         updated = db_client.update_document(
             asset_id=asset_id,
+            wallet_address=wallet_address,
             smart_contract_tx_id=smart_contract_tx_id,
             ipfs_hash=ipfs_hash,
             critical_metadata=critical_metadata,
             non_critical_metadata=non_critical_metadata
         )
+        
         if not updated:
-            raise HTTPException(status_code=404, detail="Document not found")
+            # Check if document exists at all
+            try:
+                doc = db_client.get_document_by_id(asset_id)
+                # If we get here, document exists but update was denied
+                if doc and doc["walletAddress"] != wallet_address:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"Unauthorized: Wallet {wallet_address} is not the owner of this document"
+                    )
+            except ValueError:
+                # Document doesn't exist
+                raise HTTPException(status_code=404, detail="Document not found")
+                
+            # Generic error
+            raise HTTPException(status_code=400, detail="Failed to update document")
+            
         return {"status": "success", "message": "Document updated successfully"}
     except Exception as e:
+        if "Unauthorized" in str(e):
+            raise HTTPException(status_code=403, detail=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/documents/asset/{asset_id}/verify")
@@ -234,8 +256,25 @@ async def verify_document(asset_id: str):
 
 @router.delete("/documents/asset/{asset_id}")
 async def delete_document(asset_id: str, wallet_address: str):
-    """Soft delete the current version of a document"""
+    """Soft delete the current version of a document with ownership verification"""
     try:
+        # First check document ownership
+        document = db_client.assets_collection.find_one({
+            "assetId": asset_id,
+            "isCurrent": True
+        })
+        
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Check ownership
+        if document["walletAddress"] != wallet_address:
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Unauthorized: Wallet {wallet_address} is not the owner of this document"
+            )
+            
+        # Proceed with delete if owner
         deleted = db_client.soft_delete(
             asset_id=asset_id,
             deleted_by=wallet_address
@@ -251,5 +290,7 @@ async def delete_document(asset_id: str, wallet_address: str):
             "deletion_timestamp": datetime.now(timezone.utc).isoformat()
         }
         
+    except HTTPException as e:
+        raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
