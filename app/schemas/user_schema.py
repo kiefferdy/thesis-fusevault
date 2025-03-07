@@ -1,18 +1,17 @@
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 class UserBase(BaseModel):
     wallet_address: str = Field(..., description="Ethereum wallet address used for authentication")
 
-class NonceResponse(UserBase):
-    nonce: int = Field(..., description="Nonce generated for wallet authentication")
+class UserCreate(UserBase):
+    email: EmailStr = Field(..., description="User's email address")
+    role: Optional[str] = Field("user", description="User's role (default: user)")
 
-class AuthenticationRequest(UserBase):
-    signature: str = Field(..., description="Cryptographic signature provided by the wallet to verify authenticity")
-
-class AuthenticationResponse(UserBase):
-    authenticated: bool = Field(..., description="Indicates if authentication was successful")
-    message: Optional[str] = Field(None, description="Optional message providing additional details")
-
+class UserResponse(UserBase):
+    id: str = Field(..., description="Unique identifier for the user")
+    email: EmailStr = Field(..., description="User's email address")
+    role: str = Field(..., description="User's role")
+    
     class Config:
         orm_mode = True
