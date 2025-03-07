@@ -1,15 +1,12 @@
-from typing import Optional, Dict, Any
-from datetime import datetime, timezone
+from typing import Optional, Dict, Any, List
 import logging
-import secrets
-import random
 
 logger = logging.getLogger(__name__)
 
 class AuthRepository:
     """
     Repository for authentication operations in MongoDB.
-    Handles nonce generation, verification, and session management.
+    Handles CRUD operations for the auth and sessions collections.
     """
     
     def __init__(self, db_client):
@@ -22,122 +19,84 @@ class AuthRepository:
         self.auth_collection = db_client.auth_collection
         self.sessions_collection = db_client.sessions_collection
         
-    async def get_nonce(self, wallet_address: str) -> int:
+    async def get_auth_record(self, wallet_address: str) -> Optional[Dict[str, Any]]:
         """
-        Retrieve nonce for a wallet address, or create a new one if not found.
+        Get auth record for a wallet address.
         
         Args:
-            wallet_address: The wallet address to get/create nonce for
+            wallet_address: The wallet address to get record for
             
         Returns:
-            The nonce for the wallet address
+            Auth record if found, None otherwise
         """
         try:
             auth_record = self.auth_collection.find_one({"walletAddress": wallet_address})
             
-            if auth_record and "nonce" in auth_record:
-                return auth_record["nonce"]
+            if auth_record:
+                auth_record["_id"] = str(auth_record["_id"])
                 
-            return await self.generate_nonce(wallet_address)
+            return auth_record
             
         except Exception as e:
-            logger.error(f"Error getting nonce: {str(e)}")
+            logger.error(f"Error getting auth record: {str(e)}")
             raise
             
-    async def generate_nonce(self, wallet_address: str) -> int:
+    async def upsert_auth_record(self, wallet_address: str, data: Dict[str, Any]) -> bool:
         """
-        Generate and store a new nonce for a wallet address.
+        Insert or update auth record for a wallet address.
         
         Args:
-            wallet_address: The wallet address to generate nonce for
+            wallet_address: The wallet address to upsert record for
+            data: The data to upsert
             
         Returns:
-            The generated nonce
+            True if successful, False otherwise
         """
         try:
-            nonce = random.randint(100000, 999999)  # 6-digit nonce
-            
-            self.auth_collection.update_one(
+            result = self.auth_collection.update_one(
                 {"walletAddress": wallet_address},
-                {"$set": {"nonce": nonce}},
+                {"$set": data},
                 upsert=True
             )
             
-            return nonce
+            return result.modified_count > 0 or result.upserted_id is not None
             
         except Exception as e:
-            logger.error(f"Error generating nonce: {str(e)}")
+            logger.error(f"Error upserting auth record: {str(e)}")
             raise
             
-    async def update_nonce(self, wallet_address: str) -> int:
+    async def insert_session(self, session_data: Dict[str, Any]) -> str:
         """
-        Update the nonce for a wallet address after successful authentication.
+        Insert a new session.
         
         Args:
-            wallet_address: The wallet address to update nonce for
+            session_data: Data for the session
             
         Returns:
-            The new nonce
+            Session ID if successful
         """
         try:
-            return await self.generate_nonce(wallet_address)
-            
-        except Exception as e:
-            logger.error(f"Error updating nonce: {str(e)}")
-            raise
-            
-    async def create_session(self, wallet_address: str, duration: int = 3600) -> str:
-        """
-        Create a new session for a wallet address.
-        
-        Args:
-            wallet_address: The wallet address to create session for
-            duration: Session duration in seconds (default: 1 hour)
-            
-        Returns:
-            The session ID
-        """
-        try:
-            session_id = secrets.token_hex(32)
-            expires_at = datetime.now(timezone.utc)
-            
-            # Add duration in seconds to current time
-            expires_at = expires_at.replace(second=expires_at.second + duration)
-            
-            session = {
-                "sessionId": session_id,
-                "walletAddress": wallet_address,
-                "createdAt": datetime.now(timezone.utc),
-                "expiresAt": expires_at,
-                "isActive": True
-            }
-            
-            self.sessions_collection.insert_one(session)
+            result = self.sessions_collection.insert_one(session_data)
+            session_id = session_data.get("sessionId", str(result.inserted_id))
             
             return session_id
             
         except Exception as e:
-            logger.error(f"Error creating session: {str(e)}")
+            logger.error(f"Error inserting session: {str(e)}")
             raise
             
-    async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    async def get_session(self, query: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        Retrieve a session by ID.
+        Get a session by query.
         
         Args:
-            session_id: The session ID to retrieve
+            query: Query to find the session
             
         Returns:
-            Session document if found and active, None otherwise
+            Session document if found, None otherwise
         """
         try:
-            current_time = datetime.now(timezone.utc)
-            
-            session = self.sessions_collection.find_one({
-                "sessionId": session_id,
-                "expiresAt": {"$gt": current_time},
-                "isActive": True
-            })
+            session = self.sessions_collection.find_one(query)
             
             if session:
                 session["_id"] = str(session["_id"])
@@ -148,6 +107,29 @@ class AuthRepository:
             logger.error(f"Error getting session: {str(e)}")
             raise
             
+    async def update_session(self, session_id: str, update: Dict[str, Any]) -> bool:
+        """
+        Update a session.
+        
+        Args:
+            session_id: The session ID to update
+            update: The update operations to perform
+            
+        Returns:
+            True if update was successful, False otherwise
+        """
+        try:
+            result = self.sessions_collection.update_one(
+                {"sessionId": session_id},
+                {"$set": update}
+            )
+            
+            return result.modified_count > 0
+            
+        except Exception as e:
+            logger.error(f"Error updating session: {str(e)}")
+            raise
+            
     async def delete_session(self, session_id: str) -> bool:
         """
         Delete a session.
@@ -156,15 +138,12 @@ class AuthRepository:
             session_id: The session ID to delete
             
         Returns:
-            True if session was deleted, False otherwise
+            True if deletion was successful, False otherwise
         """
         try:
-            result = self.sessions_collection.update_one(
-                {"sessionId": session_id},
-                {"$set": {"isActive": False}}
-            )
+            result = self.sessions_collection.delete_one({"sessionId": session_id})
             
-            return result.modified_count > 0
+            return result.deleted_count > 0
             
         except Exception as e:
             logger.error(f"Error deleting session: {str(e)}")

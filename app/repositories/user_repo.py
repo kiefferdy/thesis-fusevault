@@ -1,7 +1,6 @@
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timezone
-from bson import ObjectId
 import logging
+from bson import ObjectId
 
 logger = logging.getLogger(__name__)
 
@@ -20,54 +19,39 @@ class UserRepository:
         """
         self.users_collection = db_client.users_collection
         
-    async def create_user(
-        self, 
-        wallet_address: str, 
-        email: str,
-        role: str = "user"
-    ) -> str:
+    async def insert_user(self, user_data: Dict[str, Any]) -> str:
         """
-        Create a new user.
+        Insert a new user.
         
         Args:
-            wallet_address: The user's wallet address
-            email: The user's email address
-            role: The user's role (default: "user")
+            user_data: User data to insert
             
         Returns:
-            String ID of the created user
+            String ID of the inserted user
         """
         try:
-            user = {
-                "walletAddress": wallet_address,
-                "email": email,
-                "role": role,
-                "createdAt": datetime.now(timezone.utc),
-                "lastLogin": None
-            }
-            
-            result = self.users_collection.insert_one(user)
+            result = self.users_collection.insert_one(user_data)
             user_id = str(result.inserted_id)
             
-            logger.info(f"User created with ID: {user_id}")
+            logger.info(f"User inserted with ID: {user_id}")
             return user_id
             
         except Exception as e:
-            logger.error(f"Error creating user: {str(e)}")
+            logger.error(f"Error inserting user: {str(e)}")
             raise
             
-    async def get_user_by_wallet(self, wallet_address: str) -> Optional[Dict[str, Any]]:
+    async def find_user(self, query: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        Retrieve a user by wallet address.
+        Find a user by query.
         
         Args:
-            wallet_address: The wallet address to look up
+            query: MongoDB query to filter user
             
         Returns:
             User document if found, None otherwise
         """
         try:
-            user = self.users_collection.find_one({"walletAddress": wallet_address})
+            user = self.users_collection.find_one(query)
             
             if user:
                 user["_id"] = str(user["_id"])
@@ -75,29 +59,45 @@ class UserRepository:
             return user
             
         except Exception as e:
-            logger.error(f"Error getting user by wallet: {str(e)}")
+            logger.error(f"Error finding user: {str(e)}")
             raise
             
-    async def update_user(
-        self, 
-        wallet_address: str, 
-        update_data: Dict[str, Any]
-    ) -> bool:
+    async def find_users(self, query: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Update a user's information.
+        Find users by query.
         
         Args:
-            wallet_address: The wallet address of the user to update
-            update_data: The data to update
+            query: MongoDB query to filter users
             
         Returns:
-            True if user was updated, False otherwise
+            List of user documents
         """
         try:
-            result = self.users_collection.update_one(
-                {"walletAddress": wallet_address},
-                {"$set": update_data}
-            )
+            cursor = self.users_collection.find(query)
+            users = list(cursor)
+            
+            for user in users:
+                user["_id"] = str(user["_id"])
+                
+            return users
+            
+        except Exception as e:
+            logger.error(f"Error finding users: {str(e)}")
+            raise
+            
+    async def update_user(self, query: Dict[str, Any], update: Dict[str, Any]) -> bool:
+        """
+        Update a user.
+        
+        Args:
+            query: Query to identify the user to update
+            update: The update operations to perform
+            
+        Returns:
+            True if update was successful, False otherwise
+        """
+        try:
+            result = self.users_collection.update_one(query, update)
             
             return result.modified_count > 0
             
@@ -105,24 +105,21 @@ class UserRepository:
             logger.error(f"Error updating user: {str(e)}")
             raise
             
-    async def update_last_login(self, wallet_address: str) -> bool:
+    async def delete_user(self, query: Dict[str, Any]) -> bool:
         """
-        Update a user's last login timestamp.
+        Delete a user.
         
         Args:
-            wallet_address: The wallet address of the user
+            query: Query to identify the user to delete
             
         Returns:
-            True if user was updated, False otherwise
+            True if deletion was successful, False otherwise
         """
         try:
-            result = self.users_collection.update_one(
-                {"walletAddress": wallet_address},
-                {"$set": {"lastLogin": datetime.now(timezone.utc)}}
-            )
+            result = self.users_collection.delete_one(query)
             
-            return result.modified_count > 0
+            return result.deleted_count > 0
             
         except Exception as e:
-            logger.error(f"Error updating last login: {str(e)}")
+            logger.error(f"Error deleting user: {str(e)}")
             raise

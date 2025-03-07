@@ -126,3 +126,69 @@ class UserHandler:
         except Exception as e:
             logger.error(f"Error updating user: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Error updating user: {str(e)}")
+            
+    async def delete_user(self, wallet_address: str) -> Dict[str, Any]:
+        """
+        Delete a user.
+        
+        Args:
+            wallet_address: The wallet address of the user to delete
+            
+        Returns:
+            Dict containing deletion result
+            
+        Raises:
+            HTTPException: If user not found or deletion fails
+        """
+        try:
+            success = await self.user_service.delete_user(wallet_address)
+            
+            if not success:
+                raise HTTPException(status_code=404, detail="User not found")
+                
+            return {
+                "status": "success",
+                "message": "User deleted successfully",
+                "wallet_address": wallet_address
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error deleting user: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error deleting user: {str(e)}")
+            
+    async def get_users_by_role(self, role: str) -> Dict[str, Any]:
+        """
+        Get all users with a specific role.
+        
+        Args:
+            role: The role to filter by
+            
+        Returns:
+            Dict containing users with the specified role
+            
+        Raises:
+            HTTPException: If retrieval fails
+        """
+        try:
+            users = await self.user_service.get_users_by_role(role)
+            
+            return {
+                "status": "success",
+                "role": role,
+                "users": [
+                    {
+                        "id": user.id,
+                        "wallet_address": user.wallet_address,
+                        "email": user.email,
+                        "role": user.role
+                    }
+                    for user in users
+                ],
+                "count": len(users)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error retrieving users by role: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error retrieving users by role: {str(e)}")

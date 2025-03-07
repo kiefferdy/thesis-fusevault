@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
+from datetime import datetime
 from pymongo import DESCENDING
 from bson import ObjectId
 import logging
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class AssetRepository:
     """
     Repository for asset operations in MongoDB.
-    Handles document versioning, metadata management, and asset queries.
+    Handles CRUD operations for the assets collection.
     """
     
     def __init__(self, db_client):
@@ -21,45 +21,17 @@ class AssetRepository:
         """
         self.assets_collection = db_client.assets_collection
         
-    async def insert_asset(
-        self, 
-        asset_id: str, 
-        wallet_address: str,
-        smart_contract_tx_id: str, 
-        ipfs_hash: str,
-        critical_metadata: Dict[str, Any],
-        non_critical_metadata: Optional[Dict[str, Any]] = None
-    ) -> str:
+    async def insert_asset(self, document: Dict[str, Any]) -> str:
         """
         Insert a new asset document.
         
         Args:
-            asset_id: Unique identifier for the asset
-            wallet_address: Owner's wallet address
-            smart_contract_tx_id: Transaction hash from blockchain
-            ipfs_hash: CID from IPFS storage
-            critical_metadata: Core metadata stored on blockchain
-            non_critical_metadata: Additional metadata stored only in MongoDB
+            document: The document to insert
             
         Returns:
             String ID of the inserted document
         """
         try:
-            document = {
-                "assetId": asset_id,
-                "versionNumber": 1,  # Initial version
-                "walletAddress": wallet_address,
-                "smartContractTxId": smart_contract_tx_id,
-                "ipfsHash": ipfs_hash,
-                "lastVerified": datetime.now(timezone.utc),
-                "lastUpdated": datetime.now(timezone.utc),
-                "criticalMetadata": critical_metadata,
-                "nonCriticalMetadata": non_critical_metadata or {},
-                "isCurrent": True,
-                "isDeleted": False,
-                "documentHistory": []
-            }
-            
             result = self.assets_collection.insert_one(document)
             doc_id = str(result.inserted_id)
             
@@ -70,30 +42,17 @@ class AssetRepository:
             logger.error(f"Error inserting asset: {str(e)}")
             raise
             
-    async def find_asset(
-        self, 
-        asset_id: str, 
-        version: Optional[int] = None
-    ) -> Optional[Dict[str, Any]]:
+    async def find_asset(self, query: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        Find an asset by ID and optionally version.
+        Find an asset by query parameters.
         
         Args:
-            asset_id: The asset ID to find
-            version: Optional version number (default: current version)
+            query: The query parameters to search by
             
         Returns:
             Asset document if found, None otherwise
         """
         try:
-            # Set up the query
-            query = {"assetId": asset_id, "isDeleted": False}
-            
-            if version:
-                query["versionNumber"] = version
-            else:
-                query["isCurrent"] = True
-                
             # Find the document
             asset = self.assets_collection.find_one(query)
             
@@ -107,30 +66,21 @@ class AssetRepository:
             logger.error(f"Error finding asset: {str(e)}")
             raise
             
-    async def find_assets_by_wallet(
-        self, 
-        wallet_address: str, 
-        include_all_versions: bool = False
-    ) -> List[Dict[str, Any]]:
+    async def find_assets(self, query: Dict[str, Any], sort_field: str = "lastUpdated", sort_direction: int = DESCENDING) -> List[Dict[str, Any]]:
         """
-        Find assets by wallet address.
+        Find assets by query parameters.
         
         Args:
-            wallet_address: The wallet address to find assets for
-            include_all_versions: Whether to include non-current versions
+            query: The query parameters to search by
+            sort_field: Field to sort by (default: lastUpdated)
+            sort_direction: Direction to sort (default: DESCENDING)
             
         Returns:
             List of asset documents
         """
         try:
-            # Set up the query
-            query = {"walletAddress": wallet_address, "isDeleted": False}
-            
-            if not include_all_versions:
-                query["isCurrent"] = True
-                
             # Find the documents
-            cursor = self.assets_collection.find(query).sort("lastUpdated", DESCENDING)
+            cursor = self.assets_collection.find(query).sort(sort_field, sort_direction)
             assets = list(cursor)
             
             # Convert ObjectId to string for each asset
@@ -140,158 +90,61 @@ class AssetRepository:
             return assets
             
         except Exception as e:
-            logger.error(f"Error finding assets by wallet: {str(e)}")
+            logger.error(f"Error finding assets: {str(e)}")
             raise
             
-    async def create_new_version(
-        self,
-        asset_id: str,
-        wallet_address: str,
-        smart_contract_tx_id: str,
-        ipfs_hash: str,
-        critical_metadata: Dict[str, Any],
-        non_critical_metadata: Optional[Dict[str, Any]] = None
-    ) -> str:
+    async def update_asset(self, query: Dict[str, Any], update: Dict[str, Any]) -> bool:
         """
-        Create a new version of an existing asset.
+        Update an asset document.
         
         Args:
-            asset_id: The asset ID to create a new version for
-            wallet_address: Owner's wallet address
-            smart_contract_tx_id: Transaction hash from blockchain
-            ipfs_hash: CID from IPFS storage
-            critical_metadata: Core metadata stored on blockchain
-            non_critical_metadata: Additional metadata stored only in MongoDB
+            query: The query to identify document to update
+            update: The update operations to perform
             
         Returns:
-            String ID of the new version document
+            True if update was successful, False otherwise
         """
         try:
-            # Find the current version
-            current_asset = self.assets_collection.find_one(
-                {"assetId": asset_id, "isCurrent": True}
-            )
-            
-            if not current_asset:
-                raise ValueError(f"Asset not found: {asset_id}")
-                
-            # Get the current version number and increment
-            new_version_number = current_asset.get("versionNumber", 1) + 1
-            
-            # Mark the current version as not current (FIRST, to avoid race conditions)
-            self.assets_collection.update_one(
-                {"_id": current_asset["_id"]},
-                {"$set": {"isCurrent": False}}
-            )
-            
-            # Create the new version document
-            new_doc = {
-                "assetId": asset_id,
-                "versionNumber": new_version_number,
-                "walletAddress": wallet_address,
-                "smartContractTxId": smart_contract_tx_id,
-                "ipfsHash": ipfs_hash,
-                "lastVerified": datetime.now(timezone.utc),
-                "lastUpdated": datetime.now(timezone.utc),
-                "criticalMetadata": critical_metadata,
-                "nonCriticalMetadata": non_critical_metadata or {},
-                "isCurrent": True,
-                "isDeleted": False,
-                "previousVersionId": str(current_asset["_id"]),
-                "documentHistory": [*current_asset.get("documentHistory", []), str(current_asset["_id"])]
-            }
-            
-            # Insert the new version
-            result = self.assets_collection.insert_one(new_doc)
-            new_doc_id = str(result.inserted_id)
-            
-            logger.info(f"New version created for asset {asset_id}: {new_doc_id}")
-            return new_doc_id
-            
-        except Exception as e:
-            logger.error(f"Error creating new version: {str(e)}")
-            raise
-            
-    async def update_non_critical_metadata(
-        self, 
-        asset_id: str, 
-        metadata: Dict[str, Any]
-    ) -> bool:
-        """
-        Update only non-critical metadata for an asset.
-        
-        Args:
-            asset_id: The asset ID to update
-            metadata: New non-critical metadata
-            
-        Returns:
-            True if updated successfully, False otherwise
-        """
-        try:
-            result = self.assets_collection.update_one(
-                {"assetId": asset_id, "isCurrent": True},
-                {"$set": {
-                    "nonCriticalMetadata": metadata,
-                    "lastUpdated": datetime.now(timezone.utc)
-                }}
-            )
-            
+            result = self.assets_collection.update_one(query, update)
             return result.modified_count > 0
             
         except Exception as e:
-            logger.error(f"Error updating non-critical metadata: {str(e)}")
+            logger.error(f"Error updating asset: {str(e)}")
             raise
             
-    async def soft_delete(self, asset_id: str, deleted_by: str) -> bool:
+    async def update_assets(self, query: Dict[str, Any], update: Dict[str, Any]) -> int:
         """
-        Soft delete an asset (mark as deleted).
+        Update multiple asset documents.
         
         Args:
-            asset_id: The asset ID to delete
-            deleted_by: Wallet address that initiated the deletion
+            query: The query to identify documents to update
+            update: The update operations to perform
             
         Returns:
-            True if deleted successfully, False otherwise
+            Number of documents updated
         """
         try:
-            result = self.assets_collection.update_one(
-                {"assetId": asset_id, "isCurrent": True},
-                {"$set": {
-                    "isDeleted": True,
-                    "deletedBy": deleted_by,
-                    "deletedAt": datetime.now(timezone.utc)
-                }}
-            )
-            
-            return result.modified_count > 0
+            result = self.assets_collection.update_many(query, update)
+            return result.modified_count
             
         except Exception as e:
-            logger.error(f"Error soft deleting asset: {str(e)}")
+            logger.error(f"Error updating assets: {str(e)}")
             raise
             
-    async def get_version_history(self, asset_id: str) -> List[Dict[str, Any]]:
+    async def delete_asset(self, query: Dict[str, Any]) -> bool:
         """
-        Get the version history for an asset.
+        Hard delete an asset.
         
         Args:
-            asset_id: The asset ID to get history for
+            query: The query to identify document to delete
             
         Returns:
-            List of asset versions ordered by version number
+            True if deletion was successful, False otherwise
         """
         try:
-            cursor = self.assets_collection.find(
-                {"assetId": asset_id}
-            ).sort("versionNumber", 1)
-            
-            versions = list(cursor)
-            
-            # Convert ObjectId to string for each version
-            for version in versions:
-                version["_id"] = str(version["_id"])
-                
-            return versions
+            result = self.assets_collection.delete_one(query)
+            return result.deleted_count > 0
             
         except Exception as e:
-            logger.error(f"Error getting version history: {str(e)}")
+            logger.error(f"Error deleting asset: {str(e)}")
             raise

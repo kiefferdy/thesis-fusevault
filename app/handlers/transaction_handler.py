@@ -14,18 +14,18 @@ class TransactionHandler:
     
     def __init__(
         self, 
-        transaction_service: TransactionService = None,
-        asset_service: AssetService = None
+        transaction_service: TransactionService,
+        asset_service: AssetService
     ):
         """
-        Initialize with optional service dependencies.
+        Initialize with required services.
         
         Args:
             transaction_service: Service for transaction operations
-            asset_service: Service for asset operations (used for some transaction operations)
+            asset_service: Service for asset operations
         """
-        self.transaction_service = transaction_service or TransactionService()
-        self.asset_service = asset_service or AssetService()
+        self.transaction_service = transaction_service
+        self.asset_service = asset_service
         
     async def get_asset_history(
         self, 
@@ -199,14 +199,6 @@ class TransactionHandler:
             HTTPException: If there's an error recording the transaction
         """
         try:
-            # Validate action type
-            valid_actions = ["CREATE", "UPDATE", "VERSION_CREATE", "DELETE", "VERIFY"]
-            if action not in valid_actions:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid action type. Must be one of: {', '.join(valid_actions)}"
-                )
-            
             # Record the transaction
             transaction_id = await self.transaction_service.record_transaction(
                 asset_id=asset_id,
@@ -225,8 +217,9 @@ class TransactionHandler:
                 "wallet_address": wallet_address
             }
             
-        except HTTPException:
-            raise
+        except ValueError as e:
+            # This catches the validation error for invalid action types
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             logger.error(f"Error recording transaction: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
@@ -245,51 +238,10 @@ class TransactionHandler:
             HTTPException: If there's an error getting the summary
         """
         try:
-            # Get all transactions for the wallet
-            transactions = await self.transaction_service.get_wallet_history(
-                wallet_address=wallet_address,
-                include_all_versions=True,
-                asset_service=self.asset_service
-            )
+            # Get the transaction summary
+            summary = await self.transaction_service.get_transaction_summary(wallet_address)
             
-            # Process transactions to create a summary
-            summary = {
-                "total_transactions": len(transactions),
-                "actions": {},
-                "assets": set(),
-                "first_transaction": None,
-                "latest_transaction": None
-            }
-            
-            if transactions:
-                # Sort by timestamp
-                sorted_tx = sorted(
-                    transactions, 
-                    key=lambda tx: tx.get("timestamp", ""), 
-                    reverse=False
-                )
-                
-                # Get first and latest transaction timestamps
-                if sorted_tx:
-                    summary["first_transaction"] = sorted_tx[0].get("timestamp")
-                    summary["latest_transaction"] = sorted_tx[-1].get("timestamp")
-                
-                # Count actions
-                for tx in transactions:
-                    action = tx.get("action", "UNKNOWN")
-                    summary["actions"][action] = summary["actions"].get(action, 0) + 1
-                    
-                    if "assetId" in tx:
-                        summary["assets"].add(tx["assetId"])
-            
-            # Convert set to count for the response
-            summary["unique_assets"] = len(summary["assets"])
-            summary["assets"] = list(summary["assets"])
-            
-            return {
-                "wallet_address": wallet_address,
-                "summary": summary
-            }
+            return summary
             
         except Exception as e:
             logger.error(f"Error getting transaction summary: {str(e)}")

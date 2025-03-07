@@ -1,5 +1,4 @@
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
 from pymongo import DESCENDING
 import logging
 from bson import ObjectId
@@ -9,7 +8,7 @@ logger = logging.getLogger(__name__)
 class TransactionRepository:
     """
     Repository for transaction operations in MongoDB.
-    Handles saving, retrieving, and querying transaction records.
+    Handles CRUD operations for the transaction collection.
     """
     
     def __init__(self, db_client):
@@ -32,11 +31,6 @@ class TransactionRepository:
             String ID of the inserted transaction
         """
         try:
-            # Ensure timestamp is set if not provided
-            if 'timestamp' not in transaction_data:
-                transaction_data['timestamp'] = datetime.now(timezone.utc)
-                
-            # Insert the document
             result = self.transaction_collection.insert_one(transaction_data)
             transaction_id = str(result.inserted_id)
             
@@ -47,20 +41,21 @@ class TransactionRepository:
             logger.error(f"Error inserting transaction: {str(e)}")
             raise
             
-    async def find_transactions(self, query: Dict[str, Any], sort_by: str = "timestamp") -> List[Dict[str, Any]]:
+    async def find_transactions(self, query: Dict[str, Any], sort_by: str = "timestamp", sort_direction: int = DESCENDING) -> List[Dict[str, Any]]:
         """
         Find transactions matching the query.
         
         Args:
             query: MongoDB query to filter transactions
             sort_by: Field to sort results by (default: timestamp)
+            sort_direction: Direction to sort (default: DESCENDING)
             
         Returns:
             List of transaction documents
         """
         try:
-            # Find matching transactions, sorted by timestamp (newest first)
-            cursor = self.transaction_collection.find(query).sort(sort_by, DESCENDING)
+            # Find matching transactions
+            cursor = self.transaction_collection.find(query).sort(sort_by, sort_direction)
             
             # Convert cursor to list
             transactions = list(cursor)
@@ -76,60 +71,63 @@ class TransactionRepository:
             logger.error(f"Error finding transactions: {str(e)}")
             raise
             
-    async def get_transaction_by_id(self, transaction_id: str) -> Optional[Dict[str, Any]]:
+    async def find_transaction(self, query: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        Get a transaction by its ID.
+        Find a single transaction matching the query.
         
         Args:
-            transaction_id: The ID of the transaction to retrieve
+            query: MongoDB query to filter transaction
             
         Returns:
             Transaction document if found, None otherwise
         """
         try:
-            # Find the transaction by ID
-            transaction = self.transaction_collection.find_one({"_id": ObjectId(transaction_id)})
+            transaction = self.transaction_collection.find_one(query)
             
-            # Convert ObjectId to string if transaction found
             if transaction:
                 transaction['_id'] = str(transaction['_id'])
                 
             return transaction
             
         except Exception as e:
-            logger.error(f"Error getting transaction by ID: {str(e)}")
+            logger.error(f"Error finding transaction: {str(e)}")
             raise
             
-    async def get_asset_transactions(self, asset_id: str) -> List[Dict[str, Any]]:
+    async def update_transaction(self, query: Dict[str, Any], update: Dict[str, Any]) -> bool:
         """
-        Get all transactions for a specific asset.
+        Update a transaction.
         
         Args:
-            asset_id: The ID of the asset
+            query: Query to identify the transaction to update
+            update: The update operations to perform
             
         Returns:
-            List of transaction documents for the asset
+            True if update was successful, False otherwise
         """
         try:
-            return await self.find_transactions({"assetId": asset_id})
+            result = self.transaction_collection.update_one(query, update)
+            
+            return result.modified_count > 0
             
         except Exception as e:
-            logger.error(f"Error getting asset transactions: {str(e)}")
+            logger.error(f"Error updating transaction: {str(e)}")
             raise
             
-    async def get_wallet_transactions(self, wallet_address: str) -> List[Dict[str, Any]]:
+    async def delete_transaction(self, query: Dict[str, Any]) -> bool:
         """
-        Get all transactions for a specific wallet.
+        Delete a transaction.
         
         Args:
-            wallet_address: The wallet address
+            query: Query to identify the transaction to delete
             
         Returns:
-            List of transaction documents for the wallet
+            True if deletion was successful, False otherwise
         """
         try:
-            return await self.find_transactions({"walletAddress": wallet_address})
+            result = self.transaction_collection.delete_one(query)
+            
+            return result.deleted_count > 0
             
         except Exception as e:
-            logger.error(f"Error getting wallet transactions: {str(e)}")
+            logger.error(f"Error deleting transaction: {str(e)}")
             raise

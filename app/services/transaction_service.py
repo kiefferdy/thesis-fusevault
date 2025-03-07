@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 import logging
 from app.repositories.transaction_repo import TransactionRepository
+from bson import ObjectId
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,12 @@ class TransactionService:
     """
     
     def __init__(self, transaction_repository: TransactionRepository):
-        """Initialize with the transaction repository."""
+        """
+        Initialize with transaction repository.
+        
+        Args:
+            transaction_repository: Repository for transaction data access
+        """
         self.transaction_repository = transaction_repository
 
     async def get_asset_history(
@@ -77,7 +83,7 @@ class TransactionService:
             # First get all current document IDs for this wallet if we're filtering versions
             current_asset_ids = []
             if not include_all_versions and asset_service:
-                documents = await asset_service.get_documents_by_wallet(
+                documents = await asset_service.get_assets_by_wallet(
                     wallet_address, 
                     include_all_versions=False
                 )
@@ -123,6 +129,11 @@ class TransactionService:
             The ID of the newly created transaction record
         """
         try:
+            # Validate action type
+            valid_actions = ["CREATE", "UPDATE", "VERSION_CREATE", "DELETE", "VERIFY"]
+            if action not in valid_actions:
+                raise ValueError(f"Invalid action type. Must be one of: {', '.join(valid_actions)}")
+            
             # Create transaction data
             transaction_data = {
                 "assetId": asset_id,
@@ -143,6 +154,95 @@ class TransactionService:
         except Exception as e:
             logger.error(f"Error recording transaction: {str(e)}")
             raise
+            
+    async def get_transaction_by_id(self, transaction_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get details for a specific transaction.
+        
+        Args:
+            transaction_id: The ID of the transaction to get details for
+            
+        Returns:
+            Transaction details if found, None otherwise
+        """
+        try:
+            # Try to use ObjectId if it's a valid one
+            try:
+                query = {"_id": ObjectId(transaction_id)}
+            except:
+                # If not a valid ObjectId, try as a string ID
+                query = {"_id": transaction_id}
+                
+            transaction = await self.transaction_repository.find_transaction(query)
+            
+            if transaction:
+                # Format transaction for API response
+                return self._format_transactions([transaction])[0]
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting transaction by ID: {str(e)}")
+            raise
+            
+    async def get_transaction_summary(self, wallet_address: str) -> Dict[str, Any]:
+        """
+        Get a summary of transactions for a wallet address.
+        
+        Args:
+            wallet_address: The wallet address to get summary for
+            
+        Returns:
+            Dict containing transaction summary information
+        """
+        try:
+            # Get all transactions for the wallet
+            transactions = await self.transaction_repository.find_transactions(
+                {"walletAddress": wallet_address}
+            )
+            
+            # Process transactions to create a summary
+            summary = {
+                "total_transactions": len(transactions),
+                "actions": {},
+                "assets": set(),
+                "first_transaction": None,
+                "latest_transaction": None
+            }
+            
+            if transactions:
+                # Sort by timestamp
+                sorted_tx = sorted(
+                    transactions, 
+                    key=lambda tx: tx.get("timestamp", ""), 
+                    reverse=False
+                )
+                
+                # Get first and latest transaction timestamps
+                if sorted_tx:
+                    summary["first_transaction"] = sorted_tx[0].get("timestamp")
+                    summary["latest_transaction"] = sorted_tx[-1].get("timestamp")
+                
+                # Count actions
+                for tx in transactions:
+                    action = tx.get("action", "UNKNOWN")
+                    summary["actions"][action] = summary["actions"].get(action, 0) + 1
+                    
+                    if "assetId" in tx:
+                        summary["assets"].add(tx["assetId"])
+            
+            # Convert set to count and list for the response
+            summary["unique_assets"] = len(summary["assets"])
+            summary["assets"] = list(summary["assets"])
+            
+            return {
+                "wallet_address": wallet_address,
+                "summary": summary
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting transaction summary: {str(e)}")
+            raise
 
     def _format_transactions(self, transactions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -157,14 +257,17 @@ class TransactionService:
         formatted_transactions = []
         
         for tx in transactions:
-            # Convert ObjectId to string if needed
-            if '_id' in tx:
-                tx['_id'] = str(tx['_id'])
+            # Deep copy to avoid modifying original
+            formatted_tx = tx.copy()
+            
+            # Ensure _id is a string
+            if '_id' in formatted_tx:
+                formatted_tx['id'] = formatted_tx.pop('_id')
                 
             # Convert timestamp to ISO format if needed
-            if 'timestamp' in tx and isinstance(tx['timestamp'], datetime):
-                tx['timestamp'] = tx['timestamp'].isoformat()
+            if 'timestamp' in formatted_tx and isinstance(formatted_tx['timestamp'], datetime):
+                formatted_tx['timestamp'] = formatted_tx['timestamp'].isoformat()
                 
-            formatted_transactions.append(tx)
+            formatted_transactions.append(formatted_tx)
             
         return formatted_transactions

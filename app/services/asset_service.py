@@ -1,121 +1,286 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timezone
-from app.repositories.asset_repo import MongoDBRepository
-from app.schemas.asset_schema import (
-    AssetCreateRequest,
-    AssetUpdateRequest,
-    AssetResponse
-)
-from app.services.ipfs_service import IPFSService
-from app.services.blockchain_service import BlockchainService
-
 import logging
+from bson import ObjectId
+from app.repositories.asset_repo import AssetRepository
 
 logger = logging.getLogger(__name__)
 
 class AssetService:
-    def __init__(self):
-        self.db_repo = MongoDBRepository()
-        self.ipfs_service = IPFSService()
-        self.blockchain_service = BlockchainService()
-
-    async def create_asset(self, payload: AssetCreateRequest) -> AssetResponse:
-        # Store critical metadata on IPFS
-        metadata_cid = await self.ipfs_service.store_metadata({
-            "asset_id": payload.asset_id,
-            "wallet_address": payload.wallet_address,
-            "critical_metadata": payload.critical_metadata
-        })
-
-        # Store CID hash on Blockchain
-        blockchain_result = await self.blockchain_service.store_cid(metadata_cid)
-
-        # Prepare asset data for MongoDB
-        asset_data = {
-            "assetId": payload.asset_id,
-            "walletAddress": payload.wallet_address,
-            "smartContractTxId": blockchain_result.tx_hash,
-            "ipfsHash": metadata_cid,
-            "criticalMetadata": payload.critical_metadata,
-            "nonCriticalMetadata": payload.non_critical_metadata,
-            "lastVerified": datetime.now(timezone.utc)
-        }
-
-        # Insert asset into MongoDB
-        db_repo = MongoDBRepository()
-        doc_id = db_repo.insert_asset(asset_data)
-
-        return AssetResponse(
-            document_id=doc_id,
-            asset_id=payload.asset_id,
-            wallet_address=payload.wallet_address,
-            version_number=1,
-            is_current=True,
-            is_deleted=False,
-            ipfs_hash=metadata_cid,
-            smart_contract_tx_id=blockchain_result.tx_hash,
-            last_updated=asset_data["lastVerified"]
-        )
-
+    """
+    Service for asset-related operations.
+    Handles asset creation, retrieval, updates, and versioning in MongoDB.
+    """
     
-    async def update_asset(self, payload: AssetUpdateRequest) -> AssetResponse:
-        db_repo = MongoDBRepository()
-        existing_asset = self.db_repo.find_asset(payload.asset_id)
+    def __init__(self, asset_repository: AssetRepository):
+        """
+        Initialize with repository.
         
-        if not existing_asset:
-            raise ValueError("Asset not found")
-
-        # Check if critical metadata changed
-        metadata_cid = await self.ipfs_service.store_metadata({
-            "asset_id": payload.asset_id,
-            "wallet_address": payload.wallet_address,
-            "critical_metadata": payload.critical_metadata
-        })
-
-        if metadata_cid != existing_asset["ipfsHash"]:
-            # Critical metadata changed, store new CID on blockchain
-            blockchain_result = await self.blockchain_service.store_hash(metadata_cid)
-
-            new_asset_data = {
-                "walletAddress": payload.wallet_address,
-                "smartContractTxId": blockchain_result.tx_hash,
-                "ipfsHash": metadata_cid,
-                "criticalMetadata": payload.critical_metadata,
-                "nonCriticalMetadata": payload.non_critical_metadata
-            }
-
-            new_version_id = self.db_repo.create_new_version(payload.asset_id, new_asset_data)
-
-            return AssetResponse(
-                asset_id=payload.asset_id,
-                wallet_address=payload.wallet_address,
-                document_id=new_version_id,
-                version_number=existing_asset["versionNumber"] + 1,
-                is_current=True,
-                is_deleted=False,
-                ipfs_hash=metadata_cid,
-                smart_contract_tx_id=blockchain_result.tx_hash,
-                last_updated=datetime.now(timezone.utc)
-            )
-        else:
-            # Only non-critical metadata updated
-            updated = self.db_repo.update_noncritical_metadata(
-                payload.asset_id, payload.non_critical_metadata
-            )
-
-            if not updated:
-                raise ValueError("No updates made")
-
-            existing_asset = self.db_repo.find_asset(payload.asset_id)
+        Args:
+            asset_repository: Repository for asset data access
+        """
+        self.asset_repository = asset_repository
+        
+    async def create_asset(
+        self, 
+        asset_id: str, 
+        wallet_address: str,
+        smart_contract_tx_id: str,
+        ipfs_hash: str,
+        critical_metadata: Dict[str, Any],
+        non_critical_metadata: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Create a new asset document in MongoDB.
+        
+        Args:
+            asset_id: Unique identifier for the asset
+            wallet_address: Owner's wallet address
+            smart_contract_tx_id: Transaction hash from blockchain
+            ipfs_hash: CID from IPFS storage
+            critical_metadata: Core metadata stored on blockchain
+            non_critical_metadata: Additional metadata stored only in MongoDB
             
-            return AssetResponse(
-                asset_id=existing_asset["assetId"],
-                wallet_address=existing_asset["walletAddress"],
-                document_id=str(existing_asset["_id"]),
-                version_number=existing_asset["versionNumber"],
-                is_current=True,
-                is_deleted=False,
-                ipfs_hash=existing_asset["ipfsHash"],
-                smart_contract_tx_id=existing_asset["smartContractTxId"],
-                last_updated=datetime.now(timezone.utc)
+        Returns:
+            String ID of the created document
+            
+        Raises:
+            ValueError: If asset already exists
+        """
+        try:
+            # Check if asset already exists
+            existing_asset = await self.asset_repository.find_asset({"assetId": asset_id, "isCurrent": True})
+            
+            if existing_asset:
+                raise ValueError(f"Asset with ID {asset_id} already exists")
+                
+            # Create document for MongoDB
+            document = {
+                "assetId": asset_id,
+                "versionNumber": 1,  # Initial version
+                "walletAddress": wallet_address,
+                "smartContractTxId": smart_contract_tx_id,
+                "ipfsHash": ipfs_hash,
+                "lastVerified": datetime.now(timezone.utc),
+                "lastUpdated": datetime.now(timezone.utc),
+                "criticalMetadata": critical_metadata,
+                "nonCriticalMetadata": non_critical_metadata or {},
+                "isCurrent": True,
+                "isDeleted": False,
+                "documentHistory": []
+            }
+            
+            # Insert into MongoDB
+            doc_id = await self.asset_repository.insert_asset(document)
+            
+            logger.info(f"Asset created with ID: {doc_id}")
+            return doc_id
+            
+        except Exception as e:
+            logger.error(f"Error creating asset: {str(e)}")
+            raise
+            
+    async def get_asset(
+        self, 
+        asset_id: str, 
+        version: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get an asset by ID and optionally version.
+        
+        Args:
+            asset_id: The asset ID to find
+            version: Optional version number (default: current version)
+            
+        Returns:
+            Asset document if found, None otherwise
+        """
+        try:
+            # Build query
+            query = {"assetId": asset_id, "isDeleted": False}
+            
+            if version:
+                query["versionNumber"] = version
+            else:
+                query["isCurrent"] = True
+                
+            # Find asset
+            return await self.asset_repository.find_asset(query)
+            
+        except Exception as e:
+            logger.error(f"Error getting asset: {str(e)}")
+            raise
+            
+    async def get_documents_by_wallet(
+        self, 
+        wallet_address: str, 
+        include_all_versions: bool = False
+    ) -> List[Dict[str, Any]]:
+        """
+        Get assets owned by a specific wallet address.
+        
+        Args:
+            wallet_address: The wallet address to find assets for
+            include_all_versions: Whether to include non-current versions
+            
+        Returns:
+            List of asset documents
+        """
+        try:
+            # Build query
+            query = {"walletAddress": wallet_address, "isDeleted": False}
+            
+            if not include_all_versions:
+                query["isCurrent"] = True
+                
+            # Find assets
+            return await self.asset_repository.find_assets(query)
+            
+        except Exception as e:
+            logger.error(f"Error getting documents by wallet: {str(e)}")
+            raise
+            
+    async def create_new_version(
+        self,
+        asset_id: str,
+        wallet_address: str,
+        smart_contract_tx_id: str,
+        ipfs_hash: str,
+        critical_metadata: Dict[str, Any],
+        non_critical_metadata: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Create a new version of an existing asset in MongoDB.
+        
+        Args:
+            asset_id: The asset ID to create new version for
+            wallet_address: Owner's wallet address
+            smart_contract_tx_id: Transaction hash from blockchain
+            ipfs_hash: CID from IPFS storage
+            critical_metadata: Core metadata stored on blockchain
+            non_critical_metadata: Additional metadata stored only in MongoDB
+            
+        Returns:
+            String ID of the new version document
+            
+        Raises:
+            ValueError: If asset not found
+        """
+        try:
+            # Find current version
+            current_asset = await self.asset_repository.find_asset(
+                {"assetId": asset_id, "isCurrent": True}
             )
+            
+            if not current_asset:
+                raise ValueError(f"Asset not found: {asset_id}")
+                
+            # Get current version number and increment
+            new_version_number = current_asset.get("versionNumber", 1) + 1
+            
+            # Mark current version as not current first
+            await self.asset_repository.update_asset(
+                {"_id": ObjectId(current_asset["_id"])},
+                {"$set": {"isCurrent": False}}
+            )
+            
+            # Create new version document
+            new_doc = {
+                "assetId": asset_id,
+                "versionNumber": new_version_number,
+                "walletAddress": wallet_address,
+                "smartContractTxId": smart_contract_tx_id,
+                "ipfsHash": ipfs_hash,
+                "lastVerified": datetime.now(timezone.utc),
+                "lastUpdated": datetime.now(timezone.utc),
+                "criticalMetadata": critical_metadata,
+                "nonCriticalMetadata": non_critical_metadata or {},
+                "isCurrent": True,
+                "isDeleted": False,
+                "previousVersionId": current_asset["_id"],
+                "documentHistory": [*current_asset.get("documentHistory", []), current_asset["_id"]]
+            }
+            
+            # Insert new version
+            new_doc_id = await self.asset_repository.insert_asset(new_doc)
+            
+            logger.info(f"New version created for asset {asset_id}: {new_doc_id}")
+            return new_doc_id
+            
+        except Exception as e:
+            logger.error(f"Error creating new version: {str(e)}")
+            raise
+            
+    async def update_non_critical_metadata(
+        self, 
+        asset_id: str, 
+        metadata: Dict[str, Any]
+    ) -> bool:
+        """
+        Update only non-critical metadata for an asset.
+        
+        Args:
+            asset_id: The asset ID to update
+            metadata: New non-critical metadata
+            
+        Returns:
+            True if updated successfully, False otherwise
+        """
+        try:
+            return await self.asset_repository.update_asset(
+                {"assetId": asset_id, "isCurrent": True},
+                {"$set": {
+                    "nonCriticalMetadata": metadata,
+                    "lastUpdated": datetime.now(timezone.utc)
+                }}
+            )
+            
+        except Exception as e:
+            logger.error(f"Error updating non-critical metadata: {str(e)}")
+            raise
+            
+    async def soft_delete(self, asset_id: str, deleted_by: str) -> bool:
+        """
+        Soft delete an asset (mark as deleted).
+        
+        Args:
+            asset_id: The asset ID to delete
+            deleted_by: Wallet address that initiated the deletion
+            
+        Returns:
+            True if deleted successfully, False otherwise
+        """
+        try:
+            return await self.asset_repository.update_asset(
+                {"assetId": asset_id, "isCurrent": True},
+                {"$set": {
+                    "isDeleted": True,
+                    "deletedBy": deleted_by,
+                    "deletedAt": datetime.now(timezone.utc)
+                }}
+            )
+            
+        except Exception as e:
+            logger.error(f"Error soft deleting asset: {str(e)}")
+            raise
+            
+    async def get_version_history(self, asset_id: str) -> List[Dict[str, Any]]:
+        """
+        Get the version history for an asset.
+        
+        Args:
+            asset_id: The asset ID to get history for
+            
+        Returns:
+            List of asset versions ordered by version number
+        """
+        try:
+            return await self.asset_repository.find_assets(
+                {"assetId": asset_id},
+                sort_field="versionNumber",
+                sort_direction=1  # Ascending order
+            )
+            
+        except Exception as e:
+            logger.error(f"Error getting version history: {str(e)}")
+            raise

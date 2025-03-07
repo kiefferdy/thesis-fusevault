@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from fastapi import HTTPException, Response, Request, Cookie
+from fastapi import HTTPException, Response, Request
 import logging
 from app.services.auth_service import AuthService
 from app.schemas.auth_schema import AuthenticationRequest

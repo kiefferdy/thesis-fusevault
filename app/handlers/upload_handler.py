@@ -7,6 +7,9 @@ import logging
 import os
 from dotenv import load_dotenv
 from app.services.asset_service import AssetService
+from app.services.ipfs_service import IPFSService
+from app.services.blockchain_service import BlockchainService
+from app.services.transaction_service import TransactionService
 from app.utilities.format import format_json, get_ipfs_metadata
 
 logger = logging.getLogger(__name__)
@@ -14,13 +17,30 @@ logger = logging.getLogger(__name__)
 class UploadHandler:
     """
     Handler for file upload operations.
-    Processes various types of file uploads (JSON, CSV)
-    and direct metadata submissions.
+    Coordinates the process of uploading files to IPFS, storing CIDs on blockchain,
+    and creating/updating asset documents in MongoDB.
     """
 
-    def __init__(self, asset_service: AssetService = None):
-        """Initialize with optional asset service."""
-        self.asset_service = asset_service or AssetService()
+    def __init__(
+        self, 
+        asset_service: AssetService = None,
+        ipfs_service: IPFSService = None,
+        blockchain_service: BlockchainService = None,
+        transaction_service: TransactionService = None
+    ):
+        """
+        Initialize with services.
+        
+        Args:
+            asset_service: Service for asset operations
+            ipfs_service: Service for IPFS operations
+            blockchain_service: Service for blockchain operations
+            transaction_service: Service for transaction operations
+        """
+        self.asset_service = asset_service
+        self.ipfs_service = ipfs_service or IPFSService()
+        self.blockchain_service = blockchain_service or BlockchainService()
+        self.transaction_service = transaction_service
         load_dotenv()
 
     async def process_metadata(
@@ -73,7 +93,7 @@ class UploadHandler:
                 existing_ipfs_hash = existing_doc.get("ipfsHash")
                 
                 # Compute CID for the current metadata
-                computed_cid = await self.asset_service.compute_cid(ipfs_metadata)
+                computed_cid = await self.ipfs_service.compute_cid(ipfs_metadata)
                 
                 # If CIDs match, then critical metadata has NOT changed
                 critical_metadata_changed = computed_cid != existing_ipfs_hash
@@ -81,10 +101,11 @@ class UploadHandler:
                 if critical_metadata_changed:
                     # Critical metadata changed - upload to IPFS and blockchain
                     # 1) Upload to IPFS
-                    cid = await self.asset_service.store_ipfs_metadata(ipfs_metadata)
+                    cid = await self.ipfs_service.store_metadata(ipfs_metadata)
                     
                     # 2) Store on blockchain
-                    blockchain_tx_hash = await self.asset_service.store_blockchain_cid(cid)
+                    blockchain_result = await self.blockchain_service.store_hash(cid)
+                    blockchain_tx_hash = blockchain_result.get("tx_hash")
                     
                     # 3) Create new version in MongoDB
                     new_doc_id = await self.asset_service.create_new_version(
@@ -99,6 +120,19 @@ class UploadHandler:
                     # 4) Get version number of new document
                     new_doc = await self.asset_service.get_asset(asset_id)
                     version_number = new_doc.get("versionNumber", 0)
+                    
+                    # 5) Record transaction if transaction service is available
+                    if self.transaction_service:
+                        await self.transaction_service.record_transaction(
+                            asset_id=asset_id,
+                            action="VERSION_CREATE",
+                            wallet_address=wallet_address,
+                            metadata={
+                                "ipfsHash": cid,
+                                "smartContractTxId": blockchain_tx_hash,
+                                "versionNumber": version_number
+                            }
+                        )
                     
                     result = {
                         "asset_id": asset_id,
@@ -131,6 +165,17 @@ class UploadHandler:
                     new_doc = await self.asset_service.get_asset(asset_id)
                     version_number = new_doc.get("versionNumber", 0)
                     
+                    # Record transaction if transaction service is available
+                    if self.transaction_service:
+                        await self.transaction_service.record_transaction(
+                            asset_id=asset_id,
+                            action="UPDATE",
+                            wallet_address=wallet_address,
+                            metadata={
+                                "versionNumber": version_number
+                            }
+                        )
+                    
                     result = {
                         "asset_id": asset_id,
                         "status": "success",
@@ -146,10 +191,11 @@ class UploadHandler:
             else:
                 # New document - proceed with normal flow
                 # 1) Upload to IPFS
-                cid = await self.asset_service.store_ipfs_metadata(ipfs_metadata)
+                cid = await self.ipfs_service.store_metadata(ipfs_metadata)
                 
                 # 2) Store on blockchain
-                blockchain_tx_hash = await self.asset_service.store_blockchain_cid(cid)
+                blockchain_result = await self.blockchain_service.store_hash(cid)
+                blockchain_tx_hash = blockchain_result.get("tx_hash")
                 
                 # 3) Insert into MongoDB
                 doc_id = await self.asset_service.create_asset(
@@ -160,6 +206,18 @@ class UploadHandler:
                     critical_metadata=critical_metadata,
                     non_critical_metadata=non_critical_metadata
                 )
+                
+                # 4) Record transaction if transaction service is available
+                if self.transaction_service:
+                    await self.transaction_service.record_transaction(
+                        asset_id=asset_id,
+                        action="CREATE",
+                        wallet_address=wallet_address,
+                        metadata={
+                            "ipfsHash": cid,
+                            "smartContractTxId": blockchain_tx_hash
+                        }
+                    )
                 
                 result = {
                     "asset_id": asset_id,
