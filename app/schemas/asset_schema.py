@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 class AssetBase(BaseModel):
@@ -31,10 +31,10 @@ class AssetResponse(AssetBase):
     
     # These could be optional since they may not be present in all responses
     previous_version_id: Optional[str] = Field(None, description="ID of the previous version", alias="previousVersionId")
-    document_history: Optional[list] = Field(None, description="History of document IDs", alias="documentHistory")
+    document_history: Optional[List] = Field(None, description="History of document IDs", alias="documentHistory")
 
     class Config:
-        orm_mode = True  # Allows compatibility with MongoDB returned objects
+        from_attributes = True
         allow_population_by_field_name = True  # Allows use of alias field names
         
 class AssetVersionInfo(BaseModel):
@@ -44,5 +44,5 @@ class AssetVersionInfo(BaseModel):
     is_current: bool = Field(..., description="Whether this is the current version", alias="isCurrent")
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         allow_population_by_field_name = True

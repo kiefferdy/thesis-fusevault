@@ -33,7 +33,7 @@ class BlockchainService:
 
         try:
             self.contract = self.web3.eth.contract(
-                address=Web3.to_checksum_address(self._get_contract_address()),
+                address=Web3.to_checksum_address(self.contract_address),
                 abi=self.contract_abi
             )
         except Exception as e:

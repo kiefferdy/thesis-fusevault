@@ -15,4 +15,4 @@ class AuthenticationResponse(UserBase):
     message: Optional[str] = Field(None, description="Optional message providing additional details")
 
     class Config:
-        orm_mode = True
+        from_attributes = True

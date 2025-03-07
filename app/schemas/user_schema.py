@@ -14,4 +14,4 @@ class UserResponse(UserBase):
     role: str = Field(..., description="User's role")
     
     class Config:
-        orm_mode = True
+        from_attributes = True
