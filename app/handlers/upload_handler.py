@@ -1,16 +1,15 @@
-from fastapi import UploadFile, HTTPException, Form
+from fastapi import UploadFile
 from typing import List, Dict, Any, Optional
 from io import StringIO
 import json
 import pandas as pd
 import logging
-import os
 from dotenv import load_dotenv
 from app.services.asset_service import AssetService
 from app.services.ipfs_service import IPFSService
 from app.services.blockchain_service import BlockchainService
 from app.services.transaction_service import TransactionService
-from app.utilities.format import format_json, get_ipfs_metadata
+from app.utilities.format import get_ipfs_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -248,12 +247,6 @@ class UploadHandler:
     ) -> Dict[str, Any]:
         """
         Upload metadata directly (not as a file).
-        
-        - Takes asset_id, wallet_address, and metadata as parameters
-        - Checks if critical metadata has changed using CID comparison
-        - Stores in IPFS only if changed
-        - Registers on blockchain only if changed
-        - Updates MongoDB
         
         Args:
             asset_id: The asset's unique identifier

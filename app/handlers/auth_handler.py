@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional
 from fastapi import HTTPException, Response, Request
 import logging
 from app.services.auth_service import AuthService
-from app.schemas.auth_schema import AuthenticationRequest
+from app.schemas.auth_schema import AuthenticationRequest, NonceResponse
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class AuthHandler:
         """
         self.auth_service = auth_service
         
-    async def get_nonce(self, wallet_address: str) -> Dict[str, Any]:
+    async def get_nonce(self, wallet_address: str) -> NonceResponse:
         """
         Get or generate nonce for a wallet address.
         
@@ -29,7 +29,7 @@ class AuthHandler:
             wallet_address: The wallet address to get nonce for
             
         Returns:
-            Dict containing nonce information
+            NonceResponse containing nonce information
             
         Raises:
             HTTPException: If nonce retrieval fails
@@ -37,10 +37,10 @@ class AuthHandler:
         try:
             nonce_response = await self.auth_service.get_nonce(wallet_address)
             
-            return {
-                "wallet_address": nonce_response.wallet_address,
-                "nonce": nonce_response.nonce
-            }
+            return NonceResponse(
+                wallet_address=wallet_address,
+                nonce=nonce_response.nonce
+            )
             
         except Exception as e:
             logger.error(f"Error getting nonce: {str(e)}")

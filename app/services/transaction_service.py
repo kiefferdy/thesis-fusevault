@@ -83,7 +83,7 @@ class TransactionService:
             # First get all current document IDs for this wallet if we're filtering versions
             current_asset_ids = []
             if not include_all_versions and asset_service:
-                documents = await asset_service.get_assets_by_wallet(
+                documents = await asset_service.get_documents_by_wallet(
                     wallet_address, 
                     include_all_versions=False
                 )

@@ -17,8 +17,17 @@ class AssetCreateRequest(AssetBase):
         alias="nonCriticalMetadata"
     )
 
-class AssetUpdateRequest(AssetCreateRequest):
-    pass  # Same fields as AssetCreateRequest
+class AssetUpdateRequest(BaseModel):
+    critical_metadata: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Metadata fields crucial for integrity, stored in IPFS and Blockchain",
+        alias="criticalMetadata"
+    )
+    non_critical_metadata: Optional[Dict[str, Any]] = Field(
+        None, 
+        description="Additional metadata not required for integrity checks",
+        alias="nonCriticalMetadata"
+    )
 
 class AssetResponse(AssetBase):
     document_id: str = Field(..., description="MongoDB document identifier", alias="_id")
@@ -35,7 +44,7 @@ class AssetResponse(AssetBase):
 
     class Config:
         from_attributes = True
-        allow_population_by_field_name = True  # Allows use of alias field names
+        populate_by_name = True  # Allows use of alias field names
         
 class AssetVersionInfo(BaseModel):
     document_id: str = Field(..., description="MongoDB document identifier", alias="_id")
@@ -45,4 +54,14 @@ class AssetVersionInfo(BaseModel):
 
     class Config:
         from_attributes = True
-        allow_population_by_field_name = True
+        populate_by_name = True
+
+class AssetHistoryResponse(BaseModel):
+    asset_id: str = Field(..., description="Asset ID", alias="assetId")
+    version: Optional[int] = Field(None, description="Version number if filtered")
+    transactions: List[Dict[str, Any]] = Field(..., description="List of transactions for this asset")
+    transaction_count: int = Field(..., description="Number of transactions")
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True

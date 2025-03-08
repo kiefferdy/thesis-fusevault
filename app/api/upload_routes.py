@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, File, Form, UploadFile
-from typing import Dict, Any, List, Optional
-import json
+from fastapi import APIRouter, Depends, File, Form, UploadFile, Body
+from typing import List, Optional
 import logging
 
 from app.handlers.upload_handler import UploadHandler
+from app.schemas.upload_schema import MetadataUploadRequest, MetadataUploadResponse, CsvUploadResponse, JsonUploadResponse
 from app.services.asset_service import AssetService
 from app.services.ipfs_service import IPFSService
 from app.services.blockchain_service import BlockchainService
@@ -38,14 +38,14 @@ def get_upload_handler(db_client=Depends(get_db_client)) -> UploadHandler:
         transaction_service=transaction_service
     )
 
-@router.post("/metadata", response_model=Dict[str, Any])
+@router.post("/metadata", response_model=MetadataUploadResponse)
 async def upload_metadata(
     asset_id: str = Form(...),
     wallet_address: str = Form(...),
     critical_metadata: str = Form(...),
     non_critical_metadata: Optional[str] = Form(None),
     upload_handler: UploadHandler = Depends(get_upload_handler)
-) -> Dict[str, Any]:
+) -> MetadataUploadResponse:
     """
     Upload metadata directly.
     
@@ -56,21 +56,22 @@ async def upload_metadata(
         non_critical_metadata: JSON string of additional metadata
         
     Returns:
-        Dict with processing results
+        MetadataUploadResponse with processing results
     """
-    return await upload_handler.handle_metadata_upload(
+    result = await upload_handler.handle_metadata_upload(
         asset_id=asset_id,
         wallet_address=wallet_address,
         critical_metadata=critical_metadata,
         non_critical_metadata=non_critical_metadata
     )
+    return MetadataUploadResponse(**result)
 
-@router.post("/json", response_model=Dict[str, Any])
+@router.post("/json", response_model=JsonUploadResponse)
 async def upload_json_files(
     wallet_address: str = Form(...),
     files: List[UploadFile] = File(...),
     upload_handler: UploadHandler = Depends(get_upload_handler)
-) -> Dict[str, Any]:
+) -> JsonUploadResponse:
     """
     Upload JSON files.
     
@@ -79,20 +80,21 @@ async def upload_json_files(
         files: List of JSON files to upload
         
     Returns:
-        Dict with processing results for each file
+        JsonUploadResponse with processing results for each file
     """
-    return await upload_handler.handle_json_files(
+    result = await upload_handler.handle_json_files(
         files=files,
         wallet_address=wallet_address
     )
+    return JsonUploadResponse(**result)
 
-@router.post("/csv", response_model=Dict[str, Any])
+@router.post("/csv", response_model=CsvUploadResponse)
 async def upload_csv_files(
     wallet_address: str = Form(...),
     critical_metadata_fields: str = Form(...),
     files: List[UploadFile] = File(...),
     upload_handler: UploadHandler = Depends(get_upload_handler)
-) -> Dict[str, Any]:
+) -> CsvUploadResponse:
     """
     Upload CSV files.
     
@@ -102,43 +104,38 @@ async def upload_csv_files(
         files: List of CSV files to upload
         
     Returns:
-        Dict with processing results for each file
+        CsvUploadResponse with processing results for each file
     """
     # Parse critical_metadata_fields from comma-separated string to list
     fields_list = [field.strip() for field in critical_metadata_fields.split(',')]
     
-    return await upload_handler.process_csv_upload(
+    result = await upload_handler.process_csv_upload(
         files=files,
         wallet_address=wallet_address,
         critical_metadata_fields=fields_list
     )
+    return CsvUploadResponse(**result)
 
-@router.post("/process", response_model=Dict[str, Any])
+@router.post("/process", response_model=MetadataUploadResponse)
 async def process_metadata(
-    asset_id: str,
-    wallet_address: str,
-    critical_metadata: Dict[str, Any],
-    non_critical_metadata: Optional[Dict[str, Any]] = None,
-    file_info: Optional[Dict[str, str]] = None,
+    metadata_request: MetadataUploadRequest = Body(...),
     upload_handler: UploadHandler = Depends(get_upload_handler)
-) -> Dict[str, Any]:
+) -> MetadataUploadResponse:
     """
     Process metadata for an asset.
     
     Args:
-        asset_id: The asset's unique identifier
-        wallet_address: The wallet address of the owner
-        critical_metadata: Core metadata that will be stored on blockchain
-        non_critical_metadata: Additional metadata stored only in MongoDB
-        file_info: Optional information about source file
+        metadata_request: Request containing metadata to process
         
     Returns:
-        Dict with processing results
+        MetadataUploadResponse with processing results
     """
-    return await upload_handler.process_metadata(
-        asset_id=asset_id,
-        wallet_address=wallet_address,
-        critical_metadata=critical_metadata,
-        non_critical_metadata=non_critical_metadata or {},
-        file_info=file_info
+    # Extract fields from the request
+    result = await upload_handler.process_metadata(
+        asset_id=metadata_request.asset_id,
+        wallet_address=metadata_request.wallet_address,
+        critical_metadata=metadata_request.critical_metadata,
+        non_critical_metadata=metadata_request.non_critical_metadata or {},
+        file_info=metadata_request.file_info
     )
+    return MetadataUploadResponse(**result)

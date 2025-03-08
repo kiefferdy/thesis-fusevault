@@ -1,8 +1,8 @@
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from fastapi import HTTPException
 import logging
 from app.services.user_service import UserService
-from app.schemas.user_schema import UserCreate, UserResponse
+from app.schemas.user_schema import UserCreate
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +39,12 @@ class UserHandler:
             
             return {
                 "status": "success",
-                "message": "User registered successfully",
-                "user_id": user.id,
-                "wallet_address": user.wallet_address
+                "user": {
+                    "id": user.id,
+                    "wallet_address": user.wallet_address,
+                    "email": user.email,
+                    "role": user.role
+                }
             }
             
         except Exception as e:
@@ -112,7 +115,6 @@ class UserHandler:
                 
             return {
                 "status": "success",
-                "message": "User updated successfully",
                 "user": {
                     "id": updated_user.id,
                     "wallet_address": updated_user.wallet_address,

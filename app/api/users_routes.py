@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, Body
-from typing import Dict, Any
 import logging
 
 from app.handlers.user_handler import UserHandler
-from app.schemas.user_schema import UserCreate, UserResponse
+from app.schemas.user_schema import UserCreate, UserResponse, UserUpdateRequest, UserDeleteResponse, UsersResponse
 from app.services.user_service import UserService
 from app.repositories.user_repo import UserRepository
 from app.database import get_db_client
@@ -23,11 +22,11 @@ def get_user_handler(db_client=Depends(get_db_client)) -> UserHandler:
     user_service = UserService(user_repo)
     return UserHandler(user_service)
 
-@router.post("/register", response_model=Dict[str, Any])
+@router.post("/register", response_model=UserResponse)
 async def register_user(
     user_data: UserCreate,
     user_handler: UserHandler = Depends(get_user_handler)
-) -> Dict[str, Any]:
+) -> UserResponse:
     """
     Register a new user.
     
@@ -35,15 +34,16 @@ async def register_user(
         user_data: User data for registration
         
     Returns:
-        Dict containing registration result
+        UserResponse containing registration result
     """
-    return await user_handler.register_user(user_data)
+    result = await user_handler.register_user(user_data)
+    return UserResponse(**result)
 
-@router.get("/{wallet_address}", response_model=Dict[str, Any])
+@router.get("/{wallet_address}", response_model=UserResponse)
 async def get_user(
     wallet_address: str,
     user_handler: UserHandler = Depends(get_user_handler)
-) -> Dict[str, Any]:
+) -> UserResponse:
     """
     Get a user by wallet address.
     
@@ -51,16 +51,17 @@ async def get_user(
         wallet_address: The wallet address to look up
         
     Returns:
-        Dict containing user information
+        UserResponse containing user information
     """
-    return await user_handler.get_user(wallet_address)
+    result = await user_handler.get_user(wallet_address)
+    return UserResponse(**result)
 
-@router.put("/{wallet_address}", response_model=Dict[str, Any])
+@router.put("/{wallet_address}", response_model=UserResponse)
 async def update_user(
     wallet_address: str,
-    update_data: Dict[str, Any] = Body(...),
+    update_data: UserUpdateRequest = Body(...),
     user_handler: UserHandler = Depends(get_user_handler)
-) -> Dict[str, Any]:
+) -> UserResponse:
     """
     Update a user's information.
     
@@ -69,15 +70,18 @@ async def update_user(
         update_data: The data to update
         
     Returns:
-        Dict containing update result
+        UserResponse containing update result
     """
-    return await user_handler.update_user(wallet_address, update_data)
+    # Convert Pydantic model to dict, excluding unset fields
+    update_dict = update_data.dict(exclude_unset=True)
+    result = await user_handler.update_user(wallet_address, update_dict)
+    return UserResponse(**result)
 
-@router.delete("/{wallet_address}", response_model=Dict[str, Any])
+@router.delete("/{wallet_address}", response_model=UserDeleteResponse)
 async def delete_user(
     wallet_address: str,
     user_handler: UserHandler = Depends(get_user_handler)
-) -> Dict[str, Any]:
+) -> UserDeleteResponse:
     """
     Delete a user.
     
@@ -85,15 +89,16 @@ async def delete_user(
         wallet_address: The wallet address of the user to delete
         
     Returns:
-        Dict containing deletion result
+        UserDeleteResponse containing deletion result
     """
-    return await user_handler.delete_user(wallet_address)
+    result = await user_handler.delete_user(wallet_address)
+    return UserDeleteResponse(**result)
 
-@router.get("/role/{role}", response_model=Dict[str, Any])
+@router.get("/role/{role}", response_model=UsersResponse)
 async def get_users_by_role(
     role: str,
     user_handler: UserHandler = Depends(get_user_handler)
-) -> Dict[str, Any]:
+) -> UsersResponse:
     """
     Get all users with a specific role.
     
@@ -101,6 +106,7 @@ async def get_users_by_role(
         role: The role to filter by
         
     Returns:
-        Dict containing users with the specified role
+        UsersResponse containing users with the specified role
     """
-    return await user_handler.get_users_by_role(role)
+    result = await user_handler.get_users_by_role(role)
+    return UsersResponse(**result)

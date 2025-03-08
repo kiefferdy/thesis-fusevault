@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 import logging
 from fastapi import HTTPException
 from app.services.transaction_service import TransactionService
@@ -163,12 +163,10 @@ class TransactionHandler:
                     logger.warning(f"Error getting asset info for transaction: {str(asset_error)}")
             
             # Prepare the response with additional context if available
-            response = {
+            return {
                 "transaction": transaction,
                 "asset_info": asset if asset else None
             }
-            
-            return response
             
         except HTTPException:
             raise
@@ -241,7 +239,10 @@ class TransactionHandler:
             # Get the transaction summary
             summary = await self.transaction_service.get_transaction_summary(wallet_address)
             
-            return summary
+            return {
+                "wallet_address": wallet_address,
+                "summary": summary
+            }
             
         except Exception as e:
             logger.error(f"Error getting transaction summary: {str(e)}")
