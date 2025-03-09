@@ -1,9 +1,7 @@
-from typing import Any, Dict
 import os
 from dotenv import load_dotenv
 import logging
 from pymongo import MongoClient
-from fastapi import Depends
 
 logger = logging.getLogger(__name__)
 

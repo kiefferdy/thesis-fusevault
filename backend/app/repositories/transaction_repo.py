@@ -1,7 +1,6 @@
 from typing import Dict, Any, List, Optional
 from pymongo import DESCENDING
 import logging
-from bson import ObjectId
 
 logger = logging.getLogger(__name__)
 

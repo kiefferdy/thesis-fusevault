@@ -1,6 +1,5 @@
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List
-from datetime import datetime
 
 class TransactionBase(BaseModel):
     asset_id: str = Field(..., description="ID of the asset involved in the transaction", alias="assetId")
