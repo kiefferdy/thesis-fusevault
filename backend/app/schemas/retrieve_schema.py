@@ -17,7 +17,6 @@ class MetadataVerificationResult(BaseModel):
     recovery_needed: bool = Field(..., description="Whether recovery from IPFS was needed", alias="recoveryNeeded")
     recovery_successful: Optional[bool] = Field(None, description="Whether recovery was successful if needed", alias="recoverySuccessful")
     new_version_created: Optional[bool] = Field(None, description="Whether a new version was created after recovery", alias="newVersionCreated")
-    original_cid: Optional[str] = Field(None, description="Original CID retrieved from the blockchain transaction", alias="originalCid")
 
     class Config:
         populate_by_name = True

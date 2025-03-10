@@ -112,7 +112,7 @@ class BlockchainService:
 
     async def get_hash_from_transaction(self, tx_hash: str) -> Dict[str, Any]:
         """
-        Retrieve CID digest from a transaction on the blockchain.
+        Retrieve CID from a transaction on the blockchain.
         
         Args:
             tx_hash: Transaction hash to query
@@ -149,19 +149,7 @@ class BlockchainService:
                 func_obj, func_params = self.contract.decode_function_input(input_data)
                 
                 # Check that this was a call to storeCIDDigest
-                # Handle different Web3.py versions - some use function_name, others use fn_name
-                function_name = None
-                if hasattr(func_obj, 'function_name'):
-                    function_name = func_obj.function_name
-                elif hasattr(func_obj, 'fn_name'):
-                    function_name = func_obj.fn_name
-                else:
-                    # Try to get function name from the string representation
-                    func_str = str(func_obj)
-                    if 'storeCIDDigest' in func_str:
-                        function_name = 'storeCIDDigest'
-                
-                if function_name != 'storeCIDDigest':
+                if func_obj.fn_name != 'storeCIDDigest':
                     raise ValueError(f"Transaction {tx_hash} did not call storeCIDDigest function")
                     
                 # Extract the CID from the parameters
@@ -177,67 +165,15 @@ class BlockchainService:
                 
             except Exception as decode_error:
                 logger.error(f"Error decoding transaction input: {str(decode_error)}")
-                
-                # Try to get the event logs as an alternative approach
-                receipt = self.web3.eth.get_transaction_receipt(tx_hash_bytes)
-                
-                if receipt and receipt.get('logs'):
-                    for log in receipt['logs']:
-                        if log['address'].lower() == self.contract_address.lower():
-                            # Try to decode the event using the CIDStored event signature
-                            try:
-                                # Handle different Web3.py versions - some use create_filter, others createFilter
-                                event_signature = None
-                                try:
-                                    # Newer Web3.py versions
-                                    event_signature = self.contract.events.CIDStored().create_filter().filter_params['topics'][0]
-                                except Exception:
-                                    try:
-                                        # Older Web3.py versions
-                                        event_signature = self.contract.events.CIDStored().createFilter().filter_params['topics'][0]
-                                    except Exception:
-                                        # Try without fromBlock parameter
-                                        event_signature = self.contract.events.CIDStored().createFilter(fromBlock=0).filter_params['topics'][0]
-                                
-                                if event_signature and log['topics'][0].hex() == event_signature:
-                                    # Extract the digest hash from the event data
-                                    # The event has: indexed address user, bytes32 digestHash, uint256 timestamp
-                                    # So digestHash is the first 32 bytes of the data
-                                    digest_hash = log['data'][:66]  # Take the first 32 bytes (66 chars in hex)
-                                    
-                                    return {
-                                        "tx_hash": tx_hash,
-                                        "status": "success",
-                                        "retrieved_from": "event"
-                                    }
-                            except Exception as event_error:
-                                logger.error(f"Error decoding event: {str(event_error)}")
-                
-                # If we can't decode the function call or event, try getting CIDs for the sender
-                sender = tx_data['from']
-                cids = await self.get_cids_for_address(sender)
-                
-                if cids:
-                    # We can't definitely say which CID was stored in this transaction,
-                    # but we can return the most recent one as a best guess
-                    latest_cid = cids[-1]
-                    
-                    return {
-                        "tx_hash": tx_hash,
-                        "status": "uncertain",
-                        "message": "Could not directly decode transaction, returning most recent CID for sender"
-                    }
-                
-                # If all else fails
-                raise ValueError(f"Could not retrieve CID from transaction {tx_hash}")
+                raise ValueError(f"Could not retrieve CID from blockchain transaction {tx_hash}")
                 
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error retrieving hash from transaction: {str(e)}")
+            logger.error(f"Error retrieving CID from transaction: {str(e)}")
             raise HTTPException(
                 status_code=500, 
-                detail=f"Failed to retrieve hash from transaction: {str(e)}"
+                detail=f"Failed to retrieve CID from blockchain transaction: {str(e)}"
             )
             
     async def get_cids_for_address(self, address: str) -> List[str]:

@@ -76,16 +76,20 @@ class RetrieveHandler:
             # 2. Query the blockchain with the tx_id to retrieve the stored hash/CID
             try:
                 blockchain_result = await self.blockchain_service.get_hash_from_transaction(blockchain_tx_id)
-                original_cid = blockchain_result.get("cid")
+                blockchain_cid = blockchain_result.get("cid")
                 
-                if not original_cid:
-                    logger.warning(f"Could not retrieve original CID from blockchain for transaction {blockchain_tx_id}")
-                    blockchain_cid = ipfs_hash  # Fall back to stored hash
+                if not blockchain_cid:
+                    logger.error(f"Could not retrieve CID from blockchain for transaction {blockchain_tx_id}. This is a critical requirement.")
+                    # Still fall back to stored hash for verification, but mark verification as failed
+                    blockchain_cid = ipfs_hash
+                    blockchain_verification = False
                 else:
-                    blockchain_cid = original_cid
+                    blockchain_verification = True
             except Exception as e:
                 logger.error(f"Error querying blockchain for transaction {blockchain_tx_id}: {str(e)}")
-                blockchain_cid = ipfs_hash  # Fall back to stored hash
+                # Still fall back to stored hash for verification, but mark verification as failed
+                blockchain_cid = ipfs_hash
+                blockchain_verification = False
             
             # 3. Compute CID from MongoDB critical metadata
             metadata_for_ipfs = {
@@ -100,13 +104,12 @@ class RetrieveHandler:
             
             # Initialize verification result
             verification_result = MetadataVerificationResult(
-                verified=cid_match,
+                verified=cid_match and blockchain_verification,
                 cid_match=cid_match,
                 blockchain_cid=blockchain_cid,
                 computed_cid=computed_cid,
-                blockchain_verification=True,
-                recovery_needed=not cid_match,
-                original_cid=original_cid
+                blockchain_verification=blockchain_verification,
+                recovery_needed=not cid_match
             )
             
             # 5. If CIDs don't match, retrieve authentic metadata from IPFS
@@ -122,12 +125,7 @@ class RetrieveHandler:
                         authentic_metadata = await self.ipfs_service.retrieve_metadata(blockchain_cid)
                     except Exception as ipfs_error:
                         logger.error(f"Failed to retrieve metadata from IPFS: {str(ipfs_error)}")
-                        # If there was an original CID retrieved from the blockchain, try that instead
-                        if original_cid and original_cid != blockchain_cid:
-                            logger.info(f"Trying to retrieve metadata using original CID: {original_cid}")
-                            authentic_metadata = await self.ipfs_service.retrieve_metadata(original_cid)
-                        else:
-                            raise ipfs_error
+                        raise ipfs_error
                     
                     # Ensure we have the required fields
                     if not authentic_metadata or "critical_metadata" not in authentic_metadata:
