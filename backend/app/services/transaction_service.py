@@ -121,7 +121,7 @@ class TransactionService:
         
         Args:
             asset_id: The ID of the asset involved in the transaction
-            action: The type of action (CREATE, UPDATE, VERSION_CREATE, DELETE, etc.)
+            action: The type of action (CREATE, UPDATE, VERSION_CREATE, DELETE, VERIFY, INTEGRITY_RECOVERY)
             wallet_address: The wallet address that initiated the transaction
             metadata: Optional additional metadata about the transaction
             
@@ -130,7 +130,7 @@ class TransactionService:
         """
         try:
             # Validate action type
-            valid_actions = ["CREATE", "UPDATE", "VERSION_CREATE", "DELETE", "VERIFY"]
+            valid_actions = ["CREATE", "UPDATE", "VERSION_CREATE", "DELETE", "VERIFY", "INTEGRITY_RECOVERY"]
             if action not in valid_actions:
                 raise ValueError(f"Invalid action type. Must be one of: {', '.join(valid_actions)}")
             
