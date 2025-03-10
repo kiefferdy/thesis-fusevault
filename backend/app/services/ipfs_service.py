@@ -35,8 +35,22 @@ class IPFSService:
                 response = await client.post(f"{self.storage_service_url}/upload", files=files)
                 response.raise_for_status()
 
-            cid_dict = response.json()["result"]["cids"][0]["cid"]
-            cid = cid_dict["/"] if isinstance(cid_dict, dict) and "/" in cid_dict else str(cid_dict)
+            # Get the response JSON and log it for debugging
+            response_json = response.json()
+            logger.debug(f"IPFS service response: {response_json}")
+
+            # Extract CID from the response
+            if "cids" in response_json and len(response_json["cids"]) > 0 and "cid" in response_json["cids"][0]:
+                cid_dict = response_json["cids"][0]["cid"]
+                if isinstance(cid_dict, dict) and "/" in cid_dict:
+                    cid = cid_dict["/"]
+                else:
+                    cid = str(cid_dict)
+            else:
+                raise ValueError(f"Unable to extract CID from response: {response_json}")
+            
+            if not cid:
+                raise ValueError(f"Unable to extract CID from response: {response_json}")
 
             logger.info(f"Successfully stored metadata on IPFS. CID: {cid}")
             return cid

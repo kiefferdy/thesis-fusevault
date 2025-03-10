@@ -55,10 +55,32 @@ class BlockchainService:
             })
 
             # Sign transaction
-            signed_tx = self.web3.eth.account.sign_transaction(tx, private_key=os.getenv("PRIVATE_KEY"))
+            signed_tx = self.web3.eth.account.sign_transaction(tx, private_key=self.private_key)
+
+            # Debug the signed_tx object to see what attributes are available
+            logger.debug(f"Signed transaction attributes: {dir(signed_tx)}")
+
+            # Different versions of Web3.py use different attribute names
+            if hasattr(signed_tx, 'rawTransaction'):
+                raw_tx = signed_tx.rawTransaction
+            elif hasattr(signed_tx, 'raw_transaction'):
+                raw_tx = signed_tx.raw_transaction
+            else:
+                try:
+                    # Try to extract the raw transaction data in other ways
+                    if hasattr(signed_tx, '__dict__'):
+                        for key, value in signed_tx.__dict__.items():
+                            if isinstance(value, (bytes, bytearray)):
+                                raw_tx = value
+                                break
+                    # If we can't find any bytes attribute, convert the entire object to bytes
+                    raw_tx = bytes(signed_tx)
+                except:
+                    raise ValueError("Could not extract raw transaction bytes. "
+                                    "Check Web3.py version compatibility.")
 
             # Send transaction
-            tx_hash = self.web3.eth.send_raw_transaction(signed_tx.rawTransaction)
+            tx_hash = self.web3.eth.send_raw_transaction(raw_tx)
 
             # Wait for transaction receipt
             receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash)
