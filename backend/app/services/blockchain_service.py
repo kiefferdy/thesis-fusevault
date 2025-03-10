@@ -77,9 +77,6 @@ class BlockchainService:
             # Sign transaction
             signed_tx = self.web3.eth.account.sign_transaction(tx, private_key=self.private_key)
 
-            # Debug the signed_tx object to see what attributes are available
-            logger.debug(f"Signed transaction attributes: {dir(signed_tx)}")
-
             # Different versions of Web3.py use different attribute names
             if hasattr(signed_tx, 'rawTransaction'):
                 raw_tx = signed_tx.rawTransaction
@@ -152,21 +149,28 @@ class BlockchainService:
                 func_obj, func_params = self.contract.decode_function_input(input_data)
                 
                 # Check that this was a call to storeCIDDigest
-                if func_obj.function_name != 'storeCIDDigest':
+                # Handle different Web3.py versions - some use function_name, others use fn_name
+                function_name = None
+                if hasattr(func_obj, 'function_name'):
+                    function_name = func_obj.function_name
+                elif hasattr(func_obj, 'fn_name'):
+                    function_name = func_obj.fn_name
+                else:
+                    # Try to get function name from the string representation
+                    func_str = str(func_obj)
+                    if 'storeCIDDigest' in func_str:
+                        function_name = 'storeCIDDigest'
+                
+                if function_name != 'storeCIDDigest':
                     raise ValueError(f"Transaction {tx_hash} did not call storeCIDDigest function")
                     
                 # Extract the CID from the parameters
                 cid = func_params['_cid']
                 
-                # Calculate the Keccak-256 hash of the CID (this is what the contract does)
-                cid_digest = Web3.keccak(text=cid).hex()
-                
                 logger.info(f"Successfully retrieved CID {cid} from transaction {tx_hash}")
-                logger.info(f"Calculated digest: {cid_digest}")
                 
                 return {
                     "cid": cid,
-                    "cid_digest": cid_digest,
                     "tx_hash": tx_hash,
                     "status": "success"
                 }
@@ -182,15 +186,26 @@ class BlockchainService:
                         if log['address'].lower() == self.contract_address.lower():
                             # Try to decode the event using the CIDStored event signature
                             try:
-                                event_signature = self.contract.events.CIDStored().create_filter(fromBlock='latest').filter_params['topics'][0]
-                                if log['topics'][0].hex() == event_signature:
+                                # Handle different Web3.py versions - some use create_filter, others createFilter
+                                event_signature = None
+                                try:
+                                    # Newer Web3.py versions
+                                    event_signature = self.contract.events.CIDStored().create_filter().filter_params['topics'][0]
+                                except Exception:
+                                    try:
+                                        # Older Web3.py versions
+                                        event_signature = self.contract.events.CIDStored().createFilter().filter_params['topics'][0]
+                                    except Exception:
+                                        # Try without fromBlock parameter
+                                        event_signature = self.contract.events.CIDStored().createFilter(fromBlock=0).filter_params['topics'][0]
+                                
+                                if event_signature and log['topics'][0].hex() == event_signature:
                                     # Extract the digest hash from the event data
                                     # The event has: indexed address user, bytes32 digestHash, uint256 timestamp
                                     # So digestHash is the first 32 bytes of the data
                                     digest_hash = log['data'][:66]  # Take the first 32 bytes (66 chars in hex)
                                     
                                     return {
-                                        "cid_digest": digest_hash,
                                         "tx_hash": tx_hash,
                                         "status": "success",
                                         "retrieved_from": "event"
@@ -208,7 +223,6 @@ class BlockchainService:
                     latest_cid = cids[-1]
                     
                     return {
-                        "cid_digest": latest_cid,
                         "tx_hash": tx_hash,
                         "status": "uncertain",
                         "message": "Could not directly decode transaction, returning most recent CID for sender"
@@ -261,51 +275,16 @@ class BlockchainService:
             True if CID matches the one in the transaction, False otherwise
         """
         try:
-            # Compute Keccak-256 digest of the given CID (same as what the contract does)
-            computed_digest = Web3.keccak(text=cid).hex()
-            
             # Get the CID from the blockchain
             blockchain_result = await self.get_hash_from_transaction(tx_hash)
-            blockchain_digest = blockchain_result.get("cid_digest")
+            blockchain_cid = blockchain_result.get("cid")
             
-            if not blockchain_digest:
-                raise ValueError(f"Could not retrieve CID digest from transaction {tx_hash}")
+            if not blockchain_cid:
+                raise ValueError(f"Could not retrieve CID from transaction {tx_hash}")
                 
-            # Compare digests
-            return computed_digest == blockchain_digest
+            # Direct CID comparison
+            return cid == blockchain_cid
             
         except Exception as e:
             logger.error(f"Error verifying CID: {str(e)}")
             return False
-            
-    def compute_cid_digest(self, cid: str) -> str:
-        """
-        Compute the Keccak-256 digest of a CID, matching the contract's implementation.
-        
-        Args:
-            cid: The CID to compute digest for
-            
-        Returns:
-            Hex string of the Keccak-256 digest
-        """
-        # The contract uses: keccak256(abi.encodePacked(_cid))
-        # We need to match this encoding precisely
-        try:
-            # First try the simple text encoding (most likely case)
-            return Web3.keccak(text=cid).hex()
-        except Exception:
-            # If that fails, try other encodings
-            try:
-                # Try treating it as hex data
-                if cid.startswith('0x'):
-                    return Web3.keccak(hexstr=cid).hex()
-                else:
-                    return Web3.keccak(hexstr='0x' + cid).hex()
-            except Exception:
-                # Last resort - try raw bytes
-                try:
-                    return Web3.keccak(primitive=cid.encode('utf-8')).hex()
-                except Exception as e:
-                    logger.error(f"Failed to compute CID digest: {str(e)}")
-                    # Return a placeholder that won't match anything
-                    return "0x0000000000000000000000000000000000000000000000000000000000000000"

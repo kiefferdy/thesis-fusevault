@@ -1,6 +1,5 @@
 from typing import Dict, Any, Optional
 import logging
-import hashlib
 from fastapi import HTTPException
 
 from app.services.asset_service import AssetService
@@ -78,31 +77,12 @@ class RetrieveHandler:
             try:
                 blockchain_result = await self.blockchain_service.get_hash_from_transaction(blockchain_tx_id)
                 original_cid = blockchain_result.get("cid")
-                cid_digest = blockchain_result.get("cid_digest")
                 
-                if not cid_digest:
-                    logger.warning(f"Could not retrieve CID digest from blockchain for transaction {blockchain_tx_id}")
+                if not original_cid:
+                    logger.warning(f"Could not retrieve original CID from blockchain for transaction {blockchain_tx_id}")
                     blockchain_cid = ipfs_hash  # Fall back to stored hash
                 else:
-                    # In our implementation, the blockchain stores the CID itself and its Keccak-256 digest
-                    # We need to check if the stored ipfs_hash matches the original CID, or verify the digests
-                    if original_cid and original_cid == ipfs_hash:
-                        # If the CIDs match directly, all is well
-                        blockchain_cid = ipfs_hash
-                    else:
-                        # Otherwise check the digests
-                        computed_digest = self.blockchain_service.compute_cid_digest(ipfs_hash)
-                        
-                        if computed_digest != cid_digest:
-                            logger.warning(f"Stored IPFS hash digest doesn't match blockchain digest for asset {asset_id}")
-                            # Since we have a mismatch, we should try to recover the original CID from the blockchain
-                            if original_cid:
-                                blockchain_cid = original_cid
-                            else:
-                                blockchain_cid = ipfs_hash
-                            cid_match = False
-                        else:
-                            blockchain_cid = ipfs_hash
+                    blockchain_cid = original_cid
             except Exception as e:
                 logger.error(f"Error querying blockchain for transaction {blockchain_tx_id}: {str(e)}")
                 blockchain_cid = ipfs_hash  # Fall back to stored hash
@@ -118,44 +98,13 @@ class RetrieveHandler:
             # 4. Compare CIDs to check for tampering
             cid_match = computed_cid == blockchain_cid
             
-            # Check if we have blockchain digest information
-            blockchain_digest = None
-            computed_digest = None
-            digest_match = None
-            blockchain_verification = True
-            original_cid = None
-            
-            try:
-                # Get blockchain digest and original CID if available from earlier blockchain query
-                blockchain_result = await self.blockchain_service.get_hash_from_transaction(blockchain_tx_id)
-                blockchain_digest = blockchain_result.get("cid_digest")
-                original_cid = blockchain_result.get("cid")
-                
-                if blockchain_digest:
-                    # Compute digest of the IPFS hash for comparison using the same method as the contract
-                    computed_digest = self.blockchain_service.compute_cid_digest(ipfs_hash)
-                    digest_match = computed_digest == blockchain_digest
-                    
-                    # If digests don't match, that's another indicator of potential tampering
-                    if not digest_match:
-                        cid_match = False  # Consider this a CID mismatch as well
-                        blockchain_verification = False
-                        logger.warning(f"Digest mismatch for asset {asset_id}. "
-                                     f"Blockchain: {blockchain_digest}, Computed: {computed_digest}")
-            except Exception as e:
-                logger.error(f"Error during digest verification: {str(e)}")
-                blockchain_verification = False
-            
             # Initialize verification result
             verification_result = MetadataVerificationResult(
                 verified=cid_match,
                 cid_match=cid_match,
                 blockchain_cid=blockchain_cid,
                 computed_cid=computed_cid,
-                blockchain_digest=blockchain_digest,
-                computed_digest=computed_digest,
-                digest_match=digest_match,
-                blockchain_verification=blockchain_verification,
+                blockchain_verification=True,
                 recovery_needed=not cid_match,
                 original_cid=original_cid
             )
