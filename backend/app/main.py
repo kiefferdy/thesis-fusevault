@@ -8,6 +8,7 @@ from app.api.transactions_routes import router as transaction_router
 from app.api.upload_routes import router as upload_router
 from app.api.retrieve_routes import router as retrieve_router
 from app.api.users_routes import router as user_router
+from app.api.delete_routes import router as delete_router
 
 # Configure logging
 logging.basicConfig(
@@ -47,7 +48,8 @@ api_routers = [
     transaction_router,
     upload_router,
     retrieve_router,
-    user_router
+    user_router,
+    delete_router
 ]
 
 # Add all routers to the app
