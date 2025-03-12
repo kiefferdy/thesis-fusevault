@@ -73,23 +73,54 @@ class RetrieveHandler:
             critical_metadata = document.get("criticalMetadata", {})
             non_critical_metadata = document.get("nonCriticalMetadata", {})
             
+            # Initialize verification result
+            verification_result = MetadataVerificationResult(
+                verified=False,
+                cid_match=False,
+                blockchain_cid="unknown",
+                computed_cid="unknown",
+                blockchain_verification=False,
+                recovery_needed=False
+            )
+            
             # 2. Query the blockchain with the tx_id to retrieve the stored hash/CID
+            blockchain_cid = None
+            tx_sender_verified = False
+            
             try:
+                # Get transaction data from blockchain
                 blockchain_result = await self.blockchain_service.get_hash_from_transaction(blockchain_tx_id)
                 blockchain_cid = blockchain_result.get("cid")
                 
+                # Verify transaction sender if possible
+                tx_sender = blockchain_result.get("tx_sender")
+                server_wallet = self.blockchain_service.wallet_address
+                
+                if tx_sender and server_wallet:
+                    # Convert both addresses to lowercase for case-insensitive comparison
+                    tx_sender_lower = tx_sender.lower() if isinstance(tx_sender, str) else None
+                    server_wallet_lower = server_wallet.lower() if isinstance(server_wallet, str) else None
+                    
+                    # Check if transaction sender matches server wallet address
+                    tx_sender_verified = (tx_sender_lower and server_wallet_lower and 
+                                        tx_sender_lower == server_wallet_lower)
+                    
+                    if not tx_sender_verified:
+                        logger.warning(f"Transaction sender verification failed for {asset_id}. "
+                                      f"Expected: {server_wallet_lower}, Found: {tx_sender_lower}")
+                else:
+                    tx_sender_verified = False
+                    logger.warning(f"Transaction sender verification failed - missing data. " 
+                                  f"tx_sender: {tx_sender}, server_wallet: {server_wallet}")
+                
                 if not blockchain_cid:
                     logger.error(f"Could not retrieve CID from blockchain for transaction {blockchain_tx_id}. This is a critical requirement.")
-                    # Still fall back to stored hash for verification, but mark verification as failed
-                    blockchain_cid = ipfs_hash
-                    blockchain_verification = False
-                else:
-                    blockchain_verification = True
+                    # Use a marker value that will cause verification to fail
+                    blockchain_cid = "BLOCKCHAIN_RETRIEVAL_FAILED"
+                
             except Exception as e:
                 logger.error(f"Error querying blockchain for transaction {blockchain_tx_id}: {str(e)}")
-                # Still fall back to stored hash for verification, but mark verification as failed
-                blockchain_cid = ipfs_hash
-                blockchain_verification = False
+                blockchain_cid = "BLOCKCHAIN_RETRIEVAL_FAILED"
             
             # 3. Compute CID from MongoDB critical metadata
             metadata_for_ipfs = {
@@ -102,22 +133,22 @@ class RetrieveHandler:
             # 4. Compare CIDs to check for tampering
             cid_match = computed_cid == blockchain_cid
             
-            # Initialize verification result
-            verification_result = MetadataVerificationResult(
-                verified=cid_match and blockchain_verification,
-                cid_match=cid_match,
-                blockchain_cid=blockchain_cid,
-                computed_cid=computed_cid,
-                blockchain_verification=blockchain_verification,
-                recovery_needed=not cid_match
-            )
+            # Update verification result
+            verification_result.blockchain_cid = blockchain_cid
+            verification_result.computed_cid = computed_cid
+            verification_result.cid_match = cid_match
+            verification_result.tx_sender_verified = tx_sender_verified
             
-            # 5. If CIDs don't match, retrieve authentic metadata from IPFS
+            # Final verification result - include both CID match and transaction sender verification
+            verification_result.verified = cid_match and tx_sender_verified
+            verification_result.recovery_needed = not (cid_match and tx_sender_verified)
+            
+            # 5. If CIDs don't match or tx sender verification fails, retrieve authentic metadata from IPFS
             new_version_created = False
             
-            if not cid_match:
-                logger.warning(f"CID mismatch detected for asset {asset_id}. "
-                               f"Blockchain CID: {blockchain_cid}, Computed CID: {computed_cid}")
+            if verification_result.recovery_needed:
+                logger.warning(f"Verification failed for asset {asset_id}. "
+                              f"CID match: {cid_match}, TX sender verified: {tx_sender_verified}")
                 
                 try:
                     # Retrieve authentic metadata from IPFS
@@ -162,7 +193,8 @@ class RetrieveHandler:
                                     "new_version": new_version,
                                     "blockchain_cid": blockchain_cid,
                                     "computed_cid": computed_cid,
-                                    "recovery_source": "ipfs"
+                                    "recovery_source": "ipfs",
+                                    "tx_sender_verified": tx_sender_verified
                                 }
                             )
                         

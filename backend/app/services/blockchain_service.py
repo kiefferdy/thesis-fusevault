@@ -118,7 +118,7 @@ class BlockchainService:
             tx_hash: Transaction hash to query
             
         Returns:
-            Dict containing the retrieved CID information
+            Dict containing the retrieved CID information and transaction sender
             
         Raises:
             HTTPException: If retrieval fails
@@ -139,6 +139,9 @@ class BlockchainService:
             # Verify this transaction was sent to our contract
             if tx_data['to'] and tx_data['to'].lower() != self.contract_address.lower():
                 raise ValueError(f"Transaction {tx_hash} was not sent to our contract address")
+            
+            # Get transaction sender
+            tx_sender = tx_data.get('from', None)
                 
             # Get the input data from the transaction
             input_data = tx_data['input']
@@ -157,9 +160,16 @@ class BlockchainService:
                 
                 logger.info(f"Successfully retrieved CID {cid} from transaction {tx_hash}")
                 
+                # Ensure tx_sender is properly formatted and always included
+                if tx_sender:
+                    tx_sender = tx_sender.lower()
+                
+                logger.info(f"Transaction sender for tx {tx_hash}: {tx_sender}")
+                
                 return {
                     "cid": cid,
                     "tx_hash": tx_hash,
+                    "tx_sender": tx_sender,
                     "status": "success"
                 }
                 
@@ -224,3 +234,12 @@ class BlockchainService:
         except Exception as e:
             logger.error(f"Error verifying CID: {str(e)}")
             return False
+            
+    def get_server_wallet_address(self) -> str:
+        """
+        Get the server's wallet address used for signing transactions.
+        
+        Returns:
+            Server wallet address
+        """
+        return self.wallet_address

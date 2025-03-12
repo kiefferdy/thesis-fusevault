@@ -13,7 +13,7 @@ class MetadataVerificationResult(BaseModel):
     cid_match: bool = Field(..., description="Whether the computed CID matches the blockchain CID", alias="cidMatch")
     blockchain_cid: str = Field(..., description="CID retrieved from the blockchain", alias="blockchainCid")
     computed_cid: str = Field(..., description="CID computed from the retrieved metadata", alias="computedCid")
-    blockchain_verification: bool = Field(True, description="Whether blockchain verification was successful", alias="blockchainVerification")
+    tx_sender_verified: bool = Field(False, description="Whether the transaction sender matches expected server wallet", alias="txSenderVerified")
     recovery_needed: bool = Field(..., description="Whether recovery from IPFS was needed", alias="recoveryNeeded")
     recovery_successful: Optional[bool] = Field(None, description="Whether recovery was successful if needed", alias="recoverySuccessful")
     new_version_created: Optional[bool] = Field(None, description="Whether a new version was created after recovery", alias="newVersionCreated")
