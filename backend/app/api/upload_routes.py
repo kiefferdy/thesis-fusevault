@@ -15,7 +15,7 @@ from app.database import get_db_client
 # Setup router
 router = APIRouter(
     prefix="/upload",
-    tags=["Uploads"],
+    tags=["Upload"],
     responses={404: {"description": "Not found"}},
 )
 

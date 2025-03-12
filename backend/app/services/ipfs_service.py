@@ -74,12 +74,48 @@ class IPFSService:
         """
         try:
             async with httpx.AsyncClient(timeout=90.0) as client:
-                response = await client.get(f"{self.storage_service_url}/file/{cid}/contents")
-                response.raise_for_status()
-
-            metadata = response.json()
-            logger.info(f"Successfully retrieved metadata from IPFS with CID: {cid}")
-            return metadata
+                try:
+                    # Try using the storage service URL first
+                    response = await client.get(f"{self.storage_service_url}/file/{cid}/contents")
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    # If the storage service fails, try using the specified IPFS gateways
+                    # Primary gateway: w3s.link
+                    try:
+                        w3s_url = f"https://{cid}.ipfs.w3s.link"
+                        logger.info(f"Storage service failed, trying W3S gateway: {w3s_url}")
+                        response = await client.get(w3s_url)
+                        response.raise_for_status()
+                    except Exception as w3s_error:
+                        # Fallback gateway: dweb.link
+                        logger.info(f"W3S gateway failed: {str(w3s_error)}, trying dweb.link")
+                        dweb_url = f"https://{cid}.ipfs.dweb.link"
+                        try:
+                            response = await client.get(dweb_url)
+                            response.raise_for_status()
+                        except Exception as dweb_error:
+                            # If both gateways fail, re-raise the original exception
+                            logger.error(f"All IPFS gateways failed. Storage service error: {exc}, W3S error: {w3s_error}, Dweb error: {dweb_error}")
+                            raise exc
+                
+                # Try to parse as JSON
+                try:
+                    metadata = response.json()
+                except json.JSONDecodeError:
+                    # If it's not valid JSON, try to handle it as text
+                    text_content = response.text
+                    try:
+                        metadata = json.loads(text_content)
+                    except json.JSONDecodeError:
+                        # If we still can't parse it, return a minimal fallback
+                        logger.warning(f"Retrieved content is not valid JSON: {text_content[:100]}...")
+                        metadata = {
+                            "critical_metadata": {"recovered_content": text_content[:500]},
+                            "retrieval_error": "Content is not valid JSON"
+                        }
+                
+                logger.info(f"Successfully retrieved metadata from IPFS with CID: {cid}")
+                return metadata
 
         except httpx.HTTPError as exc:
             logger.error(f"HTTP error retrieving from IPFS: {str(exc)}")
