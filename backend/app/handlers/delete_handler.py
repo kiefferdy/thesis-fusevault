@@ -115,6 +115,85 @@ class DeleteHandler:
             logger.error(f"Error deleting asset: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Error deleting asset: {str(e)}")
             
+    async def undelete_asset(
+        self,
+        asset_id: str,
+        wallet_address: str
+    ) -> Dict[str, Any]:
+        """
+        Reactivate a previously deleted asset.
+        
+        Args:
+            asset_id: The asset ID to undelete
+            wallet_address: The wallet address performing the operation
+            
+        Returns:
+            Dict containing operation result
+            
+        Raises:
+            HTTPException: If asset not found or operation fails
+        """
+        try:
+            # Check if the asset exists and is deleted
+            asset = await self.asset_service.get_asset_with_deleted(asset_id)
+            
+            if not asset:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Asset with ID {asset_id} not found"
+                )
+                
+            # Check if the asset is actually deleted
+            if not asset.get("isDeleted", False):
+                return {
+                    "asset_id": asset_id,
+                    "status": "warning",
+                    "message": "Asset is not deleted, no action needed",
+                    "document_id": asset["_id"]
+                }
+                
+            # Check if the user has permission
+            asset_owner = asset.get("walletAddress", "").lower()
+            requester = wallet_address.lower()
+            
+            if asset_owner != requester:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Unauthorized: Only the asset owner can undelete this asset"
+                )
+                
+            # Undelete the asset
+            success = await self.asset_service.undelete_asset(asset_id)
+            
+            if not success:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to undelete asset with ID {asset_id}"
+                )
+                
+            # Record the transaction if transaction service is available
+            transaction_id = None
+            if self.transaction_service:
+                transaction_id = await self.transaction_service.record_transaction(
+                    asset_id=asset_id,
+                    action="UNDELETE",
+                    wallet_address=wallet_address
+                )
+                
+            return {
+                "asset_id": asset_id,
+                "status": "success",
+                "message": "Asset undeleted successfully",
+                "document_id": asset["_id"],
+                "transaction_id": transaction_id
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error undeleting asset: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error undeleting asset: {str(e)}")
+    
     async def batch_delete_assets(
         self,
         asset_ids: List[str],

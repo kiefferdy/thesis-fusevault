@@ -48,11 +48,39 @@ class AssetService:
             ValueError: If asset already exists
         """
         try:
-            # Check if asset already exists
-            existing_asset = await self.asset_repository.find_asset({"assetId": asset_id, "isCurrent": True})
+            # Check if asset already exists and is not deleted
+            existing_asset = await self.asset_repository.find_asset({
+                "assetId": asset_id, 
+                "isCurrent": True,
+                "isDeleted": False
+            })
             
             if existing_asset:
                 raise ValueError(f"Asset with ID {asset_id} already exists")
+            
+            # Check if there's a deleted asset with this ID
+            deleted_asset = await self.asset_repository.find_asset({
+                "assetId": asset_id, 
+                "isCurrent": True,
+                "isDeleted": True
+            })
+            
+            if deleted_asset:
+                # If the owner is trying to recreate their own deleted asset,
+                # we can either undelete it or create a new version
+                if deleted_asset.get("walletAddress", "").lower() == wallet_address.lower():
+                    # Create a new version
+                    return await self.create_new_version(
+                        asset_id=asset_id,
+                        wallet_address=wallet_address,
+                        smart_contract_tx_id=smart_contract_tx_id,
+                        ipfs_hash=ipfs_hash,
+                        critical_metadata=critical_metadata,
+                        non_critical_metadata=non_critical_metadata
+                    )
+                else:
+                    # Different owner can't reuse the ID
+                    raise ValueError(f"Asset with ID {asset_id} exists but is owned by a different wallet")
                 
             # Create document for MongoDB
             document = {
@@ -111,10 +139,42 @@ class AssetService:
             logger.error(f"Error getting asset: {str(e)}")
             raise
             
+    async def get_asset_with_deleted(
+        self, 
+        asset_id: str, 
+        version: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get an asset by ID and optionally version, including deleted assets.
+        
+        Args:
+            asset_id: The asset ID to find
+            version: Optional version number (default: current version)
+            
+        Returns:
+            Asset document if found, None otherwise
+        """
+        try:
+            # Build query
+            query = {"assetId": asset_id}
+            
+            if version:
+                query["versionNumber"] = version
+            else:
+                query["isCurrent"] = True
+                
+            # Find asset
+            return await self.asset_repository.find_asset(query)
+            
+        except Exception as e:
+            logger.error(f"Error getting asset with deleted: {str(e)}")
+            raise
+            
     async def get_documents_by_wallet(
         self, 
         wallet_address: str, 
-        include_all_versions: bool = False
+        include_all_versions: bool = False,
+        include_deleted: bool = False
     ) -> List[Dict[str, Any]]:
         """
         Get assets owned by a specific wallet address.
@@ -122,14 +182,18 @@ class AssetService:
         Args:
             wallet_address: The wallet address to find assets for
             include_all_versions: Whether to include non-current versions
+            include_deleted: Whether to include deleted assets
             
         Returns:
             List of asset documents
         """
         try:
             # Build query
-            query = {"walletAddress": wallet_address, "isDeleted": False}
+            query = {"walletAddress": wallet_address}
             
+            if not include_deleted:
+                query["isDeleted"] = False
+                
             if not include_all_versions:
                 query["isCurrent"] = True
                 
@@ -242,6 +306,7 @@ class AssetService:
     async def soft_delete(self, asset_id: str, deleted_by: str) -> bool:
         """
         Soft delete an asset (mark as deleted).
+        This marks ALL versions of the asset as deleted, not just the current version.
         
         Args:
             asset_id: The asset ID to delete
@@ -251,32 +316,77 @@ class AssetService:
             True if deleted successfully, False otherwise
         """
         try:
-            return await self.asset_repository.update_asset(
-                {"assetId": asset_id, "isCurrent": True},
+            # Get the deletion timestamp - use the same timestamp for all versions
+            deletion_time = datetime.now(timezone.utc)
+            
+            # Mark all versions of this asset as deleted
+            result = await self.asset_repository.update_assets(
+                {"assetId": asset_id},
                 {"$set": {
                     "isDeleted": True,
                     "deletedBy": deleted_by,
-                    "deletedAt": datetime.now(timezone.utc)
+                    "deletedAt": deletion_time
                 }}
             )
+            
+            return result > 0
             
         except Exception as e:
             logger.error(f"Error soft deleting asset: {str(e)}")
             raise
             
-    async def get_version_history(self, asset_id: str) -> List[Dict[str, Any]]:
+    async def undelete_asset(self, asset_id: str) -> bool:
+        """
+        Undelete an asset (mark as not deleted).
+        This undeletes ALL versions of the asset, not just the current version.
+        
+        Args:
+            asset_id: The asset ID to undelete
+            
+        Returns:
+            True if undeleted successfully, False otherwise
+        """
+        try:
+            # Update timestamp for all versions
+            update_time = datetime.now(timezone.utc)
+            
+            # Mark all versions of this asset as not deleted
+            result = await self.asset_repository.update_assets(
+                {"assetId": asset_id},
+                {"$set": {
+                    "isDeleted": False,
+                    "deletedBy": None,
+                    "deletedAt": None,
+                    "lastUpdated": update_time
+                }}
+            )
+            
+            return result > 0
+            
+        except Exception as e:
+            logger.error(f"Error undeleting asset: {str(e)}")
+            raise
+            
+    async def get_version_history(self, asset_id: str, include_deleted: bool = False) -> List[Dict[str, Any]]:
         """
         Get the version history for an asset.
         
         Args:
             asset_id: The asset ID to get history for
+            include_deleted: Whether to include deleted versions (default: False)
             
         Returns:
             List of asset versions ordered by version number
         """
         try:
+            # Build query based on deletion status
+            query = {"assetId": asset_id}
+            
+            if not include_deleted:
+                query["isDeleted"] = False
+                
             return await self.asset_repository.find_assets(
-                {"assetId": asset_id},
+                query,
                 sort_field="versionNumber",
                 sort_direction=1  # Ascending order
             )

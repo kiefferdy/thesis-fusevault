@@ -19,6 +19,23 @@ class DeleteResponse(BaseModel):
     class Config:
         populate_by_name = True
 
+class UndeleteRequest(BaseModel):
+    asset_id: str = Field(..., description="The asset's unique identifier", alias="assetId")
+    wallet_address: str = Field(..., description="The wallet address of the user performing the undelete operation", alias="walletAddress")
+    
+    class Config:
+        populate_by_name = True
+
+class UndeleteResponse(BaseModel):
+    asset_id: str = Field(..., description="The asset's unique identifier", alias="assetId")
+    status: str = Field(..., description="Status of the undelete operation")
+    message: str = Field(..., description="Message describing the undelete result")
+    document_id: Optional[str] = Field(None, description="MongoDB document ID", alias="documentId")
+    transaction_id: Optional[str] = Field(None, description="Transaction record ID", alias="transactionId")
+    
+    class Config:
+        populate_by_name = True
+
 class BatchDeleteRequest(BaseModel):
     asset_ids: List[str] = Field(..., description="List of asset IDs to delete", alias="assetIds")
     wallet_address: str = Field(..., description="The wallet address of the user performing the deletion", alias="walletAddress")
