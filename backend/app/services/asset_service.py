@@ -211,8 +211,9 @@ class AssetService:
         smart_contract_tx_id: str,
         ipfs_hash: str,
         critical_metadata: Dict[str, Any],
-        non_critical_metadata: Optional[Dict[str, Any]] = None
-    ) -> str:
+        non_critical_metadata: Optional[Dict[str, Any]] = None,
+        undelete_previous: bool = True
+    ) -> Dict[str, Any]:
         """
         Create a new version of an existing asset in MongoDB.
         
@@ -223,15 +224,16 @@ class AssetService:
             ipfs_hash: CID from IPFS storage
             critical_metadata: Core metadata stored on blockchain
             non_critical_metadata: Additional metadata stored only in MongoDB
+            undelete_previous: Whether to undelete previous versions
             
         Returns:
-            String ID of the new version document
+            Dict containing new document ID and version number
             
         Raises:
             ValueError: If asset not found
         """
         try:
-            # Find current version
+            # Find current version, including deleted ones
             current_asset = await self.asset_repository.find_asset(
                 {"assetId": asset_id, "isCurrent": True}
             )
@@ -241,6 +243,13 @@ class AssetService:
                 
             # Get current version number and increment
             new_version_number = current_asset.get("versionNumber", 1) + 1
+            
+            # Check if the asset is currently deleted
+            was_deleted = current_asset.get("isDeleted", False)
+            
+            # If asset was deleted and we should undelete previous versions
+            if was_deleted and undelete_previous:
+                await self.undelete_asset(asset_id)
             
             # Mark current version as not current first
             await self.asset_repository.update_asset(
@@ -269,7 +278,11 @@ class AssetService:
             new_doc_id = await self.asset_repository.insert_asset(new_doc)
             
             logger.info(f"New version created for asset {asset_id}: {new_doc_id}")
-            return new_doc_id
+            return {
+                "document_id": new_doc_id,
+                "version_number": new_version_number,
+                "was_deleted": was_deleted
+            }
             
         except Exception as e:
             logger.error(f"Error creating new version: {str(e)}")

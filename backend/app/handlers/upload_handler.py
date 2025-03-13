@@ -71,8 +71,17 @@ class UploadHandler:
         try:
             # Check if asset_id already exists
             existing_doc = None
+            was_deleted = False
             try:
+                # First check for non-deleted assets
                 existing_doc = await self.asset_service.get_asset(asset_id)
+                
+                # If not found, check if there's a deleted asset with this ID
+                if not existing_doc:
+                    deleted_doc = await self.asset_service.get_asset_with_deleted(asset_id)
+                    if deleted_doc and deleted_doc.get("isDeleted", False):
+                        existing_doc = deleted_doc
+                        was_deleted = True
             except Exception as e:
                 logger.error(f"Error checking for existing document: {str(e)}")
                 result = {"asset_id": asset_id, "status": "error", "detail": f"Error checking for existing document: {str(e)}"}
@@ -107,36 +116,47 @@ class UploadHandler:
                     blockchain_tx_hash = blockchain_result.get("tx_hash")
                     
                     # 3) Create new version in MongoDB
-                    new_doc_id = await self.asset_service.create_new_version(
+                    version_result = await self.asset_service.create_new_version(
                         asset_id=asset_id,
                         wallet_address=wallet_address,
                         smart_contract_tx_id=blockchain_tx_hash,
                         ipfs_hash=cid,
                         critical_metadata=critical_metadata,
-                        non_critical_metadata=non_critical_metadata
+                        non_critical_metadata=non_critical_metadata,
+                        undelete_previous=True
                     )
                     
-                    # 4) Get version number of new document
-                    new_doc = await self.asset_service.get_asset(asset_id)
-                    version_number = new_doc.get("versionNumber", 0)
+                    # Extract results
+                    new_doc_id = version_result["document_id"]
+                    version_number = version_result["version_number"]
+                    was_deleted = version_result["was_deleted"]
                     
-                    # 5) Record transaction if transaction service is available
+                    # 4) Record transaction if transaction service is available
                     if self.transaction_service:
+                        tx_action = "VERSION_CREATE"
+                        if was_deleted:
+                            tx_action = "RECREATE_DELETED"
+                            
                         await self.transaction_service.record_transaction(
                             asset_id=asset_id,
-                            action="VERSION_CREATE",
+                            action=tx_action,
                             wallet_address=wallet_address,
                             metadata={
                                 "ipfsHash": cid,
                                 "smartContractTxId": blockchain_tx_hash,
-                                "versionNumber": version_number
+                                "versionNumber": version_number,
+                                "wasDeleted": was_deleted
                             }
                         )
                     
+                    message = "New version created with updated critical metadata"
+                    if was_deleted:
+                        message = "Asset recreated from deleted state with new version"
+                        
                     result = {
                         "asset_id": asset_id,
                         "status": "success",
-                        "message": "New version created with updated critical metadata",
+                        "message": message,
                         "document_id": new_doc_id,
                         "version": version_number,
                         "ipfs_cid": cid,
@@ -150,43 +170,84 @@ class UploadHandler:
                     # Reuse existing IPFS hash and blockchain transaction ID
                     existing_tx_hash = existing_doc.get("smartContractTxId")
                     
-                    # Create new version in MongoDB
-                    new_doc_id = await self.asset_service.create_new_version(
-                        asset_id=asset_id,
-                        wallet_address=wallet_address,
-                        smart_contract_tx_id=existing_tx_hash,
-                        ipfs_hash=existing_ipfs_hash,
-                        critical_metadata=critical_metadata,
-                        non_critical_metadata=non_critical_metadata
-                    )
-                    
-                    # Get the new version number
-                    new_doc = await self.asset_service.get_asset(asset_id)
-                    version_number = new_doc.get("versionNumber", 0)
-                    
-                    # Record transaction if transaction service is available
-                    if self.transaction_service:
-                        await self.transaction_service.record_transaction(
+                    # If the asset was deleted, recreate it with a new version
+                    if was_deleted:
+                        version_result = await self.asset_service.create_new_version(
                             asset_id=asset_id,
-                            action="UPDATE",
                             wallet_address=wallet_address,
-                            metadata={
-                                "versionNumber": version_number
-                            }
+                            smart_contract_tx_id=existing_tx_hash,
+                            ipfs_hash=existing_ipfs_hash,
+                            critical_metadata=critical_metadata,
+                            non_critical_metadata=non_critical_metadata,
+                            undelete_previous=True  # Undelete previous versions
                         )
-                    
-                    result = {
-                        "asset_id": asset_id,
-                        "status": "success",
-                        "message": "New version created with only non-critical metadata updates",
-                        "document_id": new_doc_id,
-                        "version": version_number,
-                        "ipfs_cid": existing_ipfs_hash,
-                        "blockchain_tx_hash": existing_tx_hash,
-                    }
-                    if file_info:
-                        result.update(file_info)
-                    return result
+                        
+                        # Extract results
+                        new_doc_id = version_result["document_id"]
+                        version_number = version_result["version_number"]
+                        
+                        # Record transaction
+                        if self.transaction_service:
+                            await self.transaction_service.record_transaction(
+                                asset_id=asset_id,
+                                action="RECREATE_DELETED",
+                                wallet_address=wallet_address,
+                                metadata={
+                                    "versionNumber": version_number,
+                                    "wasDeleted": True
+                                }
+                            )
+                        
+                        result = {
+                            "asset_id": asset_id,
+                            "status": "success",
+                            "message": "Asset recreated from deleted state with no changes to critical metadata",
+                            "document_id": new_doc_id,
+                            "version": version_number,
+                            "ipfs_cid": existing_ipfs_hash,
+                            "blockchain_tx_hash": existing_tx_hash,
+                        }
+                        if file_info:
+                            result.update(file_info)
+                        return result
+                    else:
+                        # Create new version in MongoDB for non-deleted asset
+                        version_result = await self.asset_service.create_new_version(
+                            asset_id=asset_id,
+                            wallet_address=wallet_address,
+                            smart_contract_tx_id=existing_tx_hash,
+                            ipfs_hash=existing_ipfs_hash,
+                            critical_metadata=critical_metadata,
+                            non_critical_metadata=non_critical_metadata
+                        )
+                        
+                        # Extract results
+                        new_doc_id = version_result["document_id"]
+                        version_number = version_result["version_number"]
+                        
+                        # Record transaction
+                        if self.transaction_service:
+                            await self.transaction_service.record_transaction(
+                                asset_id=asset_id,
+                                action="UPDATE",
+                                wallet_address=wallet_address,
+                                metadata={
+                                    "versionNumber": version_number
+                                }
+                            )
+                        
+                        result = {
+                            "asset_id": asset_id,
+                            "status": "success",
+                            "message": "New version created with no updates to critical metadata",
+                            "document_id": new_doc_id,
+                            "version": version_number,
+                            "ipfs_cid": existing_ipfs_hash,
+                            "blockchain_tx_hash": existing_tx_hash,
+                        }
+                        if file_info:
+                            result.update(file_info)
+                        return result
             else:
                 # New document - proceed with normal flow
                 # 1) Upload to IPFS
