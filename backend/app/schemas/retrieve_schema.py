@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional, List
 class MetadataRetrieveRequest(BaseModel):
     asset_id: str = Field(..., description="The asset's unique identifier", alias="assetId")
     version: Optional[int] = Field(None, description="Specific version to retrieve, defaults to current")
+    auto_recover: Optional[bool] = Field(True, description="Whether to automatically recover from tampering")
 
     class Config:
         populate_by_name = True

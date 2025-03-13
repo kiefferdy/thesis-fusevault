@@ -42,7 +42,8 @@ class RetrieveHandler:
     async def retrieve_metadata(
         self,
         asset_id: str,
-        version: Optional[int] = None
+        version: Optional[int] = None,
+        auto_recover: bool = True
     ) -> MetadataRetrieveResponse:
         """
         Retrieve and verify metadata for an asset.
@@ -50,6 +51,7 @@ class RetrieveHandler:
         Args:
             asset_id: The asset's unique identifier
             version: Optional specific version to retrieve
+            auto_recover: Whether to automatically recover from tampering (only applies to latest version)
             
         Returns:
             MetadataRetrieveResponse containing metadata and verification results
@@ -58,15 +60,26 @@ class RetrieveHandler:
             HTTPException: If asset not found or retrieval fails
         """
         try:
-            # 1. Fetch document from MongoDB
+            # 1. First check if the asset exists at all (with any version)
+            any_version = await self.asset_service.get_asset_with_deleted(asset_id)
+            
+            if not any_version:
+                raise HTTPException(status_code=404, detail=f"Asset with ID {asset_id} not found")
+                
+            # 2. Now fetch the specific version requested
             document = await self.asset_service.get_asset(asset_id, version)
             
             if not document:
-                raise HTTPException(status_code=404, detail=f"Asset with ID {asset_id} not found")
+                if version:
+                    raise HTTPException(status_code=404, detail=f"Version {version} of asset {asset_id} not found or is deleted")
+                else:
+                    # This should not normally happen if any_version exists, unless the asset is deleted
+                    raise HTTPException(status_code=404, detail=f"Current version of asset {asset_id} not found or is deleted")
                 
             # Extract required fields
             doc_id = document["_id"]
             doc_version = document.get("versionNumber", 1)
+            is_latest_version = document.get("isCurrent", False)
             wallet_address = document.get("walletAddress")
             blockchain_tx_id = document.get("smartContractTxId")
             ipfs_hash = document.get("ipfsHash")
@@ -83,7 +96,7 @@ class RetrieveHandler:
                 recovery_needed=False
             )
             
-            # 2. Query the blockchain with the tx_id to retrieve the stored hash/CID
+            # 3. Query the blockchain with the tx_id to retrieve the stored hash/CID
             blockchain_cid = None
             tx_sender_verified = False
             
@@ -122,7 +135,7 @@ class RetrieveHandler:
                 logger.error(f"Error querying blockchain for transaction {blockchain_tx_id}: {str(e)}")
                 blockchain_cid = "BLOCKCHAIN_RETRIEVAL_FAILED"
             
-            # 3. Compute CID from MongoDB critical metadata
+            # 4. Compute CID from MongoDB critical metadata
             metadata_for_ipfs = {
                 "asset_id": asset_id,
                 "wallet_address": wallet_address,
@@ -130,7 +143,7 @@ class RetrieveHandler:
             }
             computed_cid = await self.ipfs_service.compute_cid(get_ipfs_metadata(metadata_for_ipfs))
             
-            # 4. Compare CIDs to check for tampering
+            # 5. Compare CIDs to check for tampering
             cid_match = computed_cid == blockchain_cid
             
             # Update verification result
@@ -143,10 +156,11 @@ class RetrieveHandler:
             verification_result.verified = cid_match and tx_sender_verified
             verification_result.recovery_needed = not (cid_match and tx_sender_verified)
             
-            # 5. If CIDs don't match or tx sender verification fails, retrieve authentic metadata from IPFS
+            # 6. If CIDs don't match or tx sender verification fails, retrieve authentic metadata from IPFS
+            # Only if auto_recover is True AND this is the latest version
             new_version_created = False
             
-            if verification_result.recovery_needed:
+            if verification_result.recovery_needed and auto_recover and is_latest_version:
                 logger.warning(f"Verification failed for asset {asset_id}. "
                               f"CID match: {cid_match}, TX sender verified: {tx_sender_verified}")
                 
@@ -166,7 +180,7 @@ class RetrieveHandler:
                         # Extract authentic critical metadata
                         authentic_critical_metadata = authentic_metadata.get("critical_metadata", {})
                         
-                        # 6. Create new version with authentic data
+                        # 7. Create new version with authentic data
                         new_doc_id = await self.asset_service.create_new_version(
                             asset_id=asset_id,
                             wallet_address=wallet_address,
@@ -194,7 +208,8 @@ class RetrieveHandler:
                                     "blockchain_cid": blockchain_cid,
                                     "computed_cid": computed_cid,
                                     "recovery_source": "ipfs",
-                                    "tx_sender_verified": tx_sender_verified
+                                    "tx_sender_verified": tx_sender_verified,
+                                    "auto_recover": auto_recover
                                 }
                             )
                         
@@ -212,7 +227,7 @@ class RetrieveHandler:
             # Set new version created flag in verification result
             verification_result.new_version_created = new_version_created
             
-            # 7. Prepare response
+            # 8. Prepare response
             return MetadataRetrieveResponse(
                 asset_id=asset_id,
                 version=doc_version,
