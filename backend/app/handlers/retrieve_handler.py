@@ -214,7 +214,7 @@ class RetrieveHandler:
                             )
                         
                         # Update response data
-                        doc_id = new_doc_id
+                        doc_id = new_doc_id["document_id"]
                         doc_version = new_version
                         critical_metadata = authentic_critical_metadata
                         new_version_created = True
