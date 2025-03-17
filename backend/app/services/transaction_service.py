@@ -131,7 +131,7 @@ class TransactionService:
         try:
             # Validate action type
             valid_actions = [
-                "CREATE", "UPDATE", "VERSION_CREATE", "DELETE", "UNDELETE", 
+                "CREATE", "UPDATE", "VERSION_CREATE", "DELETE", 
                 "VERIFY", "INTEGRITY_RECOVERY", "RECREATE_DELETED"
             ]
             if action not in valid_actions:

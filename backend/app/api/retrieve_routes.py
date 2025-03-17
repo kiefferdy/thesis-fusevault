@@ -3,7 +3,7 @@ from typing import Optional
 import logging
 
 from app.handlers.retrieve_handler import RetrieveHandler
-from app.schemas.retrieve_schema import MetadataRetrieveResponse, MetadataRetrieveRequest
+from app.schemas.retrieve_schema import MetadataRetrieveResponse
 from app.services.asset_service import AssetService
 from app.services.blockchain_service import BlockchainService
 from app.services.ipfs_service import IPFSService

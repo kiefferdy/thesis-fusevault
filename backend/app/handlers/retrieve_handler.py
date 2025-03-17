@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Optional
 import logging
 from fastapi import HTTPException
 
@@ -160,10 +160,11 @@ class RetrieveHandler:
             # Only if auto_recover is True AND this is the latest version
             new_version_created = False
             
-            if verification_result.recovery_needed and auto_recover and is_latest_version:
+            if verification_result.recovery_needed:
                 logger.warning(f"Verification failed for asset {asset_id}. "
-                              f"CID match: {cid_match}, TX sender verified: {tx_sender_verified}")
-                
+                            f"CID match: {cid_match}, TX sender verified: {tx_sender_verified}")
+            
+            if verification_result.recovery_needed and auto_recover and is_latest_version:
                 try:
                     # Retrieve authentic metadata from IPFS
                     try:

@@ -5,7 +5,6 @@ import logging
 from app.handlers.delete_handler import DeleteHandler
 from app.schemas.delete_schema import (
     DeleteRequest, DeleteResponse, 
-    UndeleteRequest, UndeleteResponse,
     BatchDeleteRequest, BatchDeleteResponse
 )
 from app.services.asset_service import AssetService
@@ -83,26 +82,6 @@ async def batch_delete_assets(
         reason=batch_request.reason
     )
     return result
-
-@router.post("/undelete", response_model=UndeleteResponse)
-async def undelete_asset(
-    undelete_request: UndeleteRequest = Body(...),
-    delete_handler: DeleteHandler = Depends(get_delete_handler)
-) -> UndeleteResponse:
-    """
-    Reactivate a previously deleted asset.
-    
-    Args:
-        undelete_request: Request containing asset ID and wallet address
-        
-    Returns:
-        UndeleteResponse containing operation result
-    """
-    result = await delete_handler.undelete_asset(
-        asset_id=undelete_request.asset_id,
-        wallet_address=undelete_request.wallet_address
-    )
-    return UndeleteResponse(**result)
 
 @router.delete("/asset/{asset_id}", response_model=DeleteResponse)
 async def delete_asset_by_path(

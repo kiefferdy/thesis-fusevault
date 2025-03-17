@@ -33,6 +33,10 @@ class AssetService:
         """
         Create a new asset document in MongoDB.
         
+        If an asset with the same ID exists but is marked as deleted, and the wallet address
+        matches the original owner, this method will permanently delete all previous versions
+        of the asset that are marked as deleted, and create a fresh version 1 document.
+        
         Args:
             asset_id: Unique identifier for the asset
             wallet_address: Owner's wallet address
@@ -40,17 +44,18 @@ class AssetService:
             ipfs_hash: CID from IPFS storage
             critical_metadata: Core metadata stored on blockchain
             non_critical_metadata: Additional metadata stored only in MongoDB
-            
+                
         Returns:
             String ID of the created document
-            
+                
         Raises:
-            ValueError: If asset already exists
+            ValueError: If asset already exists and is not deleted, or if a deleted
+                    asset exists but is owned by a different wallet address
         """
         try:
             # Check if asset already exists and is not deleted
             existing_asset = await self.asset_repository.find_asset({
-                "assetId": asset_id, 
+                "assetId": asset_id,
                 "isCurrent": True,
                 "isDeleted": False
             })
@@ -60,32 +65,51 @@ class AssetService:
             
             # Check if there's a deleted asset with this ID
             deleted_asset = await self.asset_repository.find_asset({
-                "assetId": asset_id, 
-                "isCurrent": True,
+                "assetId": asset_id,
+                "isCurrent": False,
                 "isDeleted": True
             })
             
             if deleted_asset:
-                # If the owner is trying to recreate their own deleted asset,
-                # we can either undelete it or create a new version
+                # If the owner is trying to recreate their own deleted asset
                 if deleted_asset.get("walletAddress", "").lower() == wallet_address.lower():
-                    # Create a new version
-                    return await self.create_new_version(
-                        asset_id=asset_id,
-                        wallet_address=wallet_address,
-                        smart_contract_tx_id=smart_contract_tx_id,
-                        ipfs_hash=ipfs_hash,
-                        critical_metadata=critical_metadata,
-                        non_critical_metadata=non_critical_metadata
-                    )
+                    # Delete all previous versions of this asset that are marked as deleted
+                    deleted_count = await self.asset_repository.delete_assets({
+                        "assetId": asset_id,
+                        "isDeleted": True
+                    })
+                    
+                    logger.info(f"Deleted {deleted_count} previous versions of asset {asset_id} before recreation")
+                    
+                    # Create a new document with version 1
+                    document = {
+                        "assetId": asset_id,
+                        "versionNumber": 1,
+                        "walletAddress": wallet_address,
+                        "smartContractTxId": smart_contract_tx_id,
+                        "ipfsHash": ipfs_hash,
+                        "lastVerified": datetime.now(timezone.utc),
+                        "lastUpdated": datetime.now(timezone.utc),
+                        "criticalMetadata": critical_metadata,
+                        "nonCriticalMetadata": non_critical_metadata or {},
+                        "isCurrent": True,
+                        "isDeleted": False,
+                        "documentHistory": []
+                    }
+                    
+                    # Insert into MongoDB
+                    doc_id = await self.asset_repository.insert_asset(document)
+                    
+                    logger.info(f"Recreated asset with ID: {doc_id}, after deleting previous versions")
+                    return doc_id
                 else:
                     # Different owner can't reuse the ID
                     raise ValueError(f"Asset with ID {asset_id} exists but is owned by a different wallet")
-                
-            # Create document for MongoDB
+            
+            # Create document for MongoDB (normal flow for new assets)
             document = {
                 "assetId": asset_id,
-                "versionNumber": 1,  # Initial version
+                "versionNumber": 1,
                 "walletAddress": wallet_address,
                 "smartContractTxId": smart_contract_tx_id,
                 "ipfsHash": ipfs_hash,
@@ -211,8 +235,7 @@ class AssetService:
         smart_contract_tx_id: str,
         ipfs_hash: str,
         critical_metadata: Dict[str, Any],
-        non_critical_metadata: Optional[Dict[str, Any]] = None,
-        undelete_previous: bool = True
+        non_critical_metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Create a new version of an existing asset in MongoDB.
@@ -224,7 +247,6 @@ class AssetService:
             ipfs_hash: CID from IPFS storage
             critical_metadata: Core metadata stored on blockchain
             non_critical_metadata: Additional metadata stored only in MongoDB
-            undelete_previous: Whether to undelete previous versions
             
         Returns:
             Dict containing new document ID and version number
@@ -246,10 +268,6 @@ class AssetService:
             
             # Check if the asset is currently deleted
             was_deleted = current_asset.get("isDeleted", False)
-            
-            # If asset was deleted and we should undelete previous versions
-            if was_deleted and undelete_previous:
-                await self.undelete_asset(asset_id)
             
             # Mark current version as not current first
             await self.asset_repository.update_asset(
@@ -346,38 +364,6 @@ class AssetService:
             
         except Exception as e:
             logger.error(f"Error soft deleting asset: {str(e)}")
-            raise
-            
-    async def undelete_asset(self, asset_id: str) -> bool:
-        """
-        Undelete an asset (mark as not deleted).
-        This undeletes ALL versions of the asset, not just the current version.
-        
-        Args:
-            asset_id: The asset ID to undelete
-            
-        Returns:
-            True if undeleted successfully, False otherwise
-        """
-        try:
-            # Update timestamp for all versions
-            update_time = datetime.now(timezone.utc)
-            
-            # Mark all versions of this asset as not deleted
-            result = await self.asset_repository.update_assets(
-                {"assetId": asset_id},
-                {"$set": {
-                    "isDeleted": False,
-                    "deletedBy": None,
-                    "deletedAt": None,
-                    "lastUpdated": update_time
-                }}
-            )
-            
-            return result > 0
-            
-        except Exception as e:
-            logger.error(f"Error undeleting asset: {str(e)}")
             raise
             
     async def get_version_history(self, asset_id: str, include_deleted: bool = False) -> List[Dict[str, Any]]:

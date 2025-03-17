@@ -146,3 +146,21 @@ class AssetRepository:
         except Exception as e:
             logger.error(f"Error deleting asset: {str(e)}")
             raise
+
+    async def delete_assets(self, query: Dict[str, Any]) -> int:
+        """
+        Hard delete multiple assets matching the query.
+        
+        Args:
+            query: The query to identify documents to delete
+            
+        Returns:
+            Number of documents deleted
+        """
+        try:
+            result = self.assets_collection.delete_many(query)
+            return result.deleted_count
+            
+        except Exception as e:
+            logger.error(f"Error deleting assets: {str(e)}")
+            raise
