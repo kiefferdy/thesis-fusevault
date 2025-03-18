@@ -104,7 +104,8 @@ class RetrieveHandler:
                     asset_id=asset_id,
                     owner_address=wallet_address
                 )
-                
+                logger.info(f"Initial Blockchain Data: asset_id={asset_id}, version={blockchain_data.get('ipfs_version')}, deleted={blockchain_data.get('is_deleted')}")
+
                 # Now verify the CID using the verifyCID function
                 # Important: Use ipfs_version instead of doc_version for blockchain verification
                 verify_result = await self.blockchain_service.verify_cid_on_chain(
@@ -130,7 +131,7 @@ class RetrieveHandler:
                 tx_data = await self.blockchain_service.get_transaction_details(blockchain_tx_id)
                 blockchain_cid = tx_data.get("cid", "unknown")
                 tx_sender = tx_data.get("tx_sender", None)
-                
+
                 # Set blockchain CID
                 verification_result.blockchain_cid = blockchain_cid
                 
@@ -169,22 +170,31 @@ class RetrieveHandler:
                 "critical_metadata": critical_metadata
             }
             computed_cid = await self.ipfs_service.compute_cid(get_ipfs_metadata(metadata_for_ipfs))
-            
+
             # 5. Set computed CID and compare with blockchain CID
             verification_result.computed_cid = computed_cid
+            verification_result.blockchain_cid = blockchain_cid
             verification_result.cid_match = computed_cid == verification_result.blockchain_cid
-            
+
             # Different verification logic for current vs. historical versions
             if is_latest_version:
                 # For latest version, use the blockchain contract verification
                 verification_result.verified = verify_result["is_valid"] if "is_valid" in locals() else verification_result.cid_match
+                
+                if verification_result.verified:
+                    logger.info(f"Verification Success: Current version of asset {asset_id}, version={doc_version}, ipfs_version={ipfs_version}")
+                else:
+                    logger.warning(f"Current version verification failed for asset {asset_id}, version {doc_version}, ipfs_version {ipfs_version}")
             else:
                 # For historical versions, use transaction history verification instead
                 # Consider it verified if the transaction data matches the computed data
                 verification_result.verified = verification_result.cid_match and verification_result.tx_sender_verified
+                
                 if verification_result.verified:
+                    logger.info(f"Verification Success: Historical version of asset {asset_id}, version={doc_version}, ipfs_version={ipfs_version}")
                     verification_result.message = "Historical version verified via transaction data"
                 else:
+                    logger.warning(f"Historical version verification failed for asset {asset_id}, version {doc_version}, ipfs_version {ipfs_version}")
                     if verification_result.cid_match:
                         verification_result.message = "Historical transaction sender verification failed"
                     else:
@@ -195,7 +205,7 @@ class RetrieveHandler:
             
             if verification_result.recovery_needed:
                 logger.warning(f"Verification failed for asset {asset_id}. "
-                             f"CID match: {verification_result.cid_match}")
+                             f"CID match: {verification_result.cid_match}, needs recovery: {verification_result.recovery_needed}")
             
             if verification_result.recovery_needed and auto_recover and is_latest_version:
                 try:
@@ -223,7 +233,7 @@ class RetrieveHandler:
                             ipfs_hash=verification_result.blockchain_cid,
                             critical_metadata=authentic_critical_metadata,
                             non_critical_metadata=non_critical_metadata,
-                            ipfs_version=verification_result.ipfs_version  # Pass the correct IPFS version
+                            ipfs_version=verification_result.ipfs_version
                         )
                         
                         # Get the new document to get its version number
