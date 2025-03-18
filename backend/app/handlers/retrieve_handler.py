@@ -98,6 +98,8 @@ class RetrieveHandler:
             )
             
             # 3. Use the contract's verification methods to verify the CID
+            blockchain_cid = "unknown"
+            ipfs_hash_verified = False
             try:
                 # First get IPFS info from the blockchain
                 blockchain_data = await self.blockchain_service.get_ipfs_info(
@@ -120,12 +122,8 @@ class RetrieveHandler:
                 verification_result.is_deleted = verify_result["is_deleted"]
                 verification_result.message = verify_result["message"]
                 
-                # Set recovery_needed based on verification result, but only for current versions
-                if is_latest_version:
-                    verification_result.recovery_needed = not verify_result["is_valid"]
-                else:
-                    # For historical versions, we never need recovery
-                    verification_result.recovery_needed = False
+                # Store result of IPFS hash verification (if stored ipfs_hash matches blockchain)
+                ipfs_hash_verified = verify_result["is_valid"]
                 
                 # Get transaction details for additional verification
                 tx_data = await self.blockchain_service.get_transaction_details(blockchain_tx_id)
@@ -159,8 +157,6 @@ class RetrieveHandler:
                 
             except Exception as e:
                 logger.error(f"Error verifying asset on blockchain: {str(e)}")
-                # Only set recovery_needed for current versions
-                verification_result.recovery_needed = is_latest_version
                 verification_result.message = f"Blockchain verification failed: {str(e)}"
             
             # 4. Compute CID from MongoDB critical metadata
@@ -173,22 +169,27 @@ class RetrieveHandler:
 
             # 5. Set computed CID and compare with blockchain CID
             verification_result.computed_cid = computed_cid
-            verification_result.blockchain_cid = blockchain_cid
             verification_result.cid_match = computed_cid == verification_result.blockchain_cid
 
             # Different verification logic for current vs. historical versions
             if is_latest_version:
-                # For latest version, use the blockchain contract verification
-                verification_result.verified = verify_result["is_valid"] if "is_valid" in locals() else verification_result.cid_match
+                # For latest version, verify both the IPFS hash AND that the computed CID matches
+                verification_result.verified = ipfs_hash_verified and verification_result.cid_match
+                verification_result.recovery_needed = not verification_result.verified
                 
                 if verification_result.verified:
                     logger.info(f"Verification Success: Current version of asset {asset_id}, version={doc_version}, ipfs_version={ipfs_version}")
                 else:
                     logger.warning(f"Current version verification failed for asset {asset_id}, version {doc_version}, ipfs_version {ipfs_version}")
+                    if not ipfs_hash_verified:
+                        verification_result.message = "IPFS hash verification failed - stored hash doesn't match blockchain"
+                    elif not verification_result.cid_match:
+                        verification_result.message = "CID mismatch - computed CID from current data doesn't match blockchain CID"
             else:
                 # For historical versions, use transaction history verification instead
                 # Consider it verified if the transaction data matches the computed data
                 verification_result.verified = verification_result.cid_match and verification_result.tx_sender_verified
+                verification_result.recovery_needed = False
                 
                 if verification_result.verified:
                     logger.info(f"Verification Success: Historical version of asset {asset_id}, version={doc_version}, ipfs_version={ipfs_version}")
@@ -200,12 +201,13 @@ class RetrieveHandler:
                     else:
                         verification_result.message = "Historical CID verification failed"
             
-            # 6. If verification failed and auto-recover is enabled, try to recover from IPFS
-            new_version_created = False
-            
+            # Additional logging if recovery needed
             if verification_result.recovery_needed:
                 logger.warning(f"Verification failed for asset {asset_id}. "
-                             f"CID match: {verification_result.cid_match}, needs recovery: {verification_result.recovery_needed}")
+                             f"CID match: {verification_result.cid_match}, IPFS hash verified: {ipfs_hash_verified}, needs recovery: {verification_result.recovery_needed}")
+            
+            # 6. If verification failed and auto-recover is enabled, try to recover from IPFS
+            new_version_created = False
             
             if verification_result.recovery_needed and auto_recover and is_latest_version:
                 try:
