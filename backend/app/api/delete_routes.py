@@ -9,6 +9,7 @@ from app.schemas.delete_schema import (
 )
 from app.services.asset_service import AssetService
 from app.services.transaction_service import TransactionService
+from app.services.blockchain_service import BlockchainService
 from app.repositories.asset_repo import AssetRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.database import get_db_client
@@ -29,10 +30,12 @@ def get_delete_handler(db_client=Depends(get_db_client)) -> DeleteHandler:
     
     asset_service = AssetService(asset_repo)
     transaction_service = TransactionService(transaction_repo)
+    blockchain_service = BlockchainService()
     
     return DeleteHandler(
         asset_service=asset_service,
-        transaction_service=transaction_service
+        transaction_service=transaction_service,
+        blockchain_service=blockchain_service
     )
 
 @router.post("", response_model=DeleteResponse)
