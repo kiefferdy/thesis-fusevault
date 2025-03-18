@@ -112,7 +112,7 @@ class UploadHandler:
                     cid = await self.ipfs_service.store_metadata(ipfs_metadata)
                     
                     # 2) Store on blockchain
-                    blockchain_result = await self.blockchain_service.store_hash(cid)
+                    blockchain_result = await self.blockchain_service.store_hash(cid, asset_id)  # Pass asset_id here
                     blockchain_tx_hash = blockchain_result.get("tx_hash")
                     
                     # 3) Handle based on whether the asset was deleted
@@ -281,8 +281,8 @@ class UploadHandler:
                 # 1) Upload to IPFS
                 cid = await self.ipfs_service.store_metadata(ipfs_metadata)
                 
-                # 2) Store on blockchain
-                blockchain_result = await self.blockchain_service.store_hash(cid)
+                # 2) Store on blockchain - now pass asset_id to the store_hash function
+                blockchain_result = await self.blockchain_service.store_hash(cid, asset_id)
                 blockchain_tx_hash = blockchain_result.get("tx_hash")
                 
                 # 3) Insert into MongoDB

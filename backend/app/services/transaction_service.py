@@ -132,7 +132,8 @@ class TransactionService:
             # Validate action type
             valid_actions = [
                 "CREATE", "UPDATE", "VERSION_CREATE", "DELETE", 
-                "VERIFY", "INTEGRITY_RECOVERY", "RECREATE_DELETED"
+                "VERIFY", "INTEGRITY_RECOVERY", "RECREATE_DELETED",
+                "TRANSFER_INITIATED", "TRANSFER_COMPLETED", "TRANSFER_CANCELLED"
             ]
             if action not in valid_actions:
                 raise ValueError(f"Invalid action type. Must be one of: {', '.join(valid_actions)}")

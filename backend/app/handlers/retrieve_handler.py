@@ -92,21 +92,45 @@ class RetrieveHandler:
                 cid_match=False,
                 blockchain_cid="unknown",
                 computed_cid="unknown",
-                blockchain_verification=False,
                 recovery_needed=False
             )
             
-            # 3. Query the blockchain with the tx_id to retrieve the stored hash/CID
-            blockchain_cid = None
-            tx_sender_verified = False
-            
+            # 3. Use the new contract's verification methods to verify the CID
             try:
-                # Get transaction data from blockchain
-                blockchain_result = await self.blockchain_service.get_hash_from_transaction(blockchain_tx_id)
-                blockchain_cid = blockchain_result.get("cid")
+                # First get IPFS info from the blockchain
+                blockchain_data = await self.blockchain_service.get_ipfs_info(
+                    asset_id=asset_id,
+                    owner_address=wallet_address
+                )
+                
+                # Now verify the CID using the verifyCID function
+                verify_result = await self.blockchain_service.verify_cid_on_chain(
+                    asset_id=asset_id,
+                    owner_address=wallet_address,
+                    cid=ipfs_hash,
+                    claimed_version=doc_version
+                )
+                
+                # Set verification results from blockchain response
+                verification_result.ipfs_version = verify_result["actual_version"]
+                verification_result.is_deleted = verify_result["is_deleted"]
+                verification_result.message = verify_result["message"]
+                
+                # Set recovery_needed based on verification result
+                verification_result.recovery_needed = not verify_result["is_valid"]
+                
+                # Set the final verification result based on blockchain verification
+                verification_result.verified = verify_result["is_valid"]
+                
+                # Get transaction details for additional verification
+                tx_data = await self.blockchain_service.get_transaction_details(blockchain_tx_id)
+                blockchain_cid = tx_data.get("cid", "unknown")
+                tx_sender = tx_data.get("tx_sender", None)
+                
+                # Set blockchain CID
+                verification_result.blockchain_cid = blockchain_cid
                 
                 # Verify transaction sender if possible
-                tx_sender = blockchain_result.get("tx_sender")
                 server_wallet = self.blockchain_service.wallet_address
                 
                 if tx_sender and server_wallet:
@@ -126,14 +150,12 @@ class RetrieveHandler:
                     logger.warning(f"Transaction sender verification failed - missing data. " 
                                   f"tx_sender: {tx_sender}, server_wallet: {server_wallet}")
                 
-                if not blockchain_cid:
-                    logger.error(f"Could not retrieve CID from blockchain for transaction {blockchain_tx_id}. This is a critical requirement.")
-                    # Use a marker value that will cause verification to fail
-                    blockchain_cid = "BLOCKCHAIN_RETRIEVAL_FAILED"
+                verification_result.tx_sender_verified = tx_sender_verified
                 
             except Exception as e:
-                logger.error(f"Error querying blockchain for transaction {blockchain_tx_id}: {str(e)}")
-                blockchain_cid = "BLOCKCHAIN_RETRIEVAL_FAILED"
+                logger.error(f"Error verifying asset on blockchain: {str(e)}")
+                verification_result.recovery_needed = True
+                verification_result.message = f"Blockchain verification failed: {str(e)}"
             
             # 4. Compute CID from MongoDB critical metadata
             metadata_for_ipfs = {
@@ -143,39 +165,34 @@ class RetrieveHandler:
             }
             computed_cid = await self.ipfs_service.compute_cid(get_ipfs_metadata(metadata_for_ipfs))
             
-            # 5. Compare CIDs to check for tampering
-            cid_match = computed_cid == blockchain_cid
-            
-            # Update verification result
-            verification_result.blockchain_cid = blockchain_cid
+            # 5. Set computed CID and compare with blockchain CID
             verification_result.computed_cid = computed_cid
-            verification_result.cid_match = cid_match
-            verification_result.tx_sender_verified = tx_sender_verified
+            verification_result.cid_match = computed_cid == verification_result.blockchain_cid
             
-            # Final verification result - include both CID match and transaction sender verification
-            verification_result.verified = cid_match and tx_sender_verified
-            verification_result.recovery_needed = not (cid_match and tx_sender_verified)
+            # If blockchain verification failed, fall back to CID match for verification
+            if verification_result.verified is None:
+                verification_result.verified = verification_result.cid_match
             
-            # 6. If CIDs don't match or tx sender verification fails, retrieve authentic metadata from IPFS
-            # Only if auto_recover is True AND this is the latest version
+            # 6. If verification failed and auto-recover is enabled, try to recover from IPFS
             new_version_created = False
             
             if verification_result.recovery_needed:
                 logger.warning(f"Verification failed for asset {asset_id}. "
-                            f"CID match: {cid_match}, TX sender verified: {tx_sender_verified}")
+                             f"CID match: {verification_result.cid_match}")
             
             if verification_result.recovery_needed and auto_recover and is_latest_version:
                 try:
-                    # Retrieve authentic metadata from IPFS
+                    # Retrieve authentic metadata from IPFS using blockchain CID
                     try:
-                        authentic_metadata = await self.ipfs_service.retrieve_metadata(blockchain_cid)
+                        authentic_metadata = await self.ipfs_service.retrieve_metadata(verification_result.blockchain_cid)
                     except Exception as ipfs_error:
                         logger.error(f"Failed to retrieve metadata from IPFS: {str(ipfs_error)}")
+                        verification_result.recovery_successful = False
                         raise ipfs_error
                     
                     # Ensure we have the required fields
                     if not authentic_metadata or "critical_metadata" not in authentic_metadata:
-                        logger.error(f"Failed to retrieve valid metadata from IPFS for CID {blockchain_cid}")
+                        logger.error(f"Failed to retrieve valid metadata from IPFS for CID {verification_result.blockchain_cid}")
                         verification_result.recovery_successful = False
                     else:
                         # Extract authentic critical metadata
@@ -186,7 +203,7 @@ class RetrieveHandler:
                             asset_id=asset_id,
                             wallet_address=wallet_address,
                             smart_contract_tx_id=blockchain_tx_id,
-                            ipfs_hash=blockchain_cid,
+                            ipfs_hash=verification_result.blockchain_cid,
                             critical_metadata=authentic_critical_metadata,
                             non_critical_metadata=non_critical_metadata
                         )
@@ -206,10 +223,10 @@ class RetrieveHandler:
                                     "new_doc_id": new_doc_id,
                                     "previous_version": doc_version,
                                     "new_version": new_version,
-                                    "blockchain_cid": blockchain_cid,
+                                    "blockchain_cid": verification_result.blockchain_cid,
                                     "computed_cid": computed_cid,
                                     "recovery_source": "ipfs",
-                                    "tx_sender_verified": tx_sender_verified,
+                                    "tx_sender_verified": verification_result.tx_sender_verified,
                                     "auto_recover": auto_recover
                                 }
                             )
@@ -236,7 +253,7 @@ class RetrieveHandler:
                 non_critical_metadata=non_critical_metadata,
                 verification=verification_result,
                 document_id=doc_id,
-                ipfs_hash=blockchain_cid,
+                ipfs_hash=verification_result.blockchain_cid,
                 blockchain_tx_id=blockchain_tx_id
             )
             

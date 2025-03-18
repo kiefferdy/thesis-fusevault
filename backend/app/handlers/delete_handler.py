@@ -3,6 +3,7 @@ import logging
 from fastapi import HTTPException
 
 from app.services.asset_service import AssetService
+from app.services.blockchain_service import BlockchainService
 from app.services.transaction_service import TransactionService
 from app.schemas.delete_schema import DeleteResponse, BatchDeleteResponse
 
@@ -17,6 +18,7 @@ class DeleteHandler:
     def __init__(
         self, 
         asset_service: AssetService,
+        blockchain_service: BlockchainService = None,
         transaction_service: TransactionService = None
     ):
         """
@@ -24,9 +26,11 @@ class DeleteHandler:
         
         Args:
             asset_service: Service for asset operations
+            blockchain_service: Service for blockchain operations
             transaction_service: Optional service for recording transactions
         """
         self.asset_service = asset_service
+        self.blockchain_service = blockchain_service
         self.transaction_service = transaction_service
         
     async def delete_asset(
@@ -75,13 +79,68 @@ class DeleteHandler:
             
             if asset_owner != requester:
                 # In a real application, you would check if the requester has admin privileges
-                # For now, only allow the asset owner to delete their assets
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Unauthorized: Only the asset owner can delete this asset"
-                )
+                # or delegate permissions with the new contract
+                if self.blockchain_service:
+                    try:
+                        # Check if the asset exists on the blockchain and get ownership
+                        asset_exists = await self.blockchain_service.check_asset_exists(
+                            asset_id=asset_id,
+                            owner_address=asset_owner
+                        )
+                        
+                        if not asset_exists["exists"] or asset_exists["is_deleted"]:
+                            raise HTTPException(
+                                status_code=404,
+                                detail=f"Asset with ID {asset_id} not found on blockchain or already deleted"
+                            )
+                            
+                        # Call the blockchain operation to delete the asset on behalf of the owner
+                        # This will fail if the caller doesn't have admin/delegate permission
+                        blockchain_result = await self.blockchain_service.delete_asset_for(
+                            asset_id=asset_id,
+                            owner_address=asset_owner
+                        )
+                        
+                        # If we get here, it means the requester has permission on the blockchain
+                        logger.info(f"Blockchain deletion successful for asset {asset_id} on behalf of {asset_owner}. TX: {blockchain_result['tx_hash']}")
+                        
+                    except Exception as blockchain_error:
+                        logger.error(f"Error validating permissions on blockchain: {str(blockchain_error)}")
+                        # If blockchain check fails, fall back to standard check
+                        raise HTTPException(
+                            status_code=403,
+                            detail=f"Unauthorized: Only the asset owner can delete this asset"
+                        )
+                else:
+                    # No blockchain service available, use standard check
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"Unauthorized: Only the asset owner can delete this asset"
+                    )
                 
-            # Soft delete the asset
+            # Delete the asset on blockchain first (if blockchain service is available)
+            blockchain_tx_hash = None
+            if self.blockchain_service:
+                try:
+                    if asset_owner == requester:
+                        # Regular deletion (owner deleting their own asset)
+                        blockchain_result = await self.blockchain_service.delete_asset(asset_id)
+                    else:
+                        # We already verified permissions above, this is a delegate/admin deleting on behalf of owner
+                        blockchain_result = await self.blockchain_service.delete_asset_for(
+                            asset_id=asset_id,
+                            owner_address=asset_owner
+                        )
+                    
+                    blockchain_tx_hash = blockchain_result.get("tx_hash")
+                    logger.info(f"Asset {asset_id} deleted on blockchain. TX: {blockchain_tx_hash}")
+                    
+                except Exception as e:
+                    logger.error(f"Blockchain deletion failed for asset {asset_id}: {str(e)}")
+                    # Continue with database deletion even if blockchain deletion fails
+                    # The reconciliation process can handle this later
+            
+            # Soft delete the asset in the database
             success = await self.asset_service.soft_delete(asset_id, wallet_address)
             
             if not success:
@@ -93,7 +152,11 @@ class DeleteHandler:
             # Record the transaction if transaction service is available
             transaction_id = None
             if self.transaction_service:
-                metadata = {"reason": reason} if reason else {}
+                metadata = {
+                    "reason": reason if reason else "User requested deletion",
+                    "blockchain_tx_hash": blockchain_tx_hash
+                }
+                
                 transaction_id = await self.transaction_service.record_transaction(
                     asset_id=asset_id,
                     action="DELETE",
