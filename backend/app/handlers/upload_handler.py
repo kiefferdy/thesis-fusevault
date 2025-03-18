@@ -106,13 +106,16 @@ class UploadHandler:
                 # If CIDs match, then critical metadata has NOT changed
                 critical_metadata_changed = computed_cid != existing_ipfs_hash
                 
+                # Get current ipfsVersion from document or fallback to versionNumber
+                current_ipfs_version = existing_doc.get("ipfsVersion", existing_doc.get("versionNumber", 1))
+                
                 if critical_metadata_changed:
                     # Critical metadata changed - upload to IPFS and blockchain
                     # 1) Upload to IPFS
                     cid = await self.ipfs_service.store_metadata(ipfs_metadata)
                     
                     # 2) Store on blockchain
-                    blockchain_result = await self.blockchain_service.store_hash(cid, asset_id)  # Pass asset_id here
+                    blockchain_result = await self.blockchain_service.store_hash(cid, asset_id)
                     blockchain_tx_hash = blockchain_result.get("tx_hash")
                     
                     # 3) Handle based on whether the asset was deleted
@@ -125,7 +128,8 @@ class UploadHandler:
                             smart_contract_tx_id=blockchain_tx_hash,
                             ipfs_hash=cid,
                             critical_metadata=critical_metadata,
-                            non_critical_metadata=non_critical_metadata
+                            non_critical_metadata=non_critical_metadata,
+                            ipfs_version=1
                         )
                         
                         # Record transaction
@@ -138,6 +142,7 @@ class UploadHandler:
                                     "ipfsHash": cid,
                                     "smartContractTxId": blockchain_tx_hash,
                                     "versionNumber": 1,
+                                    "ipfsVersion": 1,
                                     "wasDeleted": True
                                 }
                             )
@@ -150,23 +155,29 @@ class UploadHandler:
                             "message": message,
                             "document_id": new_doc_id,
                             "version": 1,
+                            "ipfs_version": 1,
                             "ipfs_cid": cid,
                             "blockchain_tx_hash": blockchain_tx_hash,
                         }
                     else:
                         # For non-deleted assets, create a new version
+                        # Increment ipfsVersion since critical metadata changed
+                        next_ipfs_version = current_ipfs_version + 1
+                        
                         version_result = await self.asset_service.create_new_version(
                             asset_id=asset_id,
                             wallet_address=wallet_address,
                             smart_contract_tx_id=blockchain_tx_hash,
                             ipfs_hash=cid,
                             critical_metadata=critical_metadata,
-                            non_critical_metadata=non_critical_metadata
+                            non_critical_metadata=non_critical_metadata,
+                            ipfs_version=next_ipfs_version
                         )
                         
                         # Extract results
                         new_doc_id = version_result["document_id"]
                         version_number = version_result["version_number"]
+                        ipfs_version = version_result.get("ipfs_version", next_ipfs_version)
                         
                         # Record transaction
                         if self.transaction_service:
@@ -178,7 +189,8 @@ class UploadHandler:
                                 metadata={
                                     "ipfsHash": cid,
                                     "smartContractTxId": blockchain_tx_hash,
-                                    "versionNumber": version_number
+                                    "versionNumber": version_number,
+                                    "ipfsVersion": ipfs_version
                                 }
                             )
                         
@@ -190,6 +202,7 @@ class UploadHandler:
                             "message": message,
                             "document_id": new_doc_id,
                             "version": version_number,
+                            "ipfs_version": ipfs_version,
                             "ipfs_cid": cid,
                             "blockchain_tx_hash": blockchain_tx_hash,
                         }
@@ -211,7 +224,8 @@ class UploadHandler:
                             smart_contract_tx_id=existing_tx_hash,
                             ipfs_hash=existing_ipfs_hash,
                             critical_metadata=critical_metadata,
-                            non_critical_metadata=non_critical_metadata
+                            non_critical_metadata=non_critical_metadata,
+                            ipfs_version=1
                         )
                         
                         # Record transaction
@@ -222,6 +236,7 @@ class UploadHandler:
                                 wallet_address=wallet_address,
                                 metadata={
                                     "versionNumber": 1,
+                                    "ipfsVersion": 1,
                                     "wasDeleted": True
                                 }
                             )
@@ -232,6 +247,7 @@ class UploadHandler:
                             "message": "Asset recreated from deleted state with version reset to 1",
                             "document_id": new_doc_id,
                             "version": 1,
+                            "ipfs_version": 1,
                             "ipfs_cid": existing_ipfs_hash,
                             "blockchain_tx_hash": existing_tx_hash,
                         }
@@ -240,18 +256,21 @@ class UploadHandler:
                         return result
                     else:
                         # Create new version in MongoDB for non-deleted asset
+                        # Keep ipfsVersion the same since critical metadata hasn't changed
                         version_result = await self.asset_service.create_new_version(
                             asset_id=asset_id,
                             wallet_address=wallet_address,
                             smart_contract_tx_id=existing_tx_hash,
                             ipfs_hash=existing_ipfs_hash,
                             critical_metadata=critical_metadata,
-                            non_critical_metadata=non_critical_metadata
+                            non_critical_metadata=non_critical_metadata,
+                            ipfs_version=current_ipfs_version
                         )
                         
                         # Extract results
                         new_doc_id = version_result["document_id"]
                         version_number = version_result["version_number"]
+                        ipfs_version = version_result.get("ipfs_version", current_ipfs_version)
                         
                         # Record transaction
                         if self.transaction_service:
@@ -260,16 +279,18 @@ class UploadHandler:
                                 action="UPDATE",
                                 wallet_address=wallet_address,
                                 metadata={
-                                    "versionNumber": version_number
+                                    "versionNumber": version_number,
+                                    "ipfsVersion": ipfs_version
                                 }
                             )
                         
                         result = {
                             "asset_id": asset_id,
                             "status": "success",
-                            "message": "New version created with no updates to critical metadata",
+                            "message": "New version created with updated non-critical metadata only",
                             "document_id": new_doc_id,
                             "version": version_number,
+                            "ipfs_version": ipfs_version,
                             "ipfs_cid": existing_ipfs_hash,
                             "blockchain_tx_hash": existing_tx_hash,
                         }
@@ -292,7 +313,8 @@ class UploadHandler:
                     smart_contract_tx_id=blockchain_tx_hash,
                     ipfs_hash=cid,
                     critical_metadata=critical_metadata,
-                    non_critical_metadata=non_critical_metadata
+                    non_critical_metadata=non_critical_metadata,
+                    ipfs_version=1
                 )
                 
                 # 4) Record transaction if transaction service is available
@@ -303,7 +325,8 @@ class UploadHandler:
                         wallet_address=wallet_address,
                         metadata={
                             "ipfsHash": cid,
-                            "smartContractTxId": blockchain_tx_hash
+                            "smartContractTxId": blockchain_tx_hash,
+                            "ipfsVersion": 1
                         }
                     )
                 
@@ -313,6 +336,7 @@ class UploadHandler:
                     "message": "Document created",
                     "document_id": doc_id,
                     "version": 1,
+                    "ipfs_version": 1,
                     "ipfs_cid": cid,
                     "blockchain_tx_hash": blockchain_tx_hash,
                 }

@@ -28,7 +28,8 @@ class AssetService:
         smart_contract_tx_id: str,
         ipfs_hash: str,
         critical_metadata: Dict[str, Any],
-        non_critical_metadata: Optional[Dict[str, Any]] = None
+        non_critical_metadata: Optional[Dict[str, Any]] = None,
+        ipfs_version: Optional[int] = None
     ) -> str:
         """
         Create a new asset document in MongoDB.
@@ -44,6 +45,7 @@ class AssetService:
             ipfs_hash: CID from IPFS storage
             critical_metadata: Core metadata stored on blockchain
             non_critical_metadata: Additional metadata stored only in MongoDB
+            ipfs_version: Optional specific blockchain IPFS version (defaults to 1 for new assets)
                 
         Returns:
             String ID of the created document
@@ -85,6 +87,7 @@ class AssetService:
                     document = {
                         "assetId": asset_id,
                         "versionNumber": 1,
+                        "ipfsVersion": ipfs_version or 1,
                         "walletAddress": wallet_address,
                         "smartContractTxId": smart_contract_tx_id,
                         "ipfsHash": ipfs_hash,
@@ -110,6 +113,7 @@ class AssetService:
             document = {
                 "assetId": asset_id,
                 "versionNumber": 1,
+                "ipfsVersion": ipfs_version or 1,
                 "walletAddress": wallet_address,
                 "smartContractTxId": smart_contract_tx_id,
                 "ipfsHash": ipfs_hash,
@@ -235,7 +239,8 @@ class AssetService:
         smart_contract_tx_id: str,
         ipfs_hash: str,
         critical_metadata: Dict[str, Any],
-        non_critical_metadata: Optional[Dict[str, Any]] = None
+        non_critical_metadata: Optional[Dict[str, Any]] = None,
+        ipfs_version: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Create a new version of an existing asset in MongoDB.
@@ -247,6 +252,7 @@ class AssetService:
             ipfs_hash: CID from IPFS storage
             critical_metadata: Core metadata stored on blockchain
             non_critical_metadata: Additional metadata stored only in MongoDB
+            ipfs_version: Optional specific blockchain IPFS version (if None, will be set to versionNumber)
             
         Returns:
             Dict containing new document ID and version number
@@ -269,6 +275,15 @@ class AssetService:
             # Check if the asset is currently deleted
             was_deleted = current_asset.get("isDeleted", False)
             
+            # Determine the ipfsVersion to use
+            if ipfs_version is None:
+                current_ipfs_version = current_asset.get("ipfsVersion", current_asset.get("versionNumber", 1))
+                ipfs_version = new_version_number
+                
+                # If blockchain_tx_id is the same, this is likely just a non-critical update
+                if smart_contract_tx_id == current_asset.get("smartContractTxId"):
+                    ipfs_version = current_ipfs_version
+            
             # Mark current version as not current first
             await self.asset_repository.update_asset(
                 {"_id": ObjectId(current_asset["_id"])},
@@ -279,6 +294,7 @@ class AssetService:
             new_doc = {
                 "assetId": asset_id,
                 "versionNumber": new_version_number,
+                "ipfsVersion": ipfs_version,
                 "walletAddress": wallet_address,
                 "smartContractTxId": smart_contract_tx_id,
                 "ipfsHash": ipfs_hash,
@@ -299,6 +315,7 @@ class AssetService:
             return {
                 "document_id": new_doc_id,
                 "version_number": new_version_number,
+                "ipfs_version": ipfs_version,
                 "was_deleted": was_deleted
             }
             
