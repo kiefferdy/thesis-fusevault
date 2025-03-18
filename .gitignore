@@ -6,11 +6,6 @@
 venv/
 env/
 
-# Compiled Solidity files
-blockchain/**/*.abi
-blockchain/**/*.bin
-blockchain/**/*.json
-
 # IDE/editor-specific files
 .vscode/
 .idea/
