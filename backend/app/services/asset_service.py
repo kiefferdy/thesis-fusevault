@@ -68,7 +68,6 @@ class AssetService:
             # Check if there's a deleted asset with this ID
             deleted_asset = await self.asset_repository.find_asset({
                 "assetId": asset_id,
-                "isCurrent": False,
                 "isDeleted": True
             })
             
