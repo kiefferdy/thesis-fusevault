@@ -94,7 +94,8 @@ class RetrieveHandler:
                 cid_match=False,
                 blockchain_cid="unknown",
                 computed_cid="unknown",
-                recovery_needed=False
+                recovery_needed=False,
+                deletion_status_tampered=False
             )
             
             # 3. Use the contract's verification methods to verify the CID
@@ -171,32 +172,43 @@ class RetrieveHandler:
             verification_result.computed_cid = computed_cid
             verification_result.cid_match = computed_cid == verification_result.blockchain_cid
 
+            # Check specifically for deletion status tampering
+            deletion_status_tampered = verification_result.is_deleted and not document.get("isDeleted", False)
+            verification_result.deletion_status_tampered = deletion_status_tampered
+
             # Different verification logic for current vs. historical versions
             if is_latest_version:
                 # For latest version, verify both the IPFS hash AND that the computed CID matches
-                verification_result.verified = ipfs_hash_verified and verification_result.cid_match
+                verification_result.verified = ipfs_hash_verified and verification_result.cid_match and not deletion_status_tampered
                 verification_result.recovery_needed = not verification_result.verified
                 
                 if verification_result.verified:
                     logger.info(f"Verification Success: Current version of asset {asset_id}, version={doc_version}, ipfs_version={ipfs_version}")
                 else:
                     logger.warning(f"Current version verification failed for asset {asset_id}, version {doc_version}, ipfs_version {ipfs_version}")
-                    if not ipfs_hash_verified:
-                        verification_result.message = "IPFS hash verification failed - stored hash doesn't match blockchain"
+                    if deletion_status_tampered:
+                        verification_result.message = "Tampering detected: Asset is marked as deleted on blockchain but not in MongoDB"
+                    elif not ipfs_hash_verified:
+                        if verification_result.is_deleted:
+                            verification_result.message = "Asset is marked as deleted on blockchain"
+                        else:
+                            verification_result.message = "IPFS hash verification failed - stored hash doesn't match blockchain"
                     elif not verification_result.cid_match:
                         verification_result.message = "CID mismatch - computed CID from current data doesn't match blockchain CID"
             else:
                 # For historical versions, use transaction history verification instead
                 # Consider it verified if the transaction data matches the computed data
-                verification_result.verified = verification_result.cid_match and verification_result.tx_sender_verified
-                verification_result.recovery_needed = False
+                verification_result.verified = verification_result.cid_match and verification_result.tx_sender_verified and not deletion_status_tampered
+                verification_result.recovery_needed = not verification_result.verified
                 
                 if verification_result.verified:
                     logger.info(f"Verification Success: Historical version of asset {asset_id}, version={doc_version}, ipfs_version={ipfs_version}")
                     verification_result.message = "Historical version verified via transaction data"
                 else:
                     logger.warning(f"Historical version verification failed for asset {asset_id}, version {doc_version}, ipfs_version {ipfs_version}")
-                    if verification_result.cid_match:
+                    if deletion_status_tampered:
+                        verification_result.message = "Tampering detected: Asset is marked as deleted on blockchain but not in MongoDB"
+                    elif verification_result.cid_match:
                         verification_result.message = "Historical transaction sender verification failed"
                     else:
                         verification_result.message = "Historical CID verification failed"
@@ -204,12 +216,57 @@ class RetrieveHandler:
             # Additional logging if recovery needed
             if verification_result.recovery_needed:
                 logger.warning(f"Verification failed for asset {asset_id}. "
-                             f"CID match: {verification_result.cid_match}, IPFS hash verified: {ipfs_hash_verified}, needs recovery: {verification_result.recovery_needed}")
+                             f"CID match: {verification_result.cid_match}, IPFS hash verified: {ipfs_hash_verified}, "
+                             f"needs recovery: {verification_result.recovery_needed}, deletion status tampered: {deletion_status_tampered}")
             
-            # 6. If verification failed and auto-recover is enabled, try to recover from IPFS
+            # 6. If verification failed and auto-recover is enabled, try to recover
             new_version_created = False
             
-            if verification_result.recovery_needed and auto_recover and is_latest_version:
+            # Special handling for deletion status tampering
+            if verification_result.deletion_status_tampered and auto_recover:
+                try:
+                    # Mark all versions of this asset as deleted in MongoDB
+                    restored = await self.asset_service.soft_delete(asset_id, wallet_address)
+                    
+                    if restored:
+                        # Record transaction if transaction service is available
+                        if self.transaction_service:
+                            await self.transaction_service.record_transaction(
+                                asset_id=asset_id,
+                                action="DELETION_STATUS_RESTORED",
+                                wallet_address=wallet_address,
+                                metadata={
+                                    "previous_doc_id": doc_id,
+                                    "previous_version": doc_version,
+                                    "recovery_source": "blockchain_verification",
+                                    "auto_recover": auto_recover
+                                }
+                            )
+                        
+                        verification_result.recovery_successful = True
+                        verification_result.message = "Asset deletion status restored from blockchain"
+                        logger.info(f"Restored deletion status for asset {asset_id} based on blockchain verification")
+                        
+                        # No new version created, just status restored
+                        verification_result.new_version_created = False
+                        
+                        # Refresh document to get updated deletion status
+                        document = await self.asset_service.get_asset_with_deleted(asset_id, version)
+                        if document:
+                            # Update the response to reflect the corrected deletion status
+                            critical_metadata = document.get("criticalMetadata", {})
+                            non_critical_metadata = document.get("nonCriticalMetadata", {})
+                    else:
+                        verification_result.recovery_successful = False
+                        verification_result.message = "Failed to restore deletion status"
+                        logger.error(f"Failed to restore deletion status for asset {asset_id}")
+                except Exception as e:
+                    logger.error(f"Error restoring deletion status: {str(e)}")
+                    verification_result.recovery_successful = False
+                    verification_result.message = f"Error restoring deletion status: {str(e)}"
+            
+            # Regular recovery for other types of tampering
+            elif verification_result.recovery_needed and auto_recover and is_latest_version and not verification_result.deletion_status_tampered:
                 try:
                     # Retrieve authentic metadata from IPFS using blockchain CID
                     try:

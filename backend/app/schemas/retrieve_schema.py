@@ -30,6 +30,9 @@ class MetadataVerificationResult(BaseModel):
     recovery_needed: bool = Field(..., description="Whether recovery from IPFS was needed", alias="recoveryNeeded")
     recovery_successful: Optional[bool] = Field(None, description="Whether recovery was successful if needed", alias="recoverySuccessful")
     new_version_created: Optional[bool] = Field(None, description="Whether a new version was created after recovery", alias="newVersionCreated")
+    
+    # Deletion status tampering flag
+    deletion_status_tampered: Optional[bool] = Field(None, description="Whether the deletion status was tampered with", alias="deletionStatusTampered")
 
     class Config:
         populate_by_name = True
