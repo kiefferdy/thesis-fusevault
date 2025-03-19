@@ -51,7 +51,7 @@ async def upload_metadata(
     
     Args:
         asset_id: The asset's unique identifier
-        wallet_address: The wallet address of the owner
+        wallet_address: The wallet address of the initiator (either the owner or an admin/delegate)
         critical_metadata: JSON string of core metadata 
         non_critical_metadata: JSON string of additional metadata
         
@@ -76,8 +76,12 @@ async def upload_json_files(
     Upload JSON files.
     
     Args:
-        wallet_address: The wallet address of the owner
-        files: List of JSON files to upload
+        wallet_address: The wallet address of the initiator (either the owner or an admin/delegate)
+        files: List of JSON files to upload. Each JSON must contain:
+               - asset_id: The asset's unique identifier
+               - wallet_address: The wallet address of the OWNER of this asset
+               - critical_metadata: Object containing critical metadata
+               - non_critical_metadata: (Optional) Object containing non-critical metadata
         
     Returns:
         JsonUploadResponse with processing results for each file
@@ -99,9 +103,12 @@ async def upload_csv_files(
     Upload CSV files.
     
     Args:
-        wallet_address: The wallet address of the owner
+        wallet_address: The wallet address of the initiator (either the owner or an admin/delegate)
         critical_metadata_fields: Comma-separated list of column names to treat as critical metadata
-        files: List of CSV files to upload
+        files: List of CSV files to upload. Each CSV must contain:
+               - asset_id: Column with the asset's unique identifier
+               - wallet_address: Column with the wallet address of the OWNER of each asset
+               - Additional columns specified in critical_metadata_fields
         
     Returns:
         CsvUploadResponse with processing results for each file
@@ -130,10 +137,12 @@ async def process_metadata(
     Returns:
         MetadataUploadResponse with processing results
     """
+    # For this endpoint, the wallet_address in the request is both the initiator and owner
     # Extract fields from the request
     result = await upload_handler.process_metadata(
         asset_id=metadata_request.asset_id,
-        wallet_address=metadata_request.wallet_address,
+        owner_address=metadata_request.wallet_address,
+        initiator_address=metadata_request.wallet_address,
         critical_metadata=metadata_request.critical_metadata,
         non_critical_metadata=metadata_request.non_critical_metadata or {},
         file_info=metadata_request.file_info

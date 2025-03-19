@@ -121,7 +121,7 @@ class TransactionService:
         
         Args:
             asset_id: The ID of the asset involved in the transaction
-            action: The type of action (CREATE, UPDATE, VERSION_CREATE, DELETE, UNDELETE, VERIFY, INTEGRITY_RECOVERY, RECREATE_DELETED)
+            action: The type of action (CREATE, UPDATE, VERSION_CREATE, DELETE, etc.)
             wallet_address: The wallet address that initiated the transaction
             metadata: Optional additional metadata about the transaction
             
@@ -132,7 +132,9 @@ class TransactionService:
             # Validate action type
             valid_actions = [
                 "CREATE", "UPDATE", "VERSION_CREATE", "DELETE", 
-                "VERIFY", "INTEGRITY_RECOVERY", "RECREATE_DELETED"
+                "VERIFY", "INTEGRITY_RECOVERY", "RECREATE_DELETED",
+                "TRANSFER_INITIATED", "TRANSFER_COMPLETED", "TRANSFER_CANCELLED",
+                "DELETION_STATUS_RESTORED"
             ]
             if action not in valid_actions:
                 raise ValueError(f"Invalid action type. Must be one of: {', '.join(valid_actions)}")

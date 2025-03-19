@@ -45,7 +45,8 @@ class UploadHandler:
     async def process_metadata(
         self, 
         asset_id: str,
-        wallet_address: str,
+        owner_address: str,
+        initiator_address: str,
         critical_metadata: Dict[str, Any],
         non_critical_metadata: Dict[str, Any],
         file_info: Optional[Dict[str, str]] = None
@@ -60,7 +61,8 @@ class UploadHandler:
         
         Args:
             asset_id: The asset's unique identifier
-            wallet_address: The wallet address of the owner
+            owner_address: The wallet address of the asset owner
+            initiator_address: The wallet address of the user initiating the operation
             critical_metadata: Core metadata that will be stored on blockchain
             non_critical_metadata: Additional metadata stored only in MongoDB
             file_info: Optional information about source file
@@ -92,7 +94,7 @@ class UploadHandler:
             # Extract IPFS-relevant metadata
             ipfs_metadata = get_ipfs_metadata({
                 "asset_id": asset_id,
-                "wallet_address": wallet_address,
+                "wallet_address": owner_address,  # Use owner address in metadata
                 "critical_metadata": critical_metadata
             })
             
@@ -106,13 +108,24 @@ class UploadHandler:
                 # If CIDs match, then critical metadata has NOT changed
                 critical_metadata_changed = computed_cid != existing_ipfs_hash
                 
-                if critical_metadata_changed:
-                    # Critical metadata changed - upload to IPFS and blockchain
+                # Get current ipfsVersion from document or fallback to versionNumber
+                current_ipfs_version = existing_doc.get("ipfsVersion", existing_doc.get("versionNumber", 1))
+                
+                # Force blockchain update if the asset was deleted, even if critical_metadata hasn't changed
+                if critical_metadata_changed or was_deleted:
+                    # Critical metadata changed or asset was deleted - upload to IPFS and blockchain
                     # 1) Upload to IPFS
                     cid = await self.ipfs_service.store_metadata(ipfs_metadata)
                     
-                    # 2) Store on blockchain
-                    blockchain_result = await self.blockchain_service.store_hash(cid)
+                    # 2) Store on blockchain - use appropriate method based on initiator vs owner
+                    blockchain_result = None
+                    if initiator_address.lower() == owner_address.lower():
+                        # Regular update (owner updating their own asset)
+                        blockchain_result = await self.blockchain_service.store_hash(cid, asset_id)
+                    else:
+                        # Admin/delegate updating on behalf of owner
+                        blockchain_result = await self.blockchain_service.store_hash_for(cid, asset_id, owner_address)
+                    
                     blockchain_tx_hash = blockchain_result.get("tx_hash")
                     
                     # 3) Handle based on whether the asset was deleted
@@ -121,11 +134,12 @@ class UploadHandler:
                         # This will delete all previous versions marked as deleted
                         new_doc_id = await self.asset_service.create_asset(
                             asset_id=asset_id,
-                            wallet_address=wallet_address,
+                            wallet_address=owner_address,
                             smart_contract_tx_id=blockchain_tx_hash,
                             ipfs_hash=cid,
                             critical_metadata=critical_metadata,
-                            non_critical_metadata=non_critical_metadata
+                            non_critical_metadata=non_critical_metadata,
+                            ipfs_version=1
                         )
                         
                         # Record transaction
@@ -133,12 +147,14 @@ class UploadHandler:
                             await self.transaction_service.record_transaction(
                                 asset_id=asset_id,
                                 action="RECREATE_DELETED",
-                                wallet_address=wallet_address,
+                                wallet_address=initiator_address,
                                 metadata={
                                     "ipfsHash": cid,
                                     "smartContractTxId": blockchain_tx_hash,
                                     "versionNumber": 1,
-                                    "wasDeleted": True
+                                    "ipfsVersion": 1,
+                                    "wasDeleted": True,
+                                    "ownerAddress": owner_address
                                 }
                             )
                         
@@ -150,23 +166,31 @@ class UploadHandler:
                             "message": message,
                             "document_id": new_doc_id,
                             "version": 1,
+                            "ipfs_version": 1,
                             "ipfs_cid": cid,
                             "blockchain_tx_hash": blockchain_tx_hash,
+                            "owner_address": owner_address,
+                            "initiator_address": initiator_address
                         }
                     else:
                         # For non-deleted assets, create a new version
+                        # Increment ipfsVersion since critical metadata changed
+                        next_ipfs_version = current_ipfs_version + 1
+                        
                         version_result = await self.asset_service.create_new_version(
                             asset_id=asset_id,
-                            wallet_address=wallet_address,
+                            wallet_address=owner_address,
                             smart_contract_tx_id=blockchain_tx_hash,
                             ipfs_hash=cid,
                             critical_metadata=critical_metadata,
-                            non_critical_metadata=non_critical_metadata
+                            non_critical_metadata=non_critical_metadata,
+                            ipfs_version=next_ipfs_version
                         )
                         
                         # Extract results
                         new_doc_id = version_result["document_id"]
                         version_number = version_result["version_number"]
+                        ipfs_version = version_result.get("ipfs_version", next_ipfs_version)
                         
                         # Record transaction
                         if self.transaction_service:
@@ -174,11 +198,13 @@ class UploadHandler:
                             await self.transaction_service.record_transaction(
                                 asset_id=asset_id,
                                 action=tx_action,
-                                wallet_address=wallet_address,
+                                wallet_address=initiator_address,
                                 metadata={
                                     "ipfsHash": cid,
                                     "smartContractTxId": blockchain_tx_hash,
-                                    "versionNumber": version_number
+                                    "versionNumber": version_number,
+                                    "ipfsVersion": ipfs_version,
+                                    "ownerAddress": owner_address
                                 }
                             )
                         
@@ -190,8 +216,11 @@ class UploadHandler:
                             "message": message,
                             "document_id": new_doc_id,
                             "version": version_number,
+                            "ipfs_version": ipfs_version,
                             "ipfs_cid": cid,
                             "blockchain_tx_hash": blockchain_tx_hash,
+                            "owner_address": owner_address,
+                            "initiator_address": initiator_address
                         }
                     
                     if file_info:
@@ -202,97 +231,76 @@ class UploadHandler:
                     # Reuse existing IPFS hash and blockchain transaction ID
                     existing_tx_hash = existing_doc.get("smartContractTxId")
                     
-                    # If the asset was deleted, recreate it
-                    if was_deleted:
-                        # Create a fresh asset with version 1
-                        new_doc_id = await self.asset_service.create_asset(
+                    # Create new version in MongoDB for non-deleted asset
+                    # Keep ipfsVersion the same since critical metadata hasn't changed
+                    version_result = await self.asset_service.create_new_version(
+                        asset_id=asset_id,
+                        wallet_address=owner_address,
+                        smart_contract_tx_id=existing_tx_hash,
+                        ipfs_hash=existing_ipfs_hash,
+                        critical_metadata=critical_metadata,
+                        non_critical_metadata=non_critical_metadata,
+                        ipfs_version=current_ipfs_version
+                    )
+                    
+                    # Extract results
+                    new_doc_id = version_result["document_id"]
+                    version_number = version_result["version_number"]
+                    ipfs_version = version_result.get("ipfs_version", current_ipfs_version)
+                    
+                    # Record transaction
+                    if self.transaction_service:
+                        await self.transaction_service.record_transaction(
                             asset_id=asset_id,
-                            wallet_address=wallet_address,
-                            smart_contract_tx_id=existing_tx_hash,
-                            ipfs_hash=existing_ipfs_hash,
-                            critical_metadata=critical_metadata,
-                            non_critical_metadata=non_critical_metadata
+                            action="UPDATE",
+                            wallet_address=initiator_address,
+                            metadata={
+                                "versionNumber": version_number,
+                                "ipfsVersion": ipfs_version,
+                                "ownerAddress": owner_address
+                            }
                         )
-                        
-                        # Record transaction
-                        if self.transaction_service:
-                            await self.transaction_service.record_transaction(
-                                asset_id=asset_id,
-                                action="RECREATE_DELETED",
-                                wallet_address=wallet_address,
-                                metadata={
-                                    "versionNumber": 1,
-                                    "wasDeleted": True
-                                }
-                            )
-                        
-                        result = {
-                            "asset_id": asset_id,
-                            "status": "success",
-                            "message": "Asset recreated from deleted state with version reset to 1",
-                            "document_id": new_doc_id,
-                            "version": 1,
-                            "ipfs_cid": existing_ipfs_hash,
-                            "blockchain_tx_hash": existing_tx_hash,
-                        }
-                        if file_info:
-                            result.update(file_info)
-                        return result
-                    else:
-                        # Create new version in MongoDB for non-deleted asset
-                        version_result = await self.asset_service.create_new_version(
-                            asset_id=asset_id,
-                            wallet_address=wallet_address,
-                            smart_contract_tx_id=existing_tx_hash,
-                            ipfs_hash=existing_ipfs_hash,
-                            critical_metadata=critical_metadata,
-                            non_critical_metadata=non_critical_metadata
-                        )
-                        
-                        # Extract results
-                        new_doc_id = version_result["document_id"]
-                        version_number = version_result["version_number"]
-                        
-                        # Record transaction
-                        if self.transaction_service:
-                            await self.transaction_service.record_transaction(
-                                asset_id=asset_id,
-                                action="UPDATE",
-                                wallet_address=wallet_address,
-                                metadata={
-                                    "versionNumber": version_number
-                                }
-                            )
-                        
-                        result = {
-                            "asset_id": asset_id,
-                            "status": "success",
-                            "message": "New version created with no updates to critical metadata",
-                            "document_id": new_doc_id,
-                            "version": version_number,
-                            "ipfs_cid": existing_ipfs_hash,
-                            "blockchain_tx_hash": existing_tx_hash,
-                        }
-                        if file_info:
-                            result.update(file_info)
-                        return result
+                    
+                    result = {
+                        "asset_id": asset_id,
+                        "status": "success",
+                        "message": "New version created with updated non-critical metadata only",
+                        "document_id": new_doc_id,
+                        "version": version_number,
+                        "ipfs_version": ipfs_version,
+                        "ipfs_cid": existing_ipfs_hash,
+                        "blockchain_tx_hash": existing_tx_hash,
+                        "owner_address": owner_address,
+                        "initiator_address": initiator_address
+                    }
+                    if file_info:
+                        result.update(file_info)
+                    return result
             else:
                 # New document - proceed with normal flow
                 # 1) Upload to IPFS
                 cid = await self.ipfs_service.store_metadata(ipfs_metadata)
                 
-                # 2) Store on blockchain
-                blockchain_result = await self.blockchain_service.store_hash(cid)
+                # 2) Store on blockchain - use appropriate method based on initiator vs owner
+                blockchain_result = None
+                if initiator_address.lower() == owner_address.lower():
+                    # Regular creation (owner creating their own asset)
+                    blockchain_result = await self.blockchain_service.store_hash(cid, asset_id)
+                else:
+                    # Admin/delegate creating on behalf of owner
+                    blockchain_result = await self.blockchain_service.store_hash_for(cid, asset_id, owner_address)
+                
                 blockchain_tx_hash = blockchain_result.get("tx_hash")
                 
                 # 3) Insert into MongoDB
                 doc_id = await self.asset_service.create_asset(
                     asset_id=asset_id,
-                    wallet_address=wallet_address,
+                    wallet_address=owner_address,
                     smart_contract_tx_id=blockchain_tx_hash,
                     ipfs_hash=cid,
                     critical_metadata=critical_metadata,
-                    non_critical_metadata=non_critical_metadata
+                    non_critical_metadata=non_critical_metadata,
+                    ipfs_version=1
                 )
                 
                 # 4) Record transaction if transaction service is available
@@ -300,10 +308,12 @@ class UploadHandler:
                     await self.transaction_service.record_transaction(
                         asset_id=asset_id,
                         action="CREATE",
-                        wallet_address=wallet_address,
+                        wallet_address=initiator_address,
                         metadata={
                             "ipfsHash": cid,
-                            "smartContractTxId": blockchain_tx_hash
+                            "smartContractTxId": blockchain_tx_hash,
+                            "ipfsVersion": 1,
+                            "ownerAddress": owner_address
                         }
                     )
                 
@@ -313,8 +323,11 @@ class UploadHandler:
                     "message": "Document created",
                     "document_id": doc_id,
                     "version": 1,
+                    "ipfs_version": 1,
                     "ipfs_cid": cid,
                     "blockchain_tx_hash": blockchain_tx_hash,
+                    "owner_address": owner_address,
+                    "initiator_address": initiator_address
                 }
                 if file_info:
                     result.update(file_info)
@@ -339,7 +352,7 @@ class UploadHandler:
         
         Args:
             asset_id: The asset's unique identifier
-            wallet_address: The wallet address of the owner
+            wallet_address: The wallet address of the initiator
             critical_metadata: JSON string of core metadata
             non_critical_metadata: JSON string of additional metadata
             
@@ -351,10 +364,14 @@ class UploadHandler:
             critical_md = json.loads(critical_metadata)
             non_critical_md = json.loads(non_critical_metadata) if non_critical_metadata else {}
             
+            # For direct metadata upload, the initiator is also the owner
+            owner_address = wallet_address
+            
             # Process metadata
             return await self.process_metadata(
                 asset_id=asset_id,
-                wallet_address=wallet_address,
+                owner_address=owner_address,
+                initiator_address=wallet_address,
                 critical_metadata=critical_md,
                 non_critical_metadata=non_critical_md
             )
@@ -374,13 +391,13 @@ class UploadHandler:
         """
         Process JSON files uploaded by the user.
         
-        - Each JSON file must have: asset_id, critical_metadata, optional non_critical_metadata
+        - Each JSON file must have: asset_id, critical_metadata, wallet_address (owner), optional non_critical_metadata
         - Each file represents a single document/asset
         - Duplicate asset_ids are skipped (first occurrence is used)
         
         Args:
             files: List of uploaded JSON files
-            wallet_address: The wallet address of the owner
+            wallet_address: The wallet address of the initiator
             
         Returns:
             Dict with processing results for each file
@@ -412,13 +429,14 @@ class UploadHandler:
                 # Check required fields
                 asset_id = data.get("asset_id")
                 critical_metadata = data.get("critical_metadata")
+                owner_wallet_address = data.get("wallet_address")
                 non_critical_metadata = data.get("non_critical_metadata", {})
                 
-                if not asset_id or not critical_metadata:
+                if not asset_id or not critical_metadata or not owner_wallet_address:
                     results.append({
                         "filename": file_obj.filename,
                         "status": "error",
-                        "detail": "Missing 'asset_id' or 'critical_metadata' in JSON."
+                        "detail": "Missing 'asset_id', 'wallet_address' (owner), or 'critical_metadata' in JSON."
                     })
                     continue
                 
@@ -436,9 +454,11 @@ class UploadHandler:
                 seen_asset_ids.add(asset_id)
                 
                 # Process metadata with file info
+                # Pass both owner address (from JSON) and initiator address (from route parameter)
                 result = await self.process_metadata(
                     asset_id=asset_id,
-                    wallet_address=wallet_address,
+                    owner_address=owner_wallet_address,
+                    initiator_address=wallet_address,
                     critical_metadata=critical_metadata,
                     non_critical_metadata=non_critical_metadata,
                     file_info={"filename": file_obj.filename}
@@ -469,12 +489,12 @@ class UploadHandler:
         
         - Each row in the CSV is treated as a distinct record with a unique asset_id
         - Must supply 'critical_metadata_fields' to identify which columns are critical
-        - Each row must have an 'asset_id' column
+        - Each row must have an 'asset_id' and 'wallet_address' (owner) column
         - Duplicate asset_ids are skipped (first occurrence is used)
         
         Args:
             files: List of uploaded CSV files
-            wallet_address: The wallet address of the owner
+            wallet_address: The wallet address of the initiator
             critical_metadata_fields: List of column names to treat as critical metadata
             
         Returns:
@@ -490,6 +510,9 @@ class UploadHandler:
 
             if "asset_id" not in csv_df.columns:
                 raise ValueError("CSV file must contain an 'asset_id' column.")
+                
+            if "wallet_address" not in csv_df.columns:
+                raise ValueError("CSV file must contain a 'wallet_address' (owner) column.")
 
             # Ensure critical fields exist
             missing = [col for col in critical_fields if col not in csv_df.columns]
@@ -501,14 +524,16 @@ class UploadHandler:
                 row_dict = row.to_dict()
 
                 asset_id = str(row_dict["asset_id"])
+                owner_address = str(row_dict["wallet_address"])
                 critical_md = {c: row_dict[c] for c in critical_fields}
-                # Everything else is non-critical (besides asset_id)
+                # Everything else is non-critical (besides asset_id and wallet_address)
                 non_critical_md = {
                     k: v for k, v in row_dict.items()
-                    if k not in critical_fields and k != "asset_id"
+                    if k not in critical_fields and k != "asset_id" and k != "wallet_address"
                 }
                 records.append({
                     "asset_id": asset_id,
+                    "owner_address": owner_address,
                     "critical_metadata": critical_md,
                     "non_critical_metadata": non_critical_md
                 })
@@ -538,6 +563,7 @@ class UploadHandler:
                 # Process each row as a separate document
                 for row_doc in row_docs:
                     asset_id = row_doc["asset_id"]
+                    owner_address = row_doc["owner_address"]
                     
                     # Check for duplicates
                     if asset_id in seen_asset_ids:
@@ -554,7 +580,8 @@ class UploadHandler:
                     # Process metadata with file info
                     result = await self.process_metadata(
                         asset_id=asset_id,
-                        wallet_address=wallet_address,
+                        owner_address=owner_address,
+                        initiator_address=wallet_address,
                         critical_metadata=row_doc["critical_metadata"],
                         non_critical_metadata=row_doc["non_critical_metadata"],
                         file_info={"filename": file_obj.filename}
