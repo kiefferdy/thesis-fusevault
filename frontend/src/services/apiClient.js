@@ -11,11 +11,11 @@ const apiClient = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
-  // Add timeout to prevent long waits when server is down
-  timeout: 15000, // Increased timeout
+  // Extended timeout for longer backend operations (blockchain/IPFS)
+  timeout: 300000, // 5 minutes to allow for blockchain and IPFS operations
   // Retry on failure - helpful for intermittent network issues
-  retries: 2,
-  retryDelay: 1000
+  retries: 3,
+  retryDelay: 2000
 });
 
 // Add response interceptor for error handling

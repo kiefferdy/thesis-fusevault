@@ -10,6 +10,7 @@ from app.api.retrieve_routes import router as retrieve_router
 from app.api.users_routes import router as user_router
 from app.api.delete_routes import router as delete_router
 from app.api.transfer_routes import router as transfer_router
+from app.api.assets_routes import router as assets_router
 
 # Configure logging
 logging.basicConfig(
@@ -61,7 +62,8 @@ api_routers = [
     retrieve_router,
     user_router,
     delete_router,
-    transfer_router
+    transfer_router,
+    assets_router
 ]
 
 # Add all routers to the app

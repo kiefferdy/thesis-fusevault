@@ -35,8 +35,8 @@ function HistoryPage() {
       
       setLoading(true);
       try {
-        // In a real implementation, you would have a paginated API for this
-        const response = await transactionService.getRecentTransactions(currentAccount, 100);
+        // Get all transactions for the user
+        const response = await transactionService.getAllTransactions(currentAccount);
         setTransactions(response.transactions || []);
       } catch (error) {
         console.error('Error fetching transactions:', error);
@@ -51,17 +51,17 @@ function HistoryPage() {
   // Filter transactions based on action type and search term
   const filteredTransactions = transactions.filter(tx => {
     // Filter by action type
-    if (filter !== 'all' && tx.action !== filter) {
-      return false;
+    if (filter !== 'all') {
+      // Check if action contains the filter text (for combined actions like VERSION_CREATE)
+      if (!tx.action || !tx.action.includes(filter)) {
+        return false;
+      }
     }
     
-    // Filter by search term (asset ID or transaction hash)
+    // Filter by search term (asset ID)
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      return (
-        tx.assetId?.toLowerCase().includes(searchLower) ||
-        tx.blockchainTxHash?.toLowerCase().includes(searchLower)
-      );
+      return tx.assetId?.toLowerCase().includes(searchLower);
     }
     
     return true;
@@ -88,11 +88,14 @@ function HistoryPage() {
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
+              <Typography variant="subtitle2" color="text.secondary" fontWeight="medium">
                 Total Transactions
               </Typography>
               <Typography variant="h4">
-                {isSummaryLoading ? <CircularProgress size={24} /> : (summary.total_transactions || 0)}
+                {isSummaryLoading ? 
+                  <CircularProgress size={24} /> : 
+                  transactions.length || summary.total_transactions || 0
+                }
               </Typography>
             </CardContent>
           </Card>
@@ -101,11 +104,15 @@ function HistoryPage() {
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
+              <Typography variant="subtitle2" color="text.secondary" fontWeight="medium">
                 Creates
               </Typography>
               <Typography variant="h4">
-                {isSummaryLoading ? <CircularProgress size={24} /> : (summary.actions?.CREATE || 0)}
+                {isSummaryLoading ? 
+                  <CircularProgress size={24} /> : 
+                  transactions.filter(tx => tx.action && tx.action.includes('CREATE')).length || 
+                  summary.actions?.CREATE || 0
+                }
               </Typography>
             </CardContent>
           </Card>
@@ -114,11 +121,15 @@ function HistoryPage() {
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
+              <Typography variant="subtitle2" color="text.secondary" fontWeight="medium">
                 Updates
               </Typography>
               <Typography variant="h4">
-                {isSummaryLoading ? <CircularProgress size={24} /> : (summary.actions?.UPDATE || 0)}
+                {isSummaryLoading ? 
+                  <CircularProgress size={24} /> : 
+                  transactions.filter(tx => tx.action && tx.action.includes('UPDATE')).length || 
+                  summary.actions?.UPDATE || 0
+                }
               </Typography>
             </CardContent>
           </Card>
@@ -127,11 +138,15 @@ function HistoryPage() {
         <Grid item xs={12} sm={6} md={3}>
           <Card>
             <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
+              <Typography variant="subtitle2" color="text.secondary" fontWeight="medium">
                 Deletes
               </Typography>
               <Typography variant="h4">
-                {isSummaryLoading ? <CircularProgress size={24} /> : (summary.actions?.DELETE || 0)}
+                {isSummaryLoading ? 
+                  <CircularProgress size={24} /> : 
+                  transactions.filter(tx => tx.action && tx.action.includes('DELETE')).length || 
+                  summary.actions?.DELETE || 0
+                }
               </Typography>
             </CardContent>
           </Card>
@@ -175,11 +190,16 @@ function HistoryPage() {
                 }}
                 size="small"
               >
-                <MenuItem value="all">All Actions</MenuItem>
-                <MenuItem value="CREATE">Create</MenuItem>
-                <MenuItem value="UPDATE">Update</MenuItem>
-                <MenuItem value="DELETE">Delete</MenuItem>
-                <MenuItem value="TRANSFER">Transfer</MenuItem>
+                <MenuItem value="all">ALL ACTIONS</MenuItem>
+                <MenuItem value="CREATE">CREATE</MenuItem>
+                <MenuItem value="VERSION_CREATE">VERSION_CREATE</MenuItem>
+                <MenuItem value="UPDATE">UPDATE</MenuItem>
+                <MenuItem value="DELETE">DELETE</MenuItem>
+                <MenuItem value="TRANSFER">TRANSFER</MenuItem>
+                <MenuItem value="VERIFY">VERIFY</MenuItem>
+                <MenuItem value="INTEGRITY">INTEGRITY</MenuItem>
+                <MenuItem value="RECREATE">RECREATE</MenuItem>
+                <MenuItem value="RESTORE">RESTORE</MenuItem>
               </TextField>
             </Grid>
           </Grid>

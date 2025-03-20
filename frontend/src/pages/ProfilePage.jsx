@@ -40,7 +40,14 @@ import { formatWalletAddress, formatDate } from '../utils/formatters';
 function ProfilePage() {
   const { user, isLoading, isError, update, isUpdating } = useUser();
   const { currentAccount, signOut } = useAuth();
-  const { summary, isSummaryLoading } = useTransactions();
+  const { summary, isSummaryLoading, allTransactions, getAllTransactions } = useTransactions();
+  
+  // Fetch all transactions when profile loads
+  useEffect(() => {
+    if (currentAccount) {
+      getAllTransactions();
+    }
+  }, [currentAccount, getAllTransactions]);
   const [tabValue, setTabValue] = useState(0);
   
   // Initialize form data from user data
@@ -448,7 +455,7 @@ function ProfilePage() {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body2" fontWeight="bold">
-                      {summary.unique_assets || 0}
+                      {summary.unique_assets || allTransactions?.filter(tx => tx.action?.includes('CREATE')).length || 0}
                     </Typography>
                   </Grid>
                   
@@ -459,7 +466,7 @@ function ProfilePage() {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body2" fontWeight="bold">
-                      {summary.total_transactions || 0}
+                      {allTransactions?.length || summary.total_transactions || 0}
                     </Typography>
                   </Grid>
                   
@@ -470,7 +477,7 @@ function ProfilePage() {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body2">
-                      {summary.actions?.CREATE || 0}
+                      {allTransactions?.filter(tx => tx.action?.includes('CREATE')).length || summary.actions?.CREATE || 0}
                     </Typography>
                   </Grid>
                   
@@ -481,7 +488,7 @@ function ProfilePage() {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body2">
-                      {summary.actions?.UPDATE || 0}
+                      {allTransactions?.filter(tx => tx.action?.includes('UPDATE')).length || summary.actions?.UPDATE || 0}
                     </Typography>
                   </Grid>
                   
@@ -492,7 +499,7 @@ function ProfilePage() {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body2">
-                      {summary.actions?.DELETE || 0}
+                      {allTransactions?.filter(tx => tx.action?.includes('DELETE')).length || summary.actions?.DELETE || 0}
                     </Typography>
                   </Grid>
                   

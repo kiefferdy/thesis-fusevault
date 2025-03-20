@@ -177,3 +177,33 @@ async def get_recent_transactions(
             transactions=[],
             count=0
         )
+
+@router.get("/all/{wallet_address}", response_model=WalletHistoryResponse)
+async def get_all_transactions(
+    wallet_address: str,
+    transaction_handler: TransactionHandler = Depends(get_transaction_handler)
+) -> WalletHistoryResponse:
+    """
+    Get all transactions for a specific wallet address.
+    
+    Args:
+        wallet_address: The wallet address to get all transactions for
+        
+    Returns:
+        WalletHistoryResponse containing all transactions
+    """
+    try:
+        result = await transaction_handler.get_wallet_history(
+            wallet_address=wallet_address, 
+            include_all_versions=True
+        )
+        return WalletHistoryResponse(**result)
+    except Exception as e:
+        logger.error(f"Error getting all transactions: {str(e)}")
+        # Return empty response instead of error
+        return WalletHistoryResponse(
+            status="success", 
+            wallet_address=wallet_address,
+            transactions=[],
+            count=0
+        )

@@ -1,7 +1,9 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 import logging
+from fastapi import HTTPException
 from app.repositories.transaction_repo import TransactionRepository
+from pymongo import DESCENDING
 from bson import ObjectId
 
 logger = logging.getLogger(__name__)
@@ -13,14 +15,16 @@ class TransactionService:
     and recording new transactions in the system.
     """
     
-    def __init__(self, transaction_repository: TransactionRepository):
+    def __init__(self, transaction_repository: TransactionRepository, asset_service=None):
         """
-        Initialize with transaction repository.
+        Initialize with transaction repository and optionally asset service.
         
         Args:
             transaction_repository: Repository for transaction data access
+            asset_service: Optional service for asset operations
         """
         self.transaction_repository = transaction_repository
+        self.asset_service = asset_service
 
     async def get_asset_history(
         self, 
@@ -64,7 +68,8 @@ class TransactionService:
         self, 
         wallet_address: str,
         include_all_versions: bool = False,
-        asset_service = None
+        asset_service = None,
+        limit: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
         Get transaction history for a specific wallet.
@@ -75,16 +80,28 @@ class TransactionService:
             wallet_address: The wallet address to get history for
             include_all_versions: Whether to include all versions or just current ones
             asset_service: Optional asset service for retrieving current documents
+            limit: Optional limit on the number of transactions to return
             
         Returns:
             List of transaction records for the wallet
         """
         try:
+            # Normalize wallet address for case-insensitive matching
+            normalized_address = wallet_address.lower()
+            
+            # Build query with case insensitivity
+            query = {
+                "$or": [
+                    {"walletAddress": normalized_address},
+                    {"walletAddress": {"$regex": f"^{normalized_address}$", "$options": "i"}}
+                ]
+            }
+            
             # First get all current document IDs for this wallet if we're filtering versions
             current_asset_ids = []
             if not include_all_versions and asset_service:
                 documents = await asset_service.get_documents_by_wallet(
-                    wallet_address, 
+                    normalized_address, 
                     include_all_versions=False
                 )
                 current_asset_ids = [doc["assetId"] for doc in documents]
@@ -93,17 +110,32 @@ class TransactionService:
                 if not current_asset_ids:
                     return []
             
-            # Build query
-            query = {"walletAddress": wallet_address}
-            
+            # Add asset filter if needed
             if not include_all_versions and current_asset_ids:
                 query["assetId"] = {"$in": current_asset_ids}
                 
-            # Get transactions from repository
-            transactions = await self.transaction_repository.find_transactions(query)
+            # Get transactions from repository, passing the limit
+            transactions = await self.transaction_repository.find_transactions(
+                query=query,
+                sort_by="timestamp",
+                sort_direction=DESCENDING,
+                limit=limit
+            )
+            
+            # Log for debugging
+            logger.info(f"Found {len(transactions)} transactions for wallet: {wallet_address}")
             
             # Format the transactions for API response
-            return self._format_transactions(transactions)
+            formatted_txs = self._format_transactions(transactions)
+            
+            # Sort by timestamp (newest first) - this ensures consistent sorting
+            sorted_txs = sorted(
+                formatted_txs,
+                key=lambda tx: tx.get("timestamp", ""),
+                reverse=True
+            )
+            
+            return sorted_txs
             
         except Exception as e:
             logger.error(f"Error retrieving wallet history: {str(e)}")

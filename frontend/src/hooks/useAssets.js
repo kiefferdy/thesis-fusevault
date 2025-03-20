@@ -21,7 +21,15 @@ export const useAssets = () => {
   const uploadMetadataMutation = useMutation({
     mutationFn: (data) => assetService.uploadMetadata(data),
     onSuccess: (data, variables, context) => {
+      // Invalidate and refetch to update the asset list
       queryClient.invalidateQueries(['assets', currentAccount]);
+      queryClient.refetchQueries(['assets', currentAccount]);
+      
+      // Invalidate transaction data to reflect the new transaction
+      queryClient.invalidateQueries(['transactions', 'all', currentAccount]);
+      queryClient.invalidateQueries(['transactions', 'recent', currentAccount]);
+      queryClient.invalidateQueries(['transactions', 'summary', currentAccount]);
+      
       toast.success('Asset metadata uploaded successfully!');
       
       // Call onSuccess callback if provided
@@ -38,8 +46,15 @@ export const useAssets = () => {
   const uploadJsonMutation = useMutation({
     mutationFn: ({ files }) => assetService.uploadJsonFiles(files, currentAccount),
     onSuccess: (data, variables, context) => {
+      // Invalidate and refetch asset data
       queryClient.invalidateQueries(['assets', currentAccount]);
       queryClient.refetchQueries(['assets', currentAccount]);
+      
+      // Invalidate transaction data to reflect the new transactions
+      queryClient.invalidateQueries(['transactions', 'all', currentAccount]);
+      queryClient.invalidateQueries(['transactions', 'recent', currentAccount]);
+      queryClient.invalidateQueries(['transactions', 'summary', currentAccount]);
+      
       toast.success('JSON files uploaded successfully!');
       
       // Call onSuccess callback if provided

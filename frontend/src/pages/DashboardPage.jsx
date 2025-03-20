@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   Container, 
   Typography, 
@@ -67,9 +67,41 @@ function DashboardPage() {
   const { 
     summary, 
     recentTransactions, 
+    allTransactions,
     isSummaryLoading, 
-    isRecentLoading 
+    isRecentLoading,
+    isAllTransactionsLoading,
+    getAllTransactions
   } = useTransactions();
+  
+  // Fetch all transactions when dashboard loads
+  useEffect(() => {
+    if (currentAccount) {
+      getAllTransactions();
+    }
+  }, [currentAccount, getAllTransactions]);
+  
+  // Calculate action counts from all transactions
+  const actionCounts = useMemo(() => {
+    if (!allTransactions || allTransactions.length === 0) {
+      return summary.actions || {};
+    }
+    
+    const counts = {};
+    allTransactions.forEach(tx => {
+      if (tx.action) {
+        // Group similar actions (e.g., CREATE, VERSION_CREATE would both count toward 'CREATE')
+        let actionType = tx.action;
+        if (actionType.includes('CREATE')) actionType = 'CREATE';
+        else if (actionType.includes('UPDATE')) actionType = 'UPDATE';
+        else if (actionType.includes('DELETE')) actionType = 'DELETE';
+        
+        counts[actionType] = (counts[actionType] || 0) + 1;
+      }
+    });
+    
+    return counts;
+  }, [allTransactions, summary.actions]);
   const navigate = useNavigate();
   
   // Check if we need to show the setup dialog
@@ -329,7 +361,10 @@ function DashboardPage() {
                         Total Transactions
                       </Typography>
                       <Typography variant="h4">
-                        {isSummaryLoading ? <CircularProgress size={24} color="inherit" /> : (summary.total_transactions || 0)}
+                        {isSummaryLoading ? 
+                          <CircularProgress size={24} color="inherit" /> : 
+                          (allTransactions?.length || summary.total_transactions || 0)
+                        }
                       </Typography>
                     </Box>
                     <Avatar sx={{ bgcolor: 'secondary.dark' }}>
@@ -379,7 +414,7 @@ function DashboardPage() {
                             <CloudUpload fontSize="small" />
                           </Avatar>
                           <Typography variant="h6">
-                            {summary.actions?.CREATE || 0}
+                            {actionCounts?.CREATE || 0}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             Creates
@@ -391,7 +426,7 @@ function DashboardPage() {
                             <Update fontSize="small" />
                           </Avatar>
                           <Typography variant="h6">
-                            {summary.actions?.UPDATE || 0}
+                            {actionCounts?.UPDATE || 0}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             Updates
@@ -403,7 +438,7 @@ function DashboardPage() {
                             <DeleteOutline fontSize="small" />
                           </Avatar>
                           <Typography variant="h6">
-                            {summary.actions?.DELETE || 0}
+                            {actionCounts?.DELETE || 0}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             Deletes

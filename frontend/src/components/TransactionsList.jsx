@@ -30,20 +30,31 @@ function TransactionsList({ transactions, isLoading }) {
     );
   }
 
-  // Function to get appropriate color for action
+  // Function to get appropriate color for action with expanded set of actions
   const getActionColor = (action) => {
-    switch (action) {
-      case 'CREATE':
-        return 'success';
-      case 'UPDATE':
-        return 'info';
-      case 'DELETE':
-        return 'error';
-      case 'TRANSFER':
-        return 'warning';
-      default:
-        return 'default';
-    }
+    // Normalize action by removing any underscores and converting to uppercase
+    const normalizedAction = action.toUpperCase().replace(/_/g, '');
+    
+    // Handle the main action types with darker colors for better contrast with white text
+    if (normalizedAction.includes('CREATE')) return 'success';
+    if (normalizedAction.includes('UPDATE')) return 'primary';
+    if (normalizedAction.includes('DELETE')) return 'error';
+    if (normalizedAction.includes('TRANSFER')) return 'secondary';
+    if (normalizedAction.includes('VERIFY')) return 'primary';
+    if (normalizedAction.includes('INTEGRITY')) return 'secondary';
+    if (normalizedAction.includes('RESTORE')) return 'primary';
+    
+    // Default for unknown actions
+    return 'default';
+  };
+  
+  // Function to format action text for display
+  const formatAction = (action) => {
+    // Replace underscores with spaces and capitalize each word
+    return action
+      .split('_')
+      .map(word => word.charAt(0) + word.slice(1).toLowerCase())
+      .join(' ');
   };
 
   return (
@@ -55,7 +66,6 @@ function TransactionsList({ transactions, isLoading }) {
             <TableCell>Asset ID</TableCell>
             <TableCell>Action</TableCell>
             <TableCell>Wallet</TableCell>
-            <TableCell>TX Hash</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -69,23 +79,19 @@ function TransactionsList({ transactions, isLoading }) {
               </TableCell>
               <TableCell>
                 <Chip 
-                  label={tx.action}
+                  label={tx.action.toUpperCase()}
                   color={getActionColor(tx.action)}
                   size="small"
+                  sx={{ 
+                    fontWeight: 'medium',
+                    color: 'white',
+                    '& .MuiChip-label': {
+                      color: 'white'
+                    }
+                  }}
                 />
               </TableCell>
               <TableCell>{formatWalletAddress(tx.walletAddress)}</TableCell>
-              <TableCell>
-                {tx.blockchainTxHash ? (
-                  <Typography variant="body2">
-                    {formatTransactionHash(tx.blockchainTxHash)}
-                  </Typography>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    N/A
-                  </Typography>
-                )}
-              </TableCell>
             </TableRow>
           ))}
         </TableBody>

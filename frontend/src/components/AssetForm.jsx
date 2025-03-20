@@ -6,6 +6,7 @@ import {
   Typography,
   Paper,
   CircularProgress,
+  LinearProgress,
   Grid,
   Chip,
   IconButton,
@@ -43,8 +44,14 @@ function AssetForm({ existingAsset = null }) {
   const [uploadStep, setUploadStep] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   
-  // Steps for the upload process
-  const uploadSteps = ['Preparing data', 'Uploading to IPFS', 'Storing on blockchain', 'Finalizing'];
+  // Steps for the upload process with more detailed backend steps
+  const uploadSteps = [
+    'Parsing metadata',
+    'Uploading asset data to IPFS',
+    'Logging asset to blockchain',
+    'Storing asset data in MongoDB',
+    'Recording transaction'
+  ];
   
   // Common field types
   const fieldTypes = [
@@ -196,25 +203,30 @@ function AssetForm({ existingAsset = null }) {
       setUploadProgress(0);
       setUploadStep(0);
       
+      // Longer duration between updates for each step to account for backend processing time
       progressInterval = setInterval(() => {
         setUploadProgress(prev => {
           const newProgress = prev + 1;
+          const stepsCount = uploadSteps.length;
+          const progressPerStep = 100 / stepsCount;
           
-          // Change steps at certain thresholds
-          if (newProgress === 25) setUploadStep(1);
-          if (newProgress === 50) setUploadStep(2);
-          if (newProgress === 75) setUploadStep(3);
+          // Change steps at appropriate thresholds based on number of steps
+          for (let i = 1; i < stepsCount; i++) {
+            if (newProgress >= i * progressPerStep && newProgress < (i + 1) * progressPerStep) {
+              setUploadStep(i);
+            }
+          }
           
           return newProgress < 99 ? newProgress : 99;
         });
-      }, 150);
+      }, 350); // Slower progress to account for longer backend processing
     } else {
       // When upload completes or fails
       clearInterval(progressInterval);
     }
     
     return () => clearInterval(progressInterval);
-  }, [isUploading]);
+  }, [isUploading, uploadSteps.length]);
   
   // Handle form submission
   const handleSubmit = (event) => {
@@ -269,17 +281,71 @@ function AssetForm({ existingAsset = null }) {
               <Box sx={{ mb: 3, mt: 2 }}>
                 {uploadProgress < 100 ? (
                   <Box sx={{ width: '100%' }}>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      {uploadSteps[uploadStep]}
-                    </Typography>
-                    <Box sx={{ width: '100%', mr: 1 }}>
+                    {/* Step indicator with stepper */}
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle1" gutterBottom fontWeight="medium">
+                        Current step: {uploadSteps[uploadStep]}
+                      </Typography>
+                      
+                      {/* Step progress indicators */}
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        {uploadSteps.map((step, index) => (
+                          <Box 
+                            key={index} 
+                            sx={{ 
+                              flex: 1,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              position: 'relative',
+                              '&:not(:last-child)::after': {
+                                content: '""',
+                                position: 'absolute',
+                                top: '14px',
+                                left: '50%',
+                                width: '100%',
+                                height: '2px',
+                                backgroundColor: index < uploadStep ? 'primary.main' : 'grey.300',
+                                zIndex: 0
+                              }
+                            }}
+                          >
+                            <Box sx={{ 
+                              width: 28, 
+                              height: 28, 
+                              borderRadius: '50%', 
+                              backgroundColor: index <= uploadStep ? 'primary.main' : 'grey.300',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'white',
+                              fontWeight: 'bold',
+                              position: 'relative',
+                              zIndex: 1,
+                              mb: 1
+                            }}>
+                              {index < uploadStep ? <CheckCircleIcon fontSize="small" /> : index + 1}
+                            </Box>
+                            <Typography variant="caption" align="center" sx={{ fontSize: '0.7rem' }}>
+                              {step}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                    
+                    {/* Overall progress */}
+                    <Box sx={{ width: '100%', mr: 1, mb: 1 }}>
                       <LinearProgress 
                         variant="determinate" 
                         value={uploadProgress} 
                         sx={{ height: 10, borderRadius: 5 }}
                       />
                     </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        This process can take several minutes
+                      </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {uploadProgress}%
                       </Typography>
@@ -288,6 +354,7 @@ function AssetForm({ existingAsset = null }) {
                 ) : (
                   <Box sx={{ textAlign: 'center' }}>
                     <CheckCircleIcon color="success" sx={{ fontSize: 60, mb: 2 }} />
+                    <Typography variant="h6" color="success.main" gutterBottom>Upload Successful!</Typography>
                     <Typography>Redirecting to dashboard...</Typography>
                   </Box>
                 )}
@@ -325,7 +392,7 @@ function AssetForm({ existingAsset = null }) {
                 Critical Metadata
               </Typography>
               
-              <Tooltip title="This data is highly secured and cannot be modified once created">
+              <Tooltip title="During retrieval, critical metadata undergo a strict verification process to ensure their authenticity.">
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <HelpOutline fontSize="small" color="primary" sx={{ mr: 1 }} />
                   <Typography variant="caption" color="text.secondary">
@@ -336,7 +403,7 @@ function AssetForm({ existingAsset = null }) {
             </Box>
             
             <Alert severity="info" sx={{ mb: 2 }}>
-              Critical metadata is essential for asset identification and cannot be modified after creation. Choose a template or define custom fields.
+              Metadata can be considered critical if they define your asset. Note that modifying these in the future take longer to process.
             </Alert>
             
             {/* Template selection */}
@@ -425,7 +492,7 @@ function AssetForm({ existingAsset = null }) {
                       setCriticalFieldName('');
                       setCriticalFieldValue('');
                     }}
-                    size="medium"
+                    size="small"
                   >
                     Add
                   </Button>
@@ -484,7 +551,7 @@ function AssetForm({ existingAsset = null }) {
                 Non-Critical Metadata
               </Typography>
               
-              <Tooltip title="This data can be updated in the future and has standard security">
+              <Tooltip title="Non-critical metadata go through standard security procedures, allowing for faster updates and modifications.">
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <HelpOutline fontSize="small" color="secondary" sx={{ mr: 1 }} />
                   <Typography variant="caption" color="text.secondary">
@@ -493,6 +560,10 @@ function AssetForm({ existingAsset = null }) {
                 </Box>
               </Tooltip>
             </Box>
+            
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Non-critical metadata include supplementary information that can be quickly updated. These can be modified with fewer computational resources.
+            </Alert>
             
             {/* Custom fields */}
             <Box sx={{ mb: 2 }}>
@@ -539,13 +610,13 @@ function AssetForm({ existingAsset = null }) {
                 sx={{ flexGrow: 1 }}
               />
               <Button 
-                variant="outlined"
+                variant="contained"
                 startIcon={<AddIcon />}
                 onClick={handleAddCustomField}
                 sx={{ mt: 1 }}
                 size="small"
               >
-                Add Field
+                Add
               </Button>
             </Box>
           </Grid>
