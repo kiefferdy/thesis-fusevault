@@ -27,12 +27,13 @@ class TransactionHistoryResponse(BaseModel):
         populate_by_name = True
 
 class WalletHistoryResponse(BaseModel):
+    status: str = Field(..., description="Status of the request")
     wallet_address: str = Field(..., description="Wallet address", alias="walletAddress")
-    include_all_versions: bool = Field(..., description="Whether all versions are included", alias="includeAllVersions")
+    include_all_versions: Optional[bool] = Field(False, description="Whether all versions are included", alias="includeAllVersions")
     transactions: List[Dict[str, Any]] = Field(..., description="List of transactions")
-    transaction_count: int = Field(..., description="Number of transactions", alias="transactionCount")
-    unique_assets: int = Field(..., description="Number of unique assets", alias="uniqueAssets")
-    action_summary: Dict[str, int] = Field(..., description="Summary of actions by type", alias="actionSummary")
+    count: int = Field(..., description="Number of transactions")
+    unique_assets: Optional[int] = Field(None, description="Number of unique assets", alias="uniqueAssets")
+    action_summary: Optional[Dict[str, int]] = Field(None, description="Summary of actions by type", alias="actionSummary")
 
     class Config:
         populate_by_name = True
@@ -49,8 +50,13 @@ class TransactionRecordResponse(BaseModel):
         populate_by_name = True
 
 class TransactionSummaryResponse(BaseModel):
+    status: str = Field(..., description="Status of the request")
     wallet_address: str = Field(..., description="Wallet address", alias="walletAddress")
-    summary: Dict[str, Any] = Field(..., description="Summary information")
+    total_transactions: int = Field(..., description="Total number of transactions", alias="total_transactions")
+    unique_assets: int = Field(..., description="Number of unique assets", alias="unique_assets")
+    total_asset_size: Optional[int] = Field(0, description="Total size of assets in bytes", alias="total_asset_size")
+    actions: Dict[str, int] = Field(..., description="Summary of actions by type", alias="actions") 
+    asset_types: Optional[Dict[str, int]] = Field({}, description="Summary of asset types", alias="asset_types") 
 
     class Config:
         populate_by_name = True

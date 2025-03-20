@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Container, 
   Typography, 
@@ -12,21 +12,57 @@ import {
   Tab,
   Card,
   CardContent,
-  Divider
+  Divider,
+  Avatar,
+  Chip,
+  IconButton,
+  CardActions,
+  CardHeader,
+  Tooltip,
+  Stack,
+  Alert,
+  LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { AddCircleOutline, Search } from '@mui/icons-material';
+import { 
+  AddCircleOutline, 
+  Search, 
+  TrendingUp, 
+  Storage, 
+  SwapHoriz,
+  DeleteOutline,
+  Update,
+  CloudUpload,
+  MoreVert,
+  Check,
+  Timeline,
+  Person,
+  GitHub,
+  Twitter,
+  LinkedIn,
+  Work
+} from '@mui/icons-material';
 import AssetCard from '../components/AssetCard';
 import TransactionsList from '../components/TransactionsList';
 import { useAssets } from '../hooks/useAssets';
 import { useTransactions } from '../hooks/useTransactions';
 import { useAuth } from '../contexts/AuthContext';
-import { formatWalletAddress } from '../utils/formatters';
+import { useUser } from '../hooks/useUser';
+import { formatWalletAddress, formatDate } from '../utils/formatters';
 
 function DashboardPage() {
   const [tabValue, setTabValue] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
-  const { currentAccount } = useAuth();
+  const [openSetupDialog, setOpenSetupDialog] = useState(false);
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const { currentAccount, isAuthenticated, backendAvailable } = useAuth();
+  const { user, isLoading: userLoading, register, isRegistering, error: userError } = useUser();
   const { assets, isLoading: assetsLoading } = useAssets();
   const { 
     summary, 
@@ -35,6 +71,27 @@ function DashboardPage() {
     isRecentLoading 
   } = useTransactions();
   const navigate = useNavigate();
+  
+  // Check if we need to show the setup dialog
+  useEffect(() => {
+    // If user data failed to load and we're not already registering
+    if (userError && !userLoading && !isRegistering && currentAccount && backendAvailable) {
+      setOpenSetupDialog(true);
+    }
+  }, [userError, userLoading, isRegistering, currentAccount, backendAvailable]);
+  
+  // Handle setup form submission
+  const handleSetupSubmit = () => {
+    if (email) {
+      register({
+        wallet_address: currentAccount,
+        email: email,
+        name: name || 'FuseVault User',
+        role: 'user'
+      });
+      setOpenSetupDialog(false);
+    }
+  };
 
   // Handle tab change
   const handleTabChange = (event, newValue) => {
@@ -43,7 +100,7 @@ function DashboardPage() {
 
   // Filter assets based on search term
   const filteredAssets = assets.filter(asset => 
-    asset.assetId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    asset.assetId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     asset.criticalMetadata?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (asset.criticalMetadata?.tags && 
       asset.criticalMetadata.tags.some(tag => 
@@ -51,8 +108,68 @@ function DashboardPage() {
       ))
   );
 
+  // Get avatar component
+  const getAvatar = () => {
+    if (user?.profile_image) {
+      return (
+        <Avatar src={user.profile_image} alt={user.name || 'User'} />
+      );
+    } else if (user?.name) {
+      const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase();
+      return (
+        <Avatar sx={{ bgcolor: 'primary.main' }}>{initials}</Avatar>
+      );
+    } else {
+      return (
+        <Avatar><Person /></Avatar>
+      );
+    }
+  };
+
+  // Calculate storage usage percentage
+  const storageUsage = Math.min(
+    ((summary?.total_asset_size || 0) / (100 * 1024 * 1024)) * 100, 
+    100
+  ); // Assuming 100MB limit for demo
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Profile Setup Dialog */}
+      <Dialog open={openSetupDialog} onClose={() => setOpenSetupDialog(false)}>
+        <DialogTitle>Welcome to FuseVault</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Please set up your profile to continue. This information will be associated with your wallet address.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Email Address"
+            type="email"
+            fullWidth
+            variant="outlined"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            sx={{ mb: 2, mt: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Your Name (Optional)"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleSetupSubmit} disabled={!email || isRegistering} variant="contained">
+            {isRegistering ? 'Setting up...' : 'Continue'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h4" component="h1">
           Dashboard
@@ -67,67 +184,232 @@ function DashboardPage() {
           Create New Asset
         </Button>
       </Box>
+
+      {!backendAvailable && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          Running in demo mode. Some features may be limited.
+        </Alert>
+      )}
       
-      {/* Stats Summary */}
+      {/* User Profile Summary Card & Stats */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
+        {/* User profile card */}
+        <Grid item xs={12} md={4}>
+          <Card sx={{ height: '100%' }}>
+            <CardHeader
+              avatar={getAvatar()}
+              title={user?.name || 'Welcome!'}
+              subheader={user ? 
+                (user.job_title ? `${user.job_title}${user.organization ? ` at ${user.organization}` : ''}` : 
+                (user.organization || formatWalletAddress(currentAccount, 6, 4))) : 
+                formatWalletAddress(currentAccount, 6, 4)
+              }
+            />
             <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Total Assets
-              </Typography>
-              <Typography variant="h4">
-                {isSummaryLoading ? <CircularProgress size={24} /> : (summary.unique_assets || 0)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Total Transactions
-              </Typography>
-              <Typography variant="h4">
-                {isSummaryLoading ? <CircularProgress size={24} /> : (summary.total_transactions || 0)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Wallet
-              </Typography>
-              <Typography variant="h6" noWrap>
-                {currentAccount ? formatWalletAddress(currentAccount, 8, 6) : 'Not connected'}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Actions
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                {isSummaryLoading ? (
-                  <CircularProgress size={24} />
-                ) : (
-                  Object.entries(summary.actions || {}).map(([action, count]) => (
-                    <Typography key={action} variant="body2">
-                      {action}: {count}
+              {userLoading ? (
+                <CircularProgress size={20} />
+              ) : (
+                <>
+                  {user?.bio && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      {user.bio.length > 150 ? `${user.bio.substring(0, 150)}...` : user.bio}
                     </Typography>
-                  ))
-                )}
-              </Box>
+                  )}
+                  
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+                    {user?.location && (
+                      <Chip 
+                        label={user.location} 
+                        size="small" 
+                        variant="outlined" 
+                      />
+                    )}
+                    {user?.created_at && (
+                      <Chip 
+                        label={`Joined ${new Date(user.created_at).toLocaleDateString()}`} 
+                        size="small" 
+                        variant="outlined" 
+                      />
+                    )}
+                  </Stack>
+                  
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    {user?.github && (
+                      <Tooltip title={`GitHub: ${user.github}`}>
+                        <IconButton 
+                          size="small" 
+                          color="default"
+                          component="a"
+                          href={`https://github.com/${user.github}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <GitHub fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {user?.twitter && (
+                      <Tooltip title={`Twitter: ${user.twitter}`}>
+                        <IconButton 
+                          size="small" 
+                          color="primary"
+                          component="a"
+                          href={`https://twitter.com/${user.twitter.replace('@', '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Twitter fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {user?.linkedin && (
+                      <Tooltip title="LinkedIn Profile">
+                        <IconButton 
+                          size="small" 
+                          color="primary"
+                          component="a"
+                          href={user.linkedin.startsWith('http') ? user.linkedin : `https://linkedin.com/in/${user.linkedin}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <LinkedIn fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
+                </>
+              )}
             </CardContent>
+            <CardActions>
+              <Button 
+                size="small" 
+                onClick={() => navigate('/profile')}
+              >
+                Edit Profile
+              </Button>
+            </CardActions>
           </Card>
+        </Grid>
+
+        {/* Stats */}
+        <Grid item xs={12} md={8}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <Card sx={{ bgcolor: 'primary.light', color: 'primary.contrastText' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ opacity: 0.8 }}>
+                        Total Assets
+                      </Typography>
+                      <Typography variant="h4">
+                        {isSummaryLoading ? <CircularProgress size={24} color="inherit" /> : (summary.unique_assets || 0)}
+                      </Typography>
+                    </Box>
+                    <Avatar sx={{ bgcolor: 'primary.dark' }}>
+                      <Storage />
+                    </Avatar>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            <Grid item xs={12} sm={6}>
+              <Card sx={{ bgcolor: 'secondary.light', color: 'secondary.contrastText' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ opacity: 0.8 }}>
+                        Total Transactions
+                      </Typography>
+                      <Typography variant="h4">
+                        {isSummaryLoading ? <CircularProgress size={24} color="inherit" /> : (summary.total_transactions || 0)}
+                      </Typography>
+                    </Box>
+                    <Avatar sx={{ bgcolor: 'secondary.dark' }}>
+                      <SwapHoriz />
+                    </Avatar>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Storage Usage
+                  </Typography>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={storageUsage} 
+                    sx={{ height: 10, borderRadius: 5, mb: 1 }} 
+                  />
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2">
+                      {((summary?.total_asset_size || 0) / (1024 * 1024)).toFixed(2)} MB used
+                    </Typography>
+                    <Typography variant="body2">
+                      100 MB limit
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Action Breakdown
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-around', py: 1 }}>
+                    {isSummaryLoading ? (
+                      <CircularProgress size={24} />
+                    ) : (
+                      <>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <Avatar sx={{ bgcolor: 'success.light', mb: 1, width: 36, height: 36 }}>
+                            <CloudUpload fontSize="small" />
+                          </Avatar>
+                          <Typography variant="h6">
+                            {summary.actions?.CREATE || 0}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Creates
+                          </Typography>
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <Avatar sx={{ bgcolor: 'info.light', mb: 1, width: 36, height: 36 }}>
+                            <Update fontSize="small" />
+                          </Avatar>
+                          <Typography variant="h6">
+                            {summary.actions?.UPDATE || 0}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Updates
+                          </Typography>
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <Avatar sx={{ bgcolor: 'error.light', mb: 1, width: 36, height: 36 }}>
+                            <DeleteOutline fontSize="small" />
+                          </Avatar>
+                          <Typography variant="h6">
+                            {summary.actions?.DELETE || 0}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Deletes
+                          </Typography>
+                        </Box>
+                      </>
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
         </Grid>
       </Grid>
       
@@ -193,25 +475,27 @@ function DashboardPage() {
         {/* Recent Activity Tab */}
         {tabValue === 1 && (
           <Box sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Recent Transactions
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">
+                Recent Transactions
+              </Typography>
+              
+              {recentTransactions.length > 0 && (
+                <Button 
+                  variant="outlined"
+                  size="small"
+                  endIcon={<Timeline />}
+                  onClick={() => navigate('/history')}
+                >
+                  View Full History
+                </Button>
+              )}
+            </Box>
             
             <TransactionsList 
               transactions={recentTransactions} 
               isLoading={isRecentLoading} 
             />
-            
-            {recentTransactions.length > 0 && (
-              <Box sx={{ mt: 2, textAlign: 'center' }}>
-                <Button 
-                  variant="outlined"
-                  onClick={() => navigate('/history')}
-                >
-                  View Full History
-                </Button>
-              </Box>
-            )}
           </Box>
         )}
       </Paper>

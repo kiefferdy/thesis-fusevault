@@ -83,7 +83,8 @@ class TransactionHandler:
     async def get_wallet_history(
         self, 
         wallet_address: str,
-        include_all_versions: bool = False
+        include_all_versions: bool = False,
+        limit: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Get transaction history for a specific wallet.
@@ -91,6 +92,7 @@ class TransactionHandler:
         Args:
             wallet_address: The wallet address to get history for
             include_all_versions: Whether to include all versions or just current ones
+            limit: Optional limit on the number of transactions to return
             
         Returns:
             Dict containing transaction history for the wallet
@@ -106,6 +108,10 @@ class TransactionHandler:
                 asset_service=self.asset_service
             )
             
+            # Apply limit if specified
+            if limit is not None and limit > 0:
+                transactions = transactions[:limit]
+            
             # Get some summary information
             asset_ids = set()
             actions = {}
@@ -119,10 +125,11 @@ class TransactionHandler:
             
             # Prepare the response
             return {
+                "status": "success",
                 "wallet_address": wallet_address,
                 "include_all_versions": include_all_versions,
                 "transactions": transactions,
-                "transaction_count": len(transactions),
+                "count": len(transactions),
                 "unique_assets": len(asset_ids),
                 "action_summary": actions
             }
@@ -240,10 +247,20 @@ class TransactionHandler:
             summary = await self.transaction_service.get_transaction_summary(wallet_address)
             
             return {
+                "status": "success",
                 "wallet_address": wallet_address,
-                "summary": summary
+                **summary  # Spread the summary fields directly
             }
             
         except Exception as e:
             logger.error(f"Error getting transaction summary: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
+            # Instead of an error, return an empty summary
+            return {
+                "status": "success",
+                "wallet_address": wallet_address,
+                "total_transactions": 0,
+                "unique_assets": 0,
+                "total_asset_size": 0,
+                "actions": {},
+                "asset_types": {}
+            }

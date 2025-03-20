@@ -36,8 +36,7 @@ async def register_user(
     Returns:
         UserResponse containing registration result
     """
-    result = await user_handler.register_user(user_data)
-    return UserResponse(**result)
+    return await user_handler.register_user(user_data)
 
 @router.get("/{wallet_address}", response_model=UserResponse)
 async def get_user(
@@ -53,8 +52,7 @@ async def get_user(
     Returns:
         UserResponse containing user information
     """
-    result = await user_handler.get_user(wallet_address)
-    return UserResponse(**result)
+    return await user_handler.get_user(wallet_address)
 
 @router.put("/{wallet_address}", response_model=UserResponse)
 async def update_user(
@@ -74,8 +72,7 @@ async def update_user(
     """
     # Convert Pydantic model to dict, excluding unset fields
     update_dict = update_data.dict(exclude_unset=True)
-    result = await user_handler.update_user(wallet_address, update_dict)
-    return UserResponse(**result)
+    return await user_handler.update_user(wallet_address, update_dict)
 
 @router.delete("/{wallet_address}", response_model=UserDeleteResponse)
 async def delete_user(
