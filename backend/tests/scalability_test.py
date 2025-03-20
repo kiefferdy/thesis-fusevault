@@ -150,15 +150,6 @@ class ScalabilityTest:
             if data["count"] > 0:
                 data["success_rate"] = data["success_count"] / data["count"]
                 data["avg_response_time"] = sum(data["response_times"]) / data["count"]
-                
-                # Calculate percentiles for endpoint response times
-                if data["response_times"]:
-                    sorted_times = sorted(data["response_times"])
-                    data["p50_response_time"] = np.percentile(sorted_times, 50)
-                    data["p90_response_time"] = np.percentile(sorted_times, 90)
-                    data["p95_response_time"] = np.percentile(sorted_times, 95)
-                    data["p99_response_time"] = np.percentile(sorted_times, 99)
-
         # Print results summary
         self.print_results_summary()
         
@@ -176,16 +167,9 @@ class ScalabilityTest:
         print(f"Test Duration: {self.results.get('test_duration', 0):.2f} seconds")
         print(f"Throughput: {self.results['throughput']:.2f} requests/second")
         print(f"Max Concurrent Requests: {self.results['max_concurrent_requests']}")
-        
-        print("\nResponse Time Statistics (seconds):")
         if self.results["response_times"]:
             print(f"  Average: {sum(self.results['response_times']) / len(self.results['response_times']):.4f}")
-            print(f"  Minimum: {min(self.results['response_times']):.4f}")
-            print(f"  Maximum: {max(self.results['response_times']):.4f}")
-            print(f"  50th Percentile (Median): {self.results.get('p50_response_time', 0):.4f}")
-            print(f"  90th Percentile: {self.results.get('p90_response_time', 0):.4f}")
-            print(f"  95th Percentile: {self.results.get('p95_response_time', 0):.4f}")
-            print(f"  99th Percentile: {self.results.get('p99_response_time', 0):.4f}")
+            
         
         if self.results["request_error_rates"]:
             print("\nError Breakdown:")
