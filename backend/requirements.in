@@ -21,3 +21,12 @@ pytest-asyncio
 
 # Utilities
 pandas
+
+# Testing 
+aiohttp
+psutil
+matplotlib
+numpy
+tqdm
+seaborn
+requests
