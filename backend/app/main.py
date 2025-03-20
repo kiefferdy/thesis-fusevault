@@ -37,10 +37,18 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001"], 
+    allow_origins=[
+        "http://localhost:3000",  # React default
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:4173",  # Vite preview server
+        "http://127.0.0.1:5173",  # Alternative localhost
+        "http://127.0.0.1:4173",  # Alternative localhost
+        "http://127.0.0.1:3000",  # Alternative localhost
+    ], 
     allow_credentials=True,
     allow_methods=["*"], 
     allow_headers=["*"],
+    expose_headers=["*"]  # Expose headers for cross-origin requests
 )
 
 # Include API routers
@@ -56,4 +64,4 @@ api_routers = [
 
 # Add all routers to the app
 for router in api_routers:
-    app.include_router(router, prefix="/api")
+    app.include_router(router)

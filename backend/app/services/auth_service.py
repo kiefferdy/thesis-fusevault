@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any, Tuple
 import logging
 import random
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from eth_account.messages import encode_defunct
 from web3 import Web3
 import os
@@ -36,8 +36,14 @@ class AuthService:
         
         # Initialize Web3
         load_dotenv()
-        infura_url = os.getenv("INFURA_URL")
-        self.web3 = Web3(Web3.HTTPProvider(infura_url))
+        infura_url = os.getenv("INFURA_URL", "https://mainnet.infura.io/v3/your-api-key")
+        
+        # Allow for local development without Infura
+        try:
+            self.web3 = Web3(Web3.HTTPProvider(infura_url))
+        except Exception as e:
+            logger.warning(f"Could not connect to Infura: {str(e)}")
+            self.web3 = Web3()
         
     async def get_nonce(self, wallet_address: str) -> NonceResponse:
         """
@@ -110,8 +116,8 @@ class AuthService:
             True if signature is valid, False otherwise
         """
         try:
-            # Create message that was signed
-            message = encode_defunct(text=f"I am signing my one-time nonce: {nonce}")
+            # Create message that was signed (match the exact message format from frontend)
+            message = encode_defunct(text=f"Sign this message to authenticate with FuseVault.\n\nNonce: {nonce}")
             
             # Recover the address that signed the message
             recovered_address = self.web3.eth.account.recover_message(message, signature=signature)
@@ -161,6 +167,15 @@ class AuthService:
                     {"walletAddress": wallet_address},
                     {"$set": {"lastLogin": datetime.now(timezone.utc)}}
                 )
+            else:
+                # Create a new user if they don't exist
+                new_user = {
+                    "walletAddress": wallet_address,
+                    "createdAt": datetime.now(timezone.utc),
+                    "lastLogin": datetime.now(timezone.utc),
+                    "role": "user"  # Default role
+                }
+                await self.user_repository.insert_user(new_user)
                 
             return True, "Authentication successful"
             
@@ -181,16 +196,13 @@ class AuthService:
         """
         try:
             session_id = secrets.token_hex(32)
-            expires_at = datetime.now(timezone.utc)
-            
-            # Add duration in seconds to current time
-            expires_at = expires_at.replace(second=expires_at.second + duration)
+            now = datetime.now(timezone.utc)
             
             session_data = {
                 "sessionId": session_id,
                 "walletAddress": wallet_address,
-                "createdAt": datetime.now(timezone.utc),
-                "expiresAt": expires_at,
+                "createdAt": now,
+                "expiresAt": now + timedelta(seconds=duration),
                 "isActive": True
             }
             
@@ -215,11 +227,17 @@ class AuthService:
         try:
             current_time = datetime.now(timezone.utc)
             
-            return await self.auth_repository.get_session({
+            session = await self.auth_repository.get_session({
                 "sessionId": session_id,
                 "expiresAt": {"$gt": current_time},
                 "isActive": True
             })
+            
+            if session:
+                # Extend session duration on successful validation
+                await self.extend_session(session_id)
+                
+            return session
             
         except Exception as e:
             logger.error(f"Error validating session: {str(e)}")
@@ -261,9 +279,9 @@ class AuthService:
             
             if not session:
                 return False
-                
-            current_expiry = session["expiresAt"]
-            new_expiry = current_expiry.replace(second=current_expiry.second + duration)
+            
+            # Set new expiry from current time
+            new_expiry = datetime.now(timezone.utc) + timedelta(seconds=duration)
             
             return await self.auth_repository.update_session(
                 session_id,
