@@ -80,12 +80,13 @@ export const assetService = {
   // Get user's assets (this endpoint might need to be added to the backend)
   getUserAssets: async (walletAddress) => {
     try {
-      // This endpoint might need to be implemented in the backend
       const { data } = await apiClient.get(`/assets/user/${walletAddress}`);
+      console.log('User assets fetched:', data);
       return data;
     } catch (error) {
       console.error('Error fetching user assets:', error);
-      throw error;
+      // Return empty data structure on error to prevent crashes
+      return { assets: [] };
     }
   }
 };

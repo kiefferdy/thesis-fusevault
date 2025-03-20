@@ -99,14 +99,20 @@ function DashboardPage() {
   };
 
   // Filter assets based on search term
-  const filteredAssets = assets.filter(asset => 
-    asset.assetId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    asset.criticalMetadata?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (asset.criticalMetadata?.tags && 
+  console.log("Dashboard assets:", assets);
+  
+  const filteredAssets = assets.filter(asset => {
+    if (!asset) return false;
+    
+    const assetIdMatch = asset.assetId?.toLowerCase().includes(searchTerm.toLowerCase());
+    const nameMatch = asset.criticalMetadata?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+    const tagMatch = asset.criticalMetadata?.tags && 
       asset.criticalMetadata.tags.some(tag => 
         tag.toLowerCase().includes(searchTerm.toLowerCase())
-      ))
-  );
+      );
+      
+    return assetIdMatch || nameMatch || tagMatch;
+  });
 
   // Get avatar component
   const getAvatar = () => {

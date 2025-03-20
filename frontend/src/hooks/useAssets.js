@@ -10,17 +10,24 @@ export const useAssets = () => {
   // Query for user's assets
   const userAssetsQuery = useQuery({
     queryKey: ['assets', currentAccount],
-    queryFn: () => currentAccount ? assetService.getUserAssets(currentAccount) : null,
+    queryFn: () => currentAccount ? assetService.getUserAssets(currentAccount) : { assets: [] },
     enabled: !!currentAccount,
-    staleTime: 60000 // 1 minute
+    staleTime: 30000, // 30 seconds
+    retry: 3,
+    refetchOnWindowFocus: true
   });
 
   // Mutation for uploading metadata
   const uploadMetadataMutation = useMutation({
     mutationFn: (data) => assetService.uploadMetadata(data),
-    onSuccess: () => {
+    onSuccess: (data, variables, context) => {
       queryClient.invalidateQueries(['assets', currentAccount]);
       toast.success('Asset metadata uploaded successfully!');
+      
+      // Call onSuccess callback if provided
+      if (context?.onSuccess) {
+        context.onSuccess(data);
+      }
     },
     onError: (error) => {
       toast.error(`Error uploading metadata: ${error.message}`);
@@ -30,9 +37,15 @@ export const useAssets = () => {
   // Mutation for uploading JSON files
   const uploadJsonMutation = useMutation({
     mutationFn: ({ files }) => assetService.uploadJsonFiles(files, currentAccount),
-    onSuccess: () => {
+    onSuccess: (data, variables, context) => {
       queryClient.invalidateQueries(['assets', currentAccount]);
+      queryClient.refetchQueries(['assets', currentAccount]);
       toast.success('JSON files uploaded successfully!');
+      
+      // Call onSuccess callback if provided
+      if (context?.onSuccess) {
+        context.onSuccess(data);
+      }
     },
     onError: (error) => {
       toast.error(`Error uploading JSON files: ${error.message}`);

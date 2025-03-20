@@ -8,16 +8,26 @@ export const useTransactions = () => {
   // Query for transaction summary
   const summaryQuery = useQuery({
     queryKey: ['transactions', 'summary', currentAccount],
-    queryFn: () => currentAccount ? transactionService.getTransactionSummary(currentAccount) : null,
+    queryFn: () => currentAccount ? transactionService.getTransactionSummary(currentAccount) : { summary: {} },
     enabled: !!currentAccount && isAuthenticated,
-    staleTime: 300000 // 5 minutes
+    staleTime: 60000, // 1 minute
+    retry: 3
   });
 
   // Query for recent transactions
   const recentQuery = useQuery({
     queryKey: ['transactions', 'recent', currentAccount],
-    queryFn: () => currentAccount ? transactionService.getRecentTransactions(currentAccount) : null,
+    queryFn: () => currentAccount ? transactionService.getRecentTransactions(currentAccount) : { transactions: [] },
     enabled: !!currentAccount && isAuthenticated,
+    staleTime: 30000, // 30 seconds
+    retry: 3
+  });
+  
+  // Query for all transactions (normally not executed automatically)
+  const allTransactionsQuery = useQuery({
+    queryKey: ['transactions', 'all', currentAccount],
+    queryFn: () => currentAccount ? transactionService.getAllTransactions(currentAccount) : { transactions: [] },
+    enabled: false, // Not automatically executed
     staleTime: 60000 // 1 minute
   });
 
@@ -36,6 +46,11 @@ export const useTransactions = () => {
     isRecentError: recentQuery.isError,
     summaryError: summaryQuery.error,
     recentError: recentQuery.error,
-    getAssetHistory
+    getAssetHistory,
+    // Add methods for all transactions
+    getAllTransactions: () => allTransactionsQuery.refetch(),
+    allTransactions: allTransactionsQuery.data?.transactions || [],
+    isAllTransactionsLoading: allTransactionsQuery.isLoading,
+    isAllTransactionsError: allTransactionsQuery.isError
   };
 };

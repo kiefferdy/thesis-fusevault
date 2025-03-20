@@ -60,6 +60,9 @@ function ProfilePage() {
   // Update form data when user data changes
   useEffect(() => {
     if (user) {
+      // Check if the user object actually has data
+      console.log('User data received:', user);
+      
       setFormData({
         email: user.email || '',
         name: user.name || '',

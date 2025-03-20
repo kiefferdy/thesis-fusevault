@@ -12,7 +12,11 @@ export const useUser = () => {
     queryKey: ['user', currentAccount],
     queryFn: () => currentAccount ? userService.getUser(currentAccount) : null,
     enabled: !!currentAccount && isAuthenticated,
-    staleTime: 300000 // 5 minutes
+    staleTime: 300000, // 5 minutes
+    select: (data) => {
+      // Make sure we return the actual user object correctly
+      return data?.user || data;
+    }
   });
 
   // Mutation for registering a user
@@ -34,7 +38,9 @@ export const useUser = () => {
   const updateMutation = useMutation({
     mutationFn: (updateData) => userService.updateUser(currentAccount, updateData),
     onSuccess: () => {
+      // Force refetch to update the UI immediately
       queryClient.invalidateQueries(['user', currentAccount]);
+      queryClient.refetchQueries(['user', currentAccount]);
       toast.success('Profile updated successfully!');
     },
     onError: (error) => {
