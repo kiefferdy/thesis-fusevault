@@ -24,9 +24,11 @@ export const AuthProvider = ({ children }) => {
       console.log("Using API URL:", API_URL);
       
       // We use a direct axios call to avoid our error interceptor
+      // Important: withCredentials is set to false to avoid sending cookies
+      // This ensures the request is treated as completely public
       const response = await axios.get(`${API_URL}/auth/nonce/0x0000000000000000000000000000000000000000`, { 
         timeout: 5000, // Increased timeout for reliability
-        withCredentials: true // Explicitly include credentials
+        withCredentials: false // Do NOT include credentials for this check
       });
       
       console.log("Backend response received:", response.status);

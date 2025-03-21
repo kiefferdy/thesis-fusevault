@@ -86,8 +86,12 @@ class AuthHandler:
                 value=session_id,
                 httponly=True,
                 max_age=3600,  # 1 hour
-                samesite="lax"
+                samesite="lax",
+                secure=False,  # Allow non-HTTPS for development
+                path="/"  # Ensure cookie is available for all paths
             )
+            
+            logger.debug(f"Set session cookie for {request.wallet_address}: {session_id}")
             
             return {
                 "status": "success",

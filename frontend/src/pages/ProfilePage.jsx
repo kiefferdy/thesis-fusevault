@@ -35,12 +35,14 @@ import {
 import { useUser } from '../hooks/useUser';
 import { useAuth } from '../contexts/AuthContext';
 import { useTransactions } from '../hooks/useTransactions';
+import { useAssets } from '../hooks/useAssets';
 import { formatWalletAddress, formatDate } from '../utils/formatters';
 
 function ProfilePage() {
   const { user, isLoading, isError, update, isUpdating } = useUser();
   const { currentAccount, signOut } = useAuth();
   const { summary, isSummaryLoading, allTransactions, getAllTransactions } = useTransactions();
+  const { assets } = useAssets();
   
   // Fetch all transactions when profile loads
   useEffect(() => {
@@ -455,7 +457,7 @@ function ProfilePage() {
                   </Grid>
                   <Grid item xs={6}>
                     <Typography variant="body2" fontWeight="bold">
-                      {summary.unique_assets || allTransactions?.filter(tx => tx.action?.includes('CREATE')).length || 0}
+                      {assets.length || summary.unique_assets || allTransactions?.filter(tx => tx.action?.includes('CREATE')).length || 0}
                     </Typography>
                   </Grid>
                   

@@ -31,8 +31,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/openapi.json",
             "/auth/login",
             "/auth/validate",
-            "/auth/logout",  # Allow logout without authentication
-            "/users/register"
+            "/auth/logout",
+            "/users/register",
         ]
         # Routes that start with these prefixes are public
         self.public_prefixes = [
@@ -44,7 +44,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/users/",         # Allow accessing user profiles
             "/assets/user/",   # Allow accessing assets
             "/transactions/",  # Allow accessing transactions
+            "/transfers/pending/",  # Allow viewing pending transfers
+            "/retrieve/",      # Allow retrieving asset metadata
         ]
+
+        # Important: The actual authentication check happens in the route handler for write operations
         
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """
@@ -60,7 +64,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Log the incoming request for debugging
         path = request.url.path
         method = request.method
-        logger.debug(f"Received {method} request for path: {path}")
+        logger.info(f"Received {method} request for path: {path}")
+        
+        # Get session ID from cookies
+        cookies = request.cookies
+        session_id = cookies.get("session_id")
+        logger.debug(f"Cookies: {cookies}")
+        logger.debug(f"Session ID: {session_id}")
         
         # Skip authentication for public paths
         if self._is_public_path(path):
@@ -76,7 +86,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
             )
             
             if is_read_operation and is_data_path:
-                session_id = request.cookies.get("session_id")
                 if not session_id:
                     # Set demo mode flag - handlers can check this to return demo data
                     request.state.demo_mode = True
@@ -87,12 +96,20 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         wallet_addr = path.split("/")[2]  # Extract wallet address from path
                         if wallet_addr:
                             request.state.demo_wallet = wallet_addr
-                            logger.info(f"Demo wallet address: {wallet_addr}")
+                            logger.debug(f"Demo wallet address: {wallet_addr}")
+                else:
+                    # If we have a session ID, try to validate it for public paths too
+                    # This way we can use the real user data for GET requests if authenticated
+                    session_data = await self._validate_session(session_id)
+                    if session_data:
+                        logger.debug(f"Valid session found for public path: {path}")
+                        request.state.user = session_data
+                        request.state.wallet_address = session_data.get("walletAddress")
+                        request.state.demo_mode = False
             
             return await call_next(request)
             
         # Check for session cookie
-        session_id = request.cookies.get("session_id")
         if not session_id:
             logger.warning(f"Authentication required for {path} but no session cookie found")
             return JSONResponse(
@@ -113,7 +130,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request.state.user = session_data
         request.state.wallet_address = session_data.get("walletAddress")
         request.state.demo_mode = False  # Not in demo mode
-        logger.debug(f"User {session_data.get('walletAddress')} authenticated for {path}")
+        logger.info(f"User {session_data.get('walletAddress')} authenticated for {path}")
         
         # Continue processing the request
         return await call_next(request)
@@ -128,15 +145,21 @@ class AuthMiddleware(BaseHTTPMiddleware):
         Returns:
             True if public, False if protected
         """
+        # Log the path being checked
+        logger.debug(f"Checking if path is public: {path}")
+        
         # Check exact matches
         if path in self.public_paths:
+            logger.debug(f"Path {path} matched exact public path")
             return True
             
         # Check prefix matches
         for prefix in self.public_prefixes:
             if path.startswith(prefix):
+                logger.debug(f"Path {path} matched public prefix: {prefix}")
                 return True
-                
+        
+        logger.debug(f"Path {path} is NOT public")        
         return False
         
     async def _validate_session(self, session_id: str) -> Optional[Dict[str, Any]]:
@@ -159,7 +182,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
             auth_service = AuthService(auth_repo, user_repo)
             
             # Validate session
-            return await auth_service.validate_session(session_id)
+            session_data = await auth_service.validate_session(session_id)
+            if session_data:
+                logger.debug(f"Session validated successfully: {session_id}")
+                # Avoid logging detailed session data for privacy/security
+                return session_data
+            else:
+                logger.debug(f"Invalid session ID: {session_id}")
+                return None
             
         except Exception as e:
             logger.error(f"Error validating session: {str(e)}")
