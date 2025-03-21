@@ -151,11 +151,7 @@ class ScalabilityTest:
                 data["success_rate"] = data["success_count"] / data["count"]
                 data["avg_response_time"] = sum(data["response_times"]) / data["count"]
         # Print results summary
-        self.print_results_summary()
-        
-        # Generate performance chart
-        self.generate_performance_chart()
-        
+        self.print_results_summary()        
         return self.results
 
     def print_results_summary(self):
