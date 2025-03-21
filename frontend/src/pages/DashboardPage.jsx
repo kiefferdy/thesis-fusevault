@@ -341,7 +341,7 @@ function DashboardPage() {
                         Total Assets
                       </Typography>
                       <Typography variant="h4">
-                        {isSummaryLoading ? <CircularProgress size={24} color="inherit" /> : (summary.unique_assets || 0)}
+                        {isSummaryLoading || assetsLoading ? <CircularProgress size={24} color="inherit" /> : assets.length}
                       </Typography>
                     </Box>
                     <Avatar sx={{ bgcolor: 'primary.dark' }}>

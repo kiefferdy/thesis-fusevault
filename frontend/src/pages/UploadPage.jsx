@@ -155,9 +155,12 @@ function UploadPage() {
             <Alert severity="info" sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
               <Info sx={{ mr: 1 }} />
               <div>
-                <Typography variant="body2" fontWeight="bold">Creating an asset involves two phases:</Typography>
-                <Typography variant="body2">1. Data is uploaded to decentralized storage (IPFS)</Typography>
-                <Typography variant="body2">2. Unique asset identifiers are stored on the blockchain</Typography>
+                <Typography variant="body2" fontWeight="bold">Creating an asset involves five phases:</Typography>
+                <Typography variant="body2">1. The metadata is parsed and validated.</Typography>
+                <Typography variant="body2">2. Critical metadata is stored on decentralized storage (IPFS).</Typography>
+                <Typography variant="body2">3. The asset is logged on the blockchain.</Typography>
+                <Typography variant="body2">4. The asset is stored on the database.</Typography>
+                <Typography variant="body2">5. The transaction is recorded.</Typography>
                 <Typography variant="body2" sx={{ mt: 0.5 }}>This process can take 1-3 minutes. Please wait for the confirmation.</Typography>
               </div>
             </Alert>
