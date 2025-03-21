@@ -44,12 +44,13 @@ class UserHandler:
             logger.error(f"Error registering user: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Error registering user: {str(e)}")
             
-    async def get_user(self, wallet_address: str) -> Dict[str, Any]:
+    async def get_user(self, wallet_address: str, demo_mode: bool = False) -> Dict[str, Any]:
         """
         Get a user by wallet address.
         
         Args:
             wallet_address: The wallet address to look up
+            demo_mode: Whether to return demo data if user not found
             
         Returns:
             Dict containing user information
@@ -57,6 +58,25 @@ class UserHandler:
         Raises:
             HTTPException: If user not found or retrieval fails
         """
+        # If in demo mode, always return a demo user profile
+        if demo_mode:
+            logger.info(f"Returning demo user profile for {wallet_address}")
+            truncated_address = wallet_address[:6] + "..." + wallet_address[-4:]
+            return {
+                "status": "success",
+                "message": "Demo user profile",
+                "demo": True,
+                "user": {
+                    "id": "demo-user-" + wallet_address[-6:],
+                    "walletAddress": wallet_address,
+                    "email": f"demo-{truncated_address}@example.com",
+                    "role": "user",
+                    "name": f"Demo User {truncated_address}",
+                    "createdAt": "2023-01-01T00:00:00Z",
+                    "lastLogin": "2023-01-01T00:00:00Z"
+                }
+            }
+        
         try:
             # This will now return a default response even if the user doesn't exist
             user_response = await self.user_service.get_user(wallet_address)
@@ -73,7 +93,7 @@ class UserHandler:
                 "message": f"Error retrieving user: {str(e)}",
                 "user": {
                     "id": "none",
-                    "wallet_address": wallet_address,
+                    "walletAddress": wallet_address,
                     "email": "none@example.com",  # Default email for validation
                     "role": "user"
                 }

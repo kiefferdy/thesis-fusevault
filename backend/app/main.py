@@ -11,6 +11,7 @@ from app.api.users_routes import router as user_router
 from app.api.delete_routes import router as delete_router
 from app.api.transfer_routes import router as transfer_router
 from app.api.assets_routes import router as assets_router
+from app.utilities.auth_middleware import AuthMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -41,9 +42,11 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",  # React default
         "http://localhost:3001",  # Current Vite config port
+        "http://localhost:3002",  # Additional Vite port
         "http://localhost:5173",  # Vite dev server
         "http://localhost:4173",  # Vite preview server
         "http://127.0.0.1:3001",  # Alternative localhost
+        "http://127.0.0.1:3002",  # Alternative localhost
         "http://127.0.0.1:5173",  # Alternative localhost
         "http://127.0.0.1:4173",  # Alternative localhost
         "http://127.0.0.1:3000",  # Alternative localhost
@@ -53,6 +56,9 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"]  # Expose headers for cross-origin requests
 )
+
+# Add authentication middleware
+app.add_middleware(AuthMiddleware)
 
 # Include API routers
 api_routers = [
