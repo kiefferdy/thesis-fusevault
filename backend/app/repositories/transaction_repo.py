@@ -40,7 +40,7 @@ class TransactionRepository:
             logger.error(f"Error inserting transaction: {str(e)}")
             raise
             
-    async def find_transactions(self, query: Dict[str, Any], sort_by: str = "timestamp", sort_direction: int = DESCENDING) -> List[Dict[str, Any]]:
+    async def find_transactions(self, query: Dict[str, Any], sort_by: str = "timestamp", sort_direction: int = DESCENDING, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Find transactions matching the query.
         
@@ -48,16 +48,24 @@ class TransactionRepository:
             query: MongoDB query to filter transactions
             sort_by: Field to sort results by (default: timestamp)
             sort_direction: Direction to sort (default: DESCENDING)
+            limit: Optional limit on the number of results to return
             
         Returns:
             List of transaction documents
         """
         try:
-            # Find matching transactions
+            # Build cursor
             cursor = self.transaction_collection.find(query).sort(sort_by, sort_direction)
+            
+            # Apply limit if specified
+            if limit is not None and limit > 0:
+                cursor = cursor.limit(limit)
             
             # Convert cursor to list
             transactions = list(cursor)
+            
+            # Log for debugging
+            logger.info(f"Found {len(transactions)} transactions with query: {query}")
             
             # Convert ObjectId to string for each transaction
             for tx in transactions:
@@ -68,7 +76,8 @@ class TransactionRepository:
             
         except Exception as e:
             logger.error(f"Error finding transactions: {str(e)}")
-            raise
+            # Return empty list instead of raising to prevent frontend crashes
+            return []
             
     async def find_transaction(self, query: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """

@@ -65,3 +65,12 @@ class AssetHistoryResponse(BaseModel):
     class Config:
         from_attributes = True
         populate_by_name = True
+        
+class AssetListResponse(BaseModel):
+    """Response schema for listing assets."""
+    status: str = Field(..., description="Status of the request")
+    assets: List[Dict[str, Any]] = Field(..., description="List of assets")
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True

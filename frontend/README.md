@@ -1,89 +1,90 @@
-# MetaMask Authentication Frontend
+# FuseVault Frontend
 
-This is a React-based frontend for authenticating users via MetaMask. It interacts with a FastAPI backend to fetch a nonce, sign it with MetaMask, and verify the signature for authentication.
+This is the frontend application for FuseVault, a secure digital asset management platform that uses blockchain for verification and IPFS for decentralized storage.
+
+## Features
+
+- **Metamask Authentication**: Secure wallet-based authentication
+- **Asset Management**: Create, view, edit, and delete digital assets
+- **Blockchain Verification**: Assets are verified using Ethereum blockchain
+- **Transaction History**: Track all actions performed on assets
+- **User Profile**: Manage user information and preferences
+
+## Technologies Used
+
+- **React**: Frontend framework
+- **Material UI**: UI component library
+- **React Router**: Client-side routing
+- **React Query**: Data fetching and caching
+- **Ethers.js**: Ethereum wallet integration
+- **Axios**: API communication
 
 ## Prerequisites
 
-Before running the project, ensure you have the following installed:
+- Node.js 16+
+- npm or yarn
+- A web browser with the MetaMask extension installed
+- Backend API running (refer to backend README)
 
-- [Node.js](https://nodejs.org/) (16+ recommended)
-- [MetaMask](https://metamask.io/) browser extension
+## Getting Started
 
-## Installation
+1. Clone the repository
+2. Navigate to the frontend directory:
 
-Navigate to the `frontend` directory and install the required dependencies:
-
-```sh
+```
 cd frontend
+```
+
+3. Install dependencies:
+
+```
 npm install
 ```
 
-This will install:
-
-- `react` (Frontend framework)
-- `ethers` (For interacting with MetaMask and signing messages)
-- `axios` (For making API requests to the backend)
-
-## Running the Project
-
-To start the frontend in development mode (make sure the backend is running simultaneously):
-
-```sh
-npm start
-```
-
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
-
-### Expected Behavior
-
-1. **Connect MetaMask:** Users will be prompted to connect their MetaMask wallet.
-2. **Fetch Nonce:** The frontend requests a nonce from the backend.
-3. **Sign Message:** The user signs the nonce message using MetaMask.
-4. **Authenticate:** The signed message is sent to the backend for verification.
-5. **Success or Failure:** The frontend displays whether authentication was successful.
-
-### Project Structure
+4. Create a `.env` file in the frontend directory with the following variables:
 
 ```
-frontend/
-├── src/
-│   ├── components/
-│   │   ├── MetaMaskLogin.js  # MetaMask authentication component
-│   ├── App.js                # Main React App entry
-│   ├── index.js              # Renders React app
-│   ├── styles.css            # Basic styling
-├── package.json              # Project dependencies and scripts
-├── README.md                 # This file
+VITE_API_URL=http://localhost:8000
 ```
 
-## Troubleshooting
+5. Start the development server:
 
-- If you get a **CORS error**, ensure the backend allows requests from `http://localhost:3000`. In FastAPI, you can use:
+```
+npm run dev
+```
 
-  ```python
-  from fastapi.middleware.cors import CORSMiddleware
+6. Open your browser and navigate to `http://localhost:5173`
 
-  app.add_middleware(
-      CORSMiddleware,
-      allow_origins=["*"],  # Adjust this in production
-      allow_credentials=True,
-      allow_methods=["*"],
-      allow_headers=["*"],
-  )
-  ```
+## Authentication Flow
 
-- If MetaMask is not detected, ensure you have the browser extension installed.
+1. Click on the "Connect Wallet" button to initiate MetaMask connection
+2. MetaMask will prompt you to select an account and connect
+3. Click "Sign In" to authenticate with the backend
+4. MetaMask will prompt you to sign a message (this is a secure way to prove ownership of the wallet)
+5. After signing, you'll be authenticated and redirected to the dashboard
 
-- If authentication fails, check the backend logs for errors.
+## Building for Production
 
-## Notes
+To create a production build:
 
-- The project assumes a FastAPI backend running at `http://127.0.0.1:8000`.
-- The nonce system prevents replay attacks by ensuring each login request is unique.
+```
+npm run build
+```
 
-## Next Steps
+The build artifacts will be stored in the `dist/` directory.
 
-- Add UI improvements for better user experience.
-- Handle error states more gracefully.
-- Secure the authentication process by restricting CORS and enforcing HTTPS in production.
+## Available Scripts
 
+- `npm run dev` - Run the development server
+- `npm run build` - Build for production
+- `npm run lint` - Lint the codebase
+- `npm run preview` - Preview the production build locally
+
+## Folder Structure
+
+- `src/components/` - Reusable UI components
+- `src/contexts/` - React contexts for state management
+- `src/hooks/` - Custom React hooks
+- `src/pages/` - Page components
+- `src/services/` - API service functions
+- `src/utils/` - Utility functions

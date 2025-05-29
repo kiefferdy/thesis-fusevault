@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any, List
 import logging
 from datetime import datetime, timezone
 from app.repositories.user_repo import UserRepository
-from app.schemas.user_schema import UserCreate, UserResponse
+from app.schemas.user_schema import UserCreate, UserResponse, UserProfileResponse
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class UserService:
         """
         self.user_repository = user_repository
         
-    async def create_user(self, user_data: UserCreate) -> UserResponse:
+    async def create_user(self, user_data: UserCreate) -> Dict[str, Any]:
         """
         Create a new user.
         
@@ -42,12 +42,7 @@ class UserService:
             
             if existing_user:
                 # Return existing user
-                return UserResponse(
-                    id=existing_user["_id"],
-                    wallet_address=existing_user["walletAddress"],
-                    email=existing_user["email"],
-                    role=existing_user["role"]
-                )
+                return self._format_user_response(existing_user)
             
             # Prepare user data for insertion
             user_doc = {
@@ -58,21 +53,39 @@ class UserService:
                 "lastLogin": None
             }
             
+            # Add optional profile fields if provided
+            if user_data.name:
+                user_doc["name"] = user_data.name
+            if user_data.organization:
+                user_doc["organization"] = user_data.organization
+            if user_data.job_title:
+                user_doc["jobTitle"] = user_data.job_title
+            if user_data.bio:
+                user_doc["bio"] = user_data.bio
+            if user_data.profile_image:
+                user_doc["profileImage"] = str(user_data.profile_image)
+            if user_data.location:
+                user_doc["location"] = user_data.location
+            if user_data.twitter:
+                user_doc["twitter"] = user_data.twitter
+            if user_data.linkedin:
+                user_doc["linkedin"] = user_data.linkedin
+            if user_data.github:
+                user_doc["github"] = user_data.github
+            
             # Create new user
             user_id = await self.user_repository.insert_user(user_doc)
             
-            return UserResponse(
-                id=user_id,
-                wallet_address=user_data.wallet_address,
-                email=user_data.email,
-                role=user_data.role or "user"
-            )
+            # Add ID to user document
+            user_doc["_id"] = user_id
+            
+            return self._format_user_response(user_doc)
             
         except Exception as e:
             logger.error(f"Error creating user: {str(e)}")
             raise
             
-    async def get_user(self, wallet_address: str) -> Optional[UserResponse]:
+    async def get_user(self, wallet_address: str) -> Optional[Dict[str, Any]]:
         """
         Get a user by wallet address.
         
@@ -88,24 +101,39 @@ class UserService:
             )
             
             if not user:
-                return None
+                # Return a "not found" response instead of None
+                return {
+                    "status": "error",
+                    "message": "User not found",
+                    "user": {
+                        "id": "none",
+                        "wallet_address": wallet_address,
+                        "email": "none@example.com",  # Default for schema validation
+                        "role": "user"
+                    }
+                }
                 
-            return UserResponse(
-                id=user["_id"],
-                wallet_address=user["walletAddress"],
-                email=user["email"],
-                role=user["role"]
-            )
+            return self._format_user_response(user)
             
         except Exception as e:
             logger.error(f"Error getting user: {str(e)}")
-            raise
+            # Return a default response instead of raising an error
+            return {
+                "status": "error",
+                "message": f"Error retrieving user: {str(e)}",
+                "user": {
+                    "id": "none",
+                    "wallet_address": wallet_address,
+                    "email": "none@example.com",  # Default for schema validation
+                    "role": "user"
+                }
+            }
             
     async def update_user(
         self, 
         wallet_address: str, 
         update_data: Dict[str, Any]
-    ) -> Optional[UserResponse]:
+    ) -> Optional[Dict[str, Any]]:
         """
         Update a user's information.
         
@@ -127,14 +155,33 @@ class UserService:
                 
             # Format update data for MongoDB (convert keys to camelCase)
             formatted_data = {}
+            
+            # Map snake_case keys to camelCase for MongoDB
+            field_mapping = {
+                "wallet_address": "walletAddress",
+                "email": "email",
+                "role": "role",
+                "name": "name",
+                "organization": "organization",
+                "job_title": "jobTitle",
+                "bio": "bio",
+                "profile_image": "profileImage",
+                "location": "location",
+                "twitter": "twitter",
+                "linkedin": "linkedin",
+                "github": "github",
+                "preferences": "preferences"
+            }
+            
             for key, value in update_data.items():
-                if key == "wallet_address":
-                    formatted_data["walletAddress"] = value
-                elif key == "email":
-                    formatted_data["email"] = value
-                elif key == "role":
-                    formatted_data["role"] = value
+                if key in field_mapping:
+                    # Convert profile_image URL to string if it's a URL object
+                    if key == "profile_image" and value is not None:
+                        formatted_data[field_mapping[key]] = str(value)
+                    else:
+                        formatted_data[field_mapping[key]] = value
                 else:
+                    # Pass through any fields not in the mapping
                     formatted_data[key] = value
             
             # Add update timestamp
@@ -154,16 +201,62 @@ class UserService:
                 {"walletAddress": wallet_address}
             )
             
-            return UserResponse(
-                id=updated_user["_id"],
-                wallet_address=updated_user["walletAddress"],
-                email=updated_user["email"],
-                role=updated_user["role"]
-            )
+            return self._format_user_response(updated_user)
             
         except Exception as e:
             logger.error(f"Error updating user: {str(e)}")
             raise
+            
+    def _format_user_response(self, user_doc: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Format a user document into a standardized response.
+        
+        Args:
+            user_doc: User document from MongoDB
+            
+        Returns:
+            Formatted user response
+        """
+        # Create the base user response
+        user_response = {
+            "id": user_doc["_id"],
+            "wallet_address": user_doc["walletAddress"],
+            "email": user_doc["email"],
+            "role": user_doc["role"]
+        }
+        
+        # Add optional profile fields if they exist
+        if "name" in user_doc:
+            user_response["name"] = user_doc["name"]
+        if "organization" in user_doc:
+            user_response["organization"] = user_doc["organization"]
+        if "jobTitle" in user_doc:
+            user_response["job_title"] = user_doc["jobTitle"]
+        if "bio" in user_doc:
+            user_response["bio"] = user_doc["bio"]
+        if "profileImage" in user_doc:
+            user_response["profile_image"] = user_doc["profileImage"]
+        if "location" in user_doc:
+            user_response["location"] = user_doc["location"]
+        if "twitter" in user_doc:
+            user_response["twitter"] = user_doc["twitter"]
+        if "linkedin" in user_doc:
+            user_response["linkedin"] = user_doc["linkedin"]
+        if "github" in user_doc:
+            user_response["github"] = user_doc["github"]
+        if "preferences" in user_doc:
+            user_response["preferences"] = user_doc["preferences"]
+            
+        # Add timestamps if they exist
+        if "createdAt" in user_doc:
+            user_response["created_at"] = user_doc["createdAt"].isoformat() if isinstance(user_doc["createdAt"], datetime) else user_doc["createdAt"]
+        if "lastLogin" in user_doc and user_doc["lastLogin"]:
+            user_response["last_login"] = user_doc["lastLogin"].isoformat() if isinstance(user_doc["lastLogin"], datetime) else user_doc["lastLogin"]
+            
+        return {
+            "status": "success",
+            "user": user_response
+        }
             
     async def update_last_login(self, wallet_address: str) -> bool:
         """

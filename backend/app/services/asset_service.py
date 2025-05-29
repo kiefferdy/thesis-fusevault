@@ -231,6 +231,71 @@ class AssetService:
             logger.error(f"Error getting documents by wallet: {str(e)}")
             raise
             
+    async def get_user_assets(self, wallet_address: str) -> List[Dict[str, Any]]:
+        """
+        Get all assets owned by a specific wallet address.
+        Only returns current versions that are not deleted.
+        Formats the response to match frontend expectations.
+        
+        Args:
+            wallet_address: The wallet address to get assets for
+            
+        Returns:
+            List of assets owned by the wallet
+        """
+        try:
+            logger.info(f"Getting assets for wallet: {wallet_address}")
+            
+            # Updated query to support case-insensitive address matching
+            # Some wallet addresses might be stored with different capitalization
+            normalized_address = wallet_address.lower()
+            
+            # Create a query that matches regardless of case
+            # MongoDB regex with options 'i' for case-insensitive
+            query = {
+                "$or": [
+                    {"walletAddress": normalized_address},
+                    {"walletAddress": {"$regex": f"^{normalized_address}$", "$options": "i"}}
+                ]
+            }
+            
+            # Also ensure we're only getting current and non-deleted assets
+            query["isCurrent"] = True
+            query["isDeleted"] = False
+            
+            # Find assets directly with the query instead of using get_documents_by_wallet
+            assets = await self.asset_repository.find_assets(query)
+
+            # Log what we found for debugging
+            logger.info(f"Raw asset count from DB: {len(assets)}")
+            if len(assets) > 0:
+                logger.info(f"Sample asset fields: {list(assets[0].keys())}")
+            
+            # Format assets for frontend compatibility
+            formatted_assets = []
+            for asset in assets:
+                # Format the asset data to match frontend expectations
+                formatted_asset = {
+                    "_id": asset["_id"],
+                    "assetId": asset.get("assetId", ""),
+                    "walletAddress": asset.get("walletAddress", ""),
+                    "criticalMetadata": asset.get("criticalMetadata", {}),
+                    "nonCriticalMetadata": asset.get("nonCriticalMetadata", {}),
+                    "ipfsCid": asset.get("ipfsHash", ""),
+                    "versionNumber": asset.get("versionNumber", 1),
+                    "createdAt": asset.get("createdAt", asset.get("lastUpdated", "")),
+                    "updatedAt": asset.get("lastUpdated", "")
+                }
+                formatted_assets.append(formatted_asset)
+            
+            logger.info(f"Found {len(formatted_assets)} assets for wallet: {wallet_address}")
+            return formatted_assets
+            
+        except Exception as e:
+            logger.error(f"Error getting user assets: {str(e)}")
+            # Return empty list on error to prevent frontend crashes
+            return []
+            
     async def create_new_version(
         self,
         asset_id: str,

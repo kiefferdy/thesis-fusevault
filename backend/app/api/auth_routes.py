@@ -86,5 +86,15 @@ async def logout(
     Returns:
         LogoutResponse containing logout result
     """
-    result = await auth_handler.logout(request, response)
-    return LogoutResponse(**result)
+    try:
+        # Attempt to logout with session validation
+        result = await auth_handler.logout(request, response)
+        return LogoutResponse(**result)
+    except HTTPException as e:
+        # If session is already invalid, just clear the cookie and return success
+        if e.status_code == 401:
+            logger.info("No valid session found during logout. Clearing cookie anyway.")
+            response.delete_cookie(key="session_id")
+            return LogoutResponse(status="success", message="Logged out successfully")
+        else:
+            raise

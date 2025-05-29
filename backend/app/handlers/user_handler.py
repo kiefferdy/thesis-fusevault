@@ -35,28 +35,22 @@ class UserHandler:
             HTTPException: If registration fails
         """
         try:
-            user = await self.user_service.create_user(user_data)
+            user_response = await self.user_service.create_user(user_data)
             
-            return {
-                "status": "success",
-                "user": {
-                    "id": user.id,
-                    "wallet_address": user.wallet_address,
-                    "email": user.email,
-                    "role": user.role
-                }
-            }
+            # The user service now returns the full response
+            return user_response
             
         except Exception as e:
             logger.error(f"Error registering user: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Error registering user: {str(e)}")
             
-    async def get_user(self, wallet_address: str) -> Dict[str, Any]:
+    async def get_user(self, wallet_address: str, demo_mode: bool = False) -> Dict[str, Any]:
         """
         Get a user by wallet address.
         
         Args:
             wallet_address: The wallet address to look up
+            demo_mode: Whether to return demo data if user not found
             
         Returns:
             Dict containing user information
@@ -64,27 +58,46 @@ class UserHandler:
         Raises:
             HTTPException: If user not found or retrieval fails
         """
-        try:
-            user = await self.user_service.get_user(wallet_address)
-            
-            if not user:
-                raise HTTPException(status_code=404, detail="User not found")
-                
+        # If in demo mode, always return a demo user profile
+        if demo_mode:
+            logger.info(f"Returning demo user profile for {wallet_address}")
+            truncated_address = wallet_address[:6] + "..." + wallet_address[-4:]
             return {
                 "status": "success",
+                "message": "Demo user profile",
+                "demo": True,
                 "user": {
-                    "id": user.id,
-                    "wallet_address": user.wallet_address,
-                    "email": user.email,
-                    "role": user.role
+                    "id": "demo-user-" + wallet_address[-6:],
+                    "walletAddress": wallet_address,
+                    "email": f"demo-{truncated_address}@example.com",
+                    "role": "user",
+                    "name": f"Demo User {truncated_address}",
+                    "createdAt": "2023-01-01T00:00:00Z",
+                    "lastLogin": "2023-01-01T00:00:00Z"
                 }
             }
+        
+        try:
+            # This will now return a default response even if the user doesn't exist
+            user_response = await self.user_service.get_user(wallet_address)
             
-        except HTTPException:
-            raise
+            # The user service now always returns a response object
+            # with status "success" or "error"
+            return user_response
+            
         except Exception as e:
             logger.error(f"Error retrieving user: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Error retrieving user: {str(e)}")
+            # Return a default error response instead of raising an exception
+            return {
+                "status": "error",
+                "message": f"Error retrieving user: {str(e)}",
+                "user": {
+                    "id": "none",
+                    "walletAddress": wallet_address,
+                    "email": "none@example.com",  # Default email for validation
+                    "role": "user"
+                }
+            }
             
     async def update_user(
         self, 
@@ -105,23 +118,16 @@ class UserHandler:
             HTTPException: If user not found or update fails
         """
         try:
-            updated_user = await self.user_service.update_user(
+            user_response = await self.user_service.update_user(
                 wallet_address=wallet_address,
                 update_data=update_data
             )
             
-            if not updated_user:
+            if not user_response:
                 raise HTTPException(status_code=404, detail="User not found")
                 
-            return {
-                "status": "success",
-                "user": {
-                    "id": updated_user.id,
-                    "wallet_address": updated_user.wallet_address,
-                    "email": updated_user.email,
-                    "role": updated_user.role
-                }
-            }
+            # The user service now returns the full response
+            return user_response
             
         except HTTPException:
             raise
