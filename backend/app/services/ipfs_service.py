@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class IPFSService:
     def __init__(self):
-        self.storage_service_url = "http://localhost:8080"  # Default service URL
+        self.storage_service_url = settings.web3_storage_service_url
         logger.info(f"Using Web3 Storage service at: {self.storage_service_url}")
 
     async def store_metadata(self, metadata: Dict[str, Any]) -> str:

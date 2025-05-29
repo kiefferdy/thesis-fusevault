@@ -21,6 +21,7 @@ import UploadPage from './pages/UploadPage';
 import AssetDetailPage from './pages/AssetDetailPage';
 import HistoryPage from './pages/HistoryPage';
 import ProfilePage from './pages/ProfilePage';
+import ApiKeysPage from './pages/ApiKeysPage';
 
 // Create a new QueryClient instance
 const queryClient = new QueryClient({
@@ -128,6 +129,15 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <ProfilePage />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                <Route 
+                  path="/api-keys" 
+                  element={
+                    <ProtectedRoute>
+                      <ApiKeysPage />
                     </ProtectedRoute>
                   } 
                 />

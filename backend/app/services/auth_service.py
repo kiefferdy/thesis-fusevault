@@ -34,14 +34,8 @@ class AuthService:
         self.user_repository = user_repository
         
         # Initialize Web3
-        infura_url = settings.infura_url or "https://mainnet.infura.io/v3/your-api-key"
-        
-        # Allow for local development without Infura
-        try:
-            self.web3 = Web3(Web3.HTTPProvider(infura_url))
-        except Exception as e:
-            logger.warning(f"Could not connect to Infura: {str(e)}")
-            self.web3 = Web3()
+        # The auth service works without a provider for signature verification
+        self.web3 = Web3()
         
     async def get_nonce(self, wallet_address: str) -> NonceResponse:
         """

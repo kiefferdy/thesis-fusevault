@@ -18,6 +18,23 @@ const apiClient = axios.create({
   retryDelay: 2000
 });
 
+// Add request interceptor to include API key if available
+apiClient.interceptors.request.use(
+  (config) => {
+    // Check if there's an API key in sessionStorage or localStorage
+    const apiKey = sessionStorage.getItem('fusevault_api_key') || localStorage.getItem('fusevault_api_key');
+    
+    if (apiKey) {
+      config.headers['X-API-Key'] = apiKey;
+    }
+    
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 // Add response interceptor for error handling
 apiClient.interceptors.response.use(
   (response) => response, 

@@ -22,7 +22,8 @@ import {
   History, 
   Person, 
   Home,
-  CloudOff
+  CloudOff,
+  VpnKey
 } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
 import WalletButton from './WalletButton';
@@ -41,6 +42,7 @@ function NavBar() {
     { text: 'Upload', icon: <CloudUpload />, path: '/upload', requiresAuth: true },
     { text: 'History', icon: <History />, path: '/history', requiresAuth: true },
     { text: 'Profile', icon: <Person />, path: '/profile', requiresAuth: true },
+    { text: 'API Keys', icon: <VpnKey />, path: '/api-keys', requiresAuth: true },
   ];
 
   const filteredItems = navigationItems.filter(item => 

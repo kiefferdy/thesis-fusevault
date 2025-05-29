@@ -16,7 +16,8 @@ pip-tools
 python-dotenv
 pydantic-settings
 
-# Redis for rate limiting (optional)
+# API keys dependencies
+motor
 redis
 
 # API testing

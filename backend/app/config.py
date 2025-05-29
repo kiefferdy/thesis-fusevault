@@ -14,14 +14,12 @@ class Settings(BaseSettings):
     wallet_address: str = Field(alias="WALLET_ADDRESS")
     private_key: str = Field(alias="PRIVATE_KEY")
     alchemy_sepolia_url: str = Field(alias="ALCHEMY_SEPOLIA_URL")
-    infura_url: Optional[str] = Field(None, alias="INFURA_URL")
     contract_address: Optional[str] = Field(None, alias="CONTRACT_ADDRESS")
     
     # Web3 Storage settings
     web3_storage_did_key: str = Field(alias="WEB3_STORAGE_DID_KEY")
     web3_storage_email: str = Field(alias="WEB3_STORAGE_EMAIL")
-    web3_storage_space: str = Field(alias="WEB3_STORAGE_SPACE")
-    web3_storage_api_token: Optional[str] = Field(None, alias="WEB3_STORAGE_API_TOKEN")
+    web3_storage_service_url: str = Field(default="http://localhost:8080", alias="WEB3_STORAGE_SERVICE_URL")
     
     # JWT settings
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
@@ -30,7 +28,7 @@ class Settings(BaseSettings):
     
     # Application settings
     debug: bool = Field(default=False, alias="DEBUG")
-    cors_origins: List[str] = Field(default=["http://localhost:3001"], alias="CORS_ORIGINS")
+    cors_origins: str = Field(default="http://localhost:3001", alias="CORS_ORIGINS")
     
     # API Key settings (new)
     api_key_auth_enabled: bool = Field(default=False, alias="API_KEY_AUTH_ENABLED")
@@ -52,15 +50,17 @@ class Settings(BaseSettings):
             raise ValueError("API_KEY_SECRET_KEY must be at least 32 characters long")
         return v
     
-    @validator("cors_origins", pre=True)
-    def parse_cors_origins(cls, v):
+    @property
+    def cors_origins_list(self) -> List[str]:
         """Parse CORS origins from comma-separated string"""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
+        if isinstance(self.cors_origins, str):
+            if "," in self.cors_origins:
+                return [origin.strip() for origin in self.cors_origins.split(",")]
+            return [self.cors_origins.strip()]
+        return self.cors_origins
     
     class Config:
-        env_file = ".env"
+        env_file = "../.env"
         case_sensitive = False
         
         
