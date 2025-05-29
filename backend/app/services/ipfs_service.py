@@ -1,20 +1,16 @@
 import httpx
 import logging
-import os
 from typing import Dict, Any, List
 from fastapi import UploadFile, HTTPException
-from dotenv import load_dotenv
 from app.utilities.format import format_json, get_ipfs_metadata
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 class IPFSService:
     def __init__(self):
-        load_dotenv()
-        self.storage_service_url = os.getenv("WEB3_STORAGE_SERVICE_URL")
-        if not self.storage_service_url:
-            self.storage_service_url = "http://localhost:8080"  # Default fallback
-            logger.warning("WEB3_STORAGE_SERVICE_URL not set, using default: http://localhost:8080")
+        self.storage_service_url = "http://localhost:8080"  # Default service URL
+        logger.info(f"Using Web3 Storage service at: {self.storage_service_url}")
 
     async def store_metadata(self, metadata: Dict[str, Any]) -> str:
         """

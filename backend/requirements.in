@@ -14,6 +14,10 @@ pymongo
 # Dependency management
 pip-tools
 python-dotenv
+pydantic-settings
+
+# Redis for rate limiting (optional)
+redis
 
 # API testing
 pytest

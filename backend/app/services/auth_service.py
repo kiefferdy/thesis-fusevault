@@ -5,11 +5,10 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from eth_account.messages import encode_defunct
 from web3 import Web3
-import os
-from dotenv import load_dotenv
 from app.repositories.auth_repo import AuthRepository
 from app.repositories.user_repo import UserRepository
 from app.schemas.auth_schema import NonceResponse
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +34,7 @@ class AuthService:
         self.user_repository = user_repository
         
         # Initialize Web3
-        load_dotenv()
-        infura_url = os.getenv("INFURA_URL", "https://mainnet.infura.io/v3/your-api-key")
+        infura_url = settings.infura_url or "https://mainnet.infura.io/v3/your-api-key"
         
         # Allow for local development without Infura
         try:

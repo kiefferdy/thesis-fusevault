@@ -11,6 +11,7 @@ from app.api.users_routes import router as user_router
 from app.api.delete_routes import router as delete_router
 from app.api.transfer_routes import router as transfer_router
 from app.api.assets_routes import router as assets_router
+from app.api.api_keys_routes import router as api_keys_router
 from app.utilities.auth_middleware import AuthMiddleware
 
 # Configure logging
@@ -22,8 +23,23 @@ logging.basicConfig(
 # Define lifespan context manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: No specific operations yet, but could be added here
+    # Startup: Initialize indexes and other resources
+    from app.database import get_db_client
+    from app.repositories.api_key_repo import APIKeyRepository
+    from app.config import settings
+    
+    try:
+        # Initialize API key indexes if enabled
+        if settings.api_key_auth_enabled:
+            db_client = get_db_client()
+            api_key_repo = APIKeyRepository(db_client.get_collection("api_keys"))
+            await api_key_repo.create_indexes()
+            logging.info("API key indexes created successfully")
+    except Exception as e:
+        logging.error(f"Error creating API key indexes: {e}")
+    
     yield
+    
     # Shutdown: Clean up resources
     from app.database import db_client
     if db_client:
@@ -69,7 +85,8 @@ api_routers = [
     user_router,
     delete_router,
     transfer_router,
-    assets_router
+    assets_router,
+    api_keys_router
 ]
 
 # Add all routers to the app

@@ -4,6 +4,7 @@ from fastapi import Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.services.auth_service import AuthService
+from app.services.auth_manager import AuthManager
 from app.repositories.auth_repo import AuthRepository
 from app.repositories.user_repo import UserRepository
 from app.database import get_db_client
@@ -24,6 +25,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             app: The FastAPI app
         """
         super().__init__(app)
+        # Initialize authentication manager
+        self.auth_manager = AuthManager()
+        
         # Public routes that don't require authentication
         self.public_paths = [
             "/docs",
@@ -33,6 +37,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/auth/validate",
             "/auth/logout",
             "/users/register",
+            "/api-keys/create",  # Requires wallet auth, handled in route
+            "/api-keys/list",    # Requires wallet auth, handled in route
         ]
         # Routes that start with these prefixes are public
         self.public_prefixes = [
@@ -98,39 +104,45 @@ class AuthMiddleware(BaseHTTPMiddleware):
                             request.state.demo_wallet = wallet_addr
                             logger.debug(f"Demo wallet address: {wallet_addr}")
                 else:
-                    # If we have a session ID, try to validate it for public paths too
+                    # If we have any auth credentials, try to validate them for public paths too
                     # This way we can use the real user data for GET requests if authenticated
-                    session_data = await self._validate_session(session_id)
-                    if session_data:
-                        logger.debug(f"Valid session found for public path: {path}")
-                        request.state.user = session_data
-                        request.state.wallet_address = session_data.get("walletAddress")
+                    auth_context = await self.auth_manager.authenticate(request)
+                    if auth_context:
+                        logger.debug(f"Valid authentication found for public path: {path}")
+                        request.state.auth_context = auth_context
+                        request.state.wallet_address = auth_context.get("wallet_address")
+                        request.state.auth_method = auth_context.get("auth_method")
+                        request.state.permissions = auth_context.get("permissions", [])
                         request.state.demo_mode = False
+                        
+                        # For backward compatibility
+                        if auth_context.get("session_data"):
+                            request.state.user = auth_context.get("session_data")
             
             return await call_next(request)
             
-        # Check for session cookie
-        if not session_id:
-            logger.warning(f"Authentication required for {path} but no session cookie found")
+        # Try to authenticate using the AuthManager (supports multiple methods)
+        auth_context = await self.auth_manager.authenticate(request)
+        
+        if not auth_context:
+            logger.warning(f"Authentication required for {path} but no valid credentials found")
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Authentication required"}
             )
             
-        # Validate session
-        session_data = await self._validate_session(session_id)
-        if not session_data:
-            logger.warning(f"Invalid or expired session for {path}")
-            return JSONResponse(
-                status_code=401,
-                content={"detail": "Invalid or expired session"}
-            )
-            
-        # Add session data to request state for use in route handlers
-        request.state.user = session_data
-        request.state.wallet_address = session_data.get("walletAddress")
+        # Add auth context to request state for use in route handlers
+        request.state.auth_context = auth_context
+        request.state.wallet_address = auth_context.get("wallet_address")
+        request.state.auth_method = auth_context.get("auth_method")
+        request.state.permissions = auth_context.get("permissions", [])
         request.state.demo_mode = False  # Not in demo mode
-        logger.info(f"User {session_data.get('walletAddress')} authenticated for {path}")
+        
+        # For backward compatibility, also set user if session data is available
+        if auth_context.get("session_data"):
+            request.state.user = auth_context.get("session_data")
+        
+        logger.info(f"User {auth_context.get('wallet_address')} authenticated for {path} via {auth_context.get('auth_method')}")
         
         # Continue processing the request
         return await call_next(request)
@@ -212,6 +224,13 @@ async def get_current_user(request: Request) -> Dict[str, Any]:
         HTTPException: If user is not authenticated
     """
     if not hasattr(request.state, "user") or not request.state.user:
+        # For API key auth, we might not have full user data
+        if hasattr(request.state, "auth_context") and request.state.auth_context:
+            # Return a minimal user object for API key auth
+            return {
+                "walletAddress": request.state.auth_context.get("wallet_address"),
+                "auth_method": request.state.auth_context.get("auth_method")
+            }
         raise HTTPException(
             status_code=401,
             detail="Authentication required"
@@ -241,3 +260,34 @@ async def get_wallet_address(request: Request) -> str:
         )
         
     return request.state.wallet_address
+
+# New dependency to check permissions
+async def check_permission(permission: str):
+    """
+    Create a dependency that checks for a specific permission.
+    
+    Args:
+        permission: The required permission (read, write, delete, admin)
+        
+    Returns:
+        A dependency function that validates the permission
+    """
+    async def permission_checker(request: Request) -> Dict[str, Any]:
+        if not hasattr(request.state, "auth_context") or not request.state.auth_context:
+            raise HTTPException(
+                status_code=401,
+                detail="Authentication required"
+            )
+            
+        permissions = request.state.auth_context.get("permissions", [])
+        
+        # Admin permission grants all access
+        if "admin" in permissions or permission in permissions:
+            return request.state.auth_context
+            
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission denied. Required permission: {permission}"
+        )
+    
+    return permission_checker

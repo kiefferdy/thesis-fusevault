@@ -1,11 +1,11 @@
-import os
-from dotenv import load_dotenv
 import logging
 from typing import Dict, Any, List, Optional
 import json
 from datetime import datetime, timezone
 from bson import ObjectId
 import traceback
+
+from app.config import settings
 
 # Try to import pymongo, but fall back to a mock implementation if not available
 try:
@@ -16,9 +16,6 @@ except ImportError:
     logging.warning("pymongo not available, using mock database for development")
 
 logger = logging.getLogger(__name__)
-
-# Load environment variables
-load_dotenv()
 
 # Helper to convert ObjectId to string in JSON serialization
 class JSONEncoder(json.JSONEncoder):
@@ -217,8 +214,8 @@ class DatabaseClient:
         self.using_mock = False
         
         if MONGODB_AVAILABLE:
-            mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-            db_name = os.getenv("MONGO_DB_NAME", "fusevault")
+            mongo_uri = settings.mongo_uri
+            db_name = settings.mongo_db_name
             
             try:
                 self.client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
@@ -263,6 +260,24 @@ class DatabaseClient:
             "createdAt": datetime.now(timezone.utc),
             "lastLogin": datetime.now(timezone.utc)
         })
+    
+    def get_collection(self, collection_name: str):
+        """
+        Get a collection by name.
+        
+        Args:
+            collection_name: Name of the collection
+            
+        Returns:
+            Collection object
+        """
+        if self.using_mock:
+            # For mock, create a new collection if it doesn't exist
+            if not hasattr(self, f"{collection_name}_collection"):
+                setattr(self, f"{collection_name}_collection", MockCollection(collection_name))
+            return getattr(self, f"{collection_name}_collection")
+        else:
+            return self.db[collection_name]
     
     def close(self):
         """Close the MongoDB connection."""
