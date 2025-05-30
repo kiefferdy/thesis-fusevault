@@ -7,13 +7,13 @@ import traceback
 
 from app.config import settings
 
-# Try to import pymongo, but fall back to a mock implementation if not available
+# Try to import motor, but fall back to a mock implementation if not available
 try:
-    from pymongo import MongoClient
+    from motor.motor_asyncio import AsyncIOMotorClient
     MONGODB_AVAILABLE = True
 except ImportError:
     MONGODB_AVAILABLE = False
-    logging.warning("pymongo not available, using mock database for development")
+    logging.warning("motor not available, using mock database for development")
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class MockCollection:
         self.id_counter = 1000  # Start with a high number to avoid conflicts
         logger.info(f"Created mock collection: {name}")
     
-    def find_one(self, query: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def find_one(self, query: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Simple query matching implementation"""
         for item in self.data:
             matches = True
@@ -58,35 +58,45 @@ class MockCollection:
         
         return None
     
-    def find(self, query: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        """Simple find implementation"""
+    def find(self, query: Dict[str, Any] = None):
+        """Simple find implementation - returns cursor-like object"""
         if query is None:
             query = {}
         
-        results = []
-        for item in self.data:
-            matches = True
-            for key, value in query.items():
-                if key not in item:
-                    matches = False
-                    break
+        class MockCursor:
+            def __init__(self, data, query):
+                self.data = data
+                self.query = query
+                self._results = None
                 
-                # Handle special $gt operator
-                if isinstance(value, dict) and "$gt" in value:
-                    if not (item[key] > value["$gt"]):
-                        matches = False
-                        break
-                # Handle normal equality
-                elif item[key] != value:
-                    matches = False
-                    break
-            
-            if matches:
-                results.append(json.loads(json.dumps(item, cls=JSONEncoder)))
+            async def to_list(self, length=None):
+                if self._results is None:
+                    self._results = []
+                    for item in self.data:
+                        matches = True
+                        for key, value in self.query.items():
+                            if key not in item:
+                                matches = False
+                                break
+                            
+                            # Handle special $gt operator
+                            if isinstance(value, dict) and "$gt" in value:
+                                if not (item[key] > value["$gt"]):
+                                    matches = False
+                                    break
+                            # Handle normal equality
+                            elif item[key] != value:
+                                matches = False
+                                break
+                        
+                        if matches:
+                            self._results.append(json.loads(json.dumps(item, cls=JSONEncoder)))
+                
+                return self._results[:length] if length else self._results
         
-        return results
+        return MockCursor(self.data, query)
     
-    def insert_one(self, document: Dict[str, Any]) -> Any:
+    async def insert_one(self, document: Dict[str, Any]) -> Any:
         """Insert a document"""
         document = json.loads(json.dumps(document, cls=JSONEncoder))
         
@@ -102,9 +112,9 @@ class MockCollection:
         
         return Result()
     
-    def update_one(self, query: Dict[str, Any], update: Dict[str, Any], upsert: bool = False) -> Any:
+    async def update_one(self, query: Dict[str, Any], update: Dict[str, Any], upsert: bool = False) -> Any:
         """Update a document"""
-        item = self.find_one(query)
+        item = await self.find_one(query)
         
         if item is None:
             if upsert:
@@ -117,7 +127,7 @@ class MockCollection:
                     for key, value in update["$set"].items():
                         document[key] = value
                 
-                self.insert_one(document)
+                await self.insert_one(document)
                 
                 class Result:
                     @property
@@ -160,9 +170,9 @@ class MockCollection:
         
         return Result()
     
-    def delete_one(self, query: Dict[str, Any]) -> Any:
+    async def delete_one(self, query: Dict[str, Any]) -> Any:
         """Delete a document"""
-        item = self.find_one(query)
+        item = await self.find_one(query)
         
         if item is None:
             class Result:
@@ -185,9 +195,30 @@ class MockCollection:
         
         return Result()
     
-    def update_many(self, query: Dict[str, Any], update: Dict[str, Any]) -> Any:
+    async def delete_many(self, query: Dict[str, Any]) -> Any:
+        """Delete multiple documents"""
+        cursor = self.find(query)
+        items = await cursor.to_list(length=None)
+        count = 0
+        
+        for item in items:
+            for i, doc in enumerate(self.data):
+                if doc.get("_id") == item.get("_id"):
+                    del self.data[i]
+                    count += 1
+                    break
+        
+        class Result:
+            @property
+            def deleted_count(self):
+                return count
+        
+        return Result()
+    
+    async def update_many(self, query: Dict[str, Any], update: Dict[str, Any]) -> Any:
         """Update multiple documents"""
-        items = self.find(query)
+        cursor = self.find(query)
+        items = await cursor.to_list(length=None)
         count = 0
         
         for item in items:
@@ -205,6 +236,16 @@ class MockCollection:
                 return count
         
         return Result()
+    
+    async def count_documents(self, query: Dict[str, Any]) -> int:
+        """Count documents matching query"""
+        cursor = self.find(query)
+        items = await cursor.to_list(length=None)
+        return len(items)
+    
+    async def create_indexes(self, indexes) -> List[str]:
+        """Mock index creation"""
+        return [f"mock_index_{i}" for i in range(len(indexes))]
 
 class DatabaseClient:
     """Database client for MongoDB connection and collections."""
@@ -218,9 +259,7 @@ class DatabaseClient:
             db_name = settings.mongo_db_name
             
             try:
-                self.client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
-                # Test connection
-                self.client.admin.command('ping')
+                self.client = AsyncIOMotorClient(mongo_uri, serverSelectionTimeoutMS=5000)
                 self.db = self.client[db_name]
                 
                 # Initialize collections
@@ -251,15 +290,6 @@ class DatabaseClient:
         self.users_collection = MockCollection("users")
         
         logger.warning("Using mock database for development")
-        
-        # Add some sample data
-        self.users_collection.insert_one({
-            "walletAddress": "0x1234567890123456789012345678901234567890",
-            "email": "demo@example.com",
-            "role": "admin",
-            "createdAt": datetime.now(timezone.utc),
-            "lastLogin": datetime.now(timezone.utc)
-        })
     
     def get_collection(self, collection_name: str):
         """
@@ -269,7 +299,7 @@ class DatabaseClient:
             collection_name: Name of the collection
             
         Returns:
-            Collection object
+            Collection object (AsyncIOMotorCollection or MockCollection)
         """
         if self.using_mock:
             # For mock, create a new collection if it doesn't exist
@@ -278,6 +308,18 @@ class DatabaseClient:
             return getattr(self, f"{collection_name}_collection")
         else:
             return self.db[collection_name]
+    
+    async def ping(self) -> bool:
+        """Test database connection"""
+        try:
+            if self.using_mock:
+                return True
+            else:
+                await self.client.admin.command('ping')
+                return True
+        except Exception as e:
+            logger.error(f"Database ping failed: {str(e)}")
+            return False
     
     def close(self):
         """Close the MongoDB connection."""

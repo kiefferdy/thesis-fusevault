@@ -30,7 +30,7 @@ class TransactionRepository:
             String ID of the inserted transaction
         """
         try:
-            result = self.transaction_collection.insert_one(transaction_data)
+            result = await self.transaction_collection.insert_one(transaction_data)
             transaction_id = str(result.inserted_id)
             
             logger.info(f"Transaction record inserted with ID: {transaction_id}")
@@ -62,7 +62,7 @@ class TransactionRepository:
                 cursor = cursor.limit(limit)
             
             # Convert cursor to list
-            transactions = list(cursor)
+            transactions = await cursor.to_list(length=None)
             
             # Log for debugging
             logger.info(f"Found {len(transactions)} transactions with query: {query}")
@@ -90,7 +90,7 @@ class TransactionRepository:
             Transaction document if found, None otherwise
         """
         try:
-            transaction = self.transaction_collection.find_one(query)
+            transaction = await self.transaction_collection.find_one(query)
             
             if transaction:
                 transaction['_id'] = str(transaction['_id'])
@@ -113,7 +113,7 @@ class TransactionRepository:
             True if update was successful, False otherwise
         """
         try:
-            result = self.transaction_collection.update_one(query, update)
+            result = await self.transaction_collection.update_one(query, update)
             
             return result.modified_count > 0
             
@@ -132,7 +132,7 @@ class TransactionRepository:
             True if deletion was successful, False otherwise
         """
         try:
-            result = self.transaction_collection.delete_one(query)
+            result = await self.transaction_collection.delete_one(query)
             
             return result.deleted_count > 0
             

@@ -65,9 +65,10 @@ class APIKeyRepository:
             List of API keys
         """
         cursor = self.collection.find({"wallet_address": wallet_address})
-        api_keys = []
+        api_key_dicts = await cursor.to_list(length=None)
         
-        async for api_key_dict in cursor:
+        api_keys = []
+        for api_key_dict in api_key_dicts:
             api_keys.append(APIKeyInDB(**api_key_dict))
         
         return api_keys

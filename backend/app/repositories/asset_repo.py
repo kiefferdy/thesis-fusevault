@@ -30,7 +30,7 @@ class AssetRepository:
             String ID of the inserted document
         """
         try:
-            result = self.assets_collection.insert_one(document)
+            result = await self.assets_collection.insert_one(document)
             doc_id = str(result.inserted_id)
             
             logger.info(f"Asset document inserted with ID: {doc_id}")
@@ -52,7 +52,7 @@ class AssetRepository:
         """
         try:
             # Find the document
-            asset = self.assets_collection.find_one(query)
+            asset = await self.assets_collection.find_one(query)
             
             # Convert ObjectId to string if asset found
             if asset:
@@ -79,7 +79,7 @@ class AssetRepository:
         try:
             # Find the documents
             cursor = self.assets_collection.find(query).sort(sort_field, sort_direction)
-            assets = list(cursor)
+            assets = await cursor.to_list(length=None)
             
             # Convert ObjectId to string for each asset
             for asset in assets:
@@ -103,7 +103,7 @@ class AssetRepository:
             True if update was successful, False otherwise
         """
         try:
-            result = self.assets_collection.update_one(query, update)
+            result = await self.assets_collection.update_one(query, update)
             return result.modified_count > 0
             
         except Exception as e:
@@ -122,7 +122,7 @@ class AssetRepository:
             Number of documents updated
         """
         try:
-            result = self.assets_collection.update_many(query, update)
+            result = await self.assets_collection.update_many(query, update)
             return result.modified_count
             
         except Exception as e:
@@ -140,7 +140,7 @@ class AssetRepository:
             True if deletion was successful, False otherwise
         """
         try:
-            result = self.assets_collection.delete_one(query)
+            result = await self.assets_collection.delete_one(query)
             return result.deleted_count > 0
             
         except Exception as e:
@@ -158,7 +158,7 @@ class AssetRepository:
             Number of documents deleted
         """
         try:
-            result = self.assets_collection.delete_many(query)
+            result = await self.assets_collection.delete_many(query)
             return result.deleted_count
             
         except Exception as e:
