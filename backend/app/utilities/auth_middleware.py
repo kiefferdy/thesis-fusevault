@@ -38,6 +38,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/auth/validate",
             "/auth/logout",
             "/users/register",
+            "/api-keys/status",  # API keys status endpoint is public
         ]
         
         # Routes that start with these prefixes are public
@@ -68,6 +69,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method
         logger.info(f"Received {method} request for path: {path}")
+
+        # Skip authentication for OPTIONS requests (CORS preflight)
+        if method == "OPTIONS":
+            logger.debug(f"Skipping authentication for OPTIONS request to {path}")
+            return await call_next(request)
 
         # Get session ID from cookies
         session_id = request.cookies.get("session_id")
