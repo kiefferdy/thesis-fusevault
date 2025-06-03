@@ -18,6 +18,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api-keys", tags=["API Keys"])
 
 
+def check_api_keys_enabled():
+    """Check if API keys feature is enabled"""
+    if not settings.api_key_auth_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="API key authentication is not enabled"
+        )
+
+
 def get_api_key_service() -> APIKeyService:
     """Get API key service instance"""
     db_client = get_db_client()
@@ -25,25 +34,33 @@ def get_api_key_service() -> APIKeyService:
     return APIKeyService(api_key_repo)
 
 
+@router.get("/status")
+async def get_api_keys_status():
+    """
+    Get the status of API keys feature.
+    This endpoint can be accessed without authentication.
+    """
+    return {
+        "enabled": settings.api_key_auth_enabled,
+        "max_keys_per_wallet": settings.api_key_max_per_wallet,
+        "default_expiration_days": settings.api_key_default_expiration_days,
+        "rate_limit_per_minute": settings.api_key_rate_limit_per_minute
+    }
+
+
 @router.post("/create", response_model=APIKeyCreateResponse)
 async def create_api_key(
     api_key_data: APIKeyCreate,
     wallet_address: str = Depends(get_wallet_address),
     request: Request = None,
-    api_key_service: APIKeyService = Depends(get_api_key_service)
+    api_key_service: APIKeyService = Depends(get_api_key_service),
+    _: None = Depends(check_api_keys_enabled)  # Check if feature is enabled
 ):
     """
     Create a new API key for the authenticated user.
     
     Note: This endpoint requires wallet authentication (not API key auth).
     """
-    # Check if API keys are enabled
-    if not settings.api_key_auth_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="API key authentication is not enabled"
-        )
-    
     # Ensure this is wallet auth, not API key auth
     if hasattr(request.state, "auth_method") and request.state.auth_method == "api_key":
         raise HTTPException(
@@ -78,7 +95,8 @@ async def create_api_key(
 async def list_api_keys(
     wallet_address: str = Depends(get_wallet_address),
     request: Request = None,
-    api_key_service: APIKeyService = Depends(get_api_key_service)
+    api_key_service: APIKeyService = Depends(get_api_key_service),
+    _: None = Depends(check_api_keys_enabled)  # Check if feature is enabled
 ):
     """
     List all API keys for the authenticated user.
@@ -109,7 +127,8 @@ async def revoke_api_key(
     key_name: str,
     wallet_address: str = Depends(get_wallet_address),
     request: Request = None,
-    api_key_service: APIKeyService = Depends(get_api_key_service)
+    api_key_service: APIKeyService = Depends(get_api_key_service),
+    _: None = Depends(check_api_keys_enabled)  # Check if feature is enabled
 ):
     """
     Revoke an API key by name.
@@ -151,7 +170,8 @@ async def update_api_key_permissions(
     permissions_update: APIKeyUpdate,
     wallet_address: str = Depends(get_wallet_address),
     request: Request = None,
-    api_key_service: APIKeyService = Depends(get_api_key_service)
+    api_key_service: APIKeyService = Depends(get_api_key_service),
+    _: None = Depends(check_api_keys_enabled)  # Check if feature is enabled
 ):
     """
     Update permissions for an API key.

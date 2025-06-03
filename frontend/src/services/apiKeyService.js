@@ -7,6 +7,20 @@ const API_KEYS_BASE_URL = '/api-keys';
  */
 const apiKeyService = {
   /**
+   * Get API keys feature status
+   * @returns {Promise<Object>} API keys status and configuration
+   */
+  getStatus: async () => {
+    try {
+      const response = await apiClient.get(`${API_KEYS_BASE_URL}/status`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting API keys status:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Create a new API key
    * @param {Object} apiKeyData - The API key creation data
    * @param {string} apiKeyData.name - User-friendly name for the API key

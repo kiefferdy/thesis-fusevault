@@ -29,7 +29,10 @@ API_KEY_AUTH_ENABLED=false
 # API_KEY_RATE_LIMIT_PER_MINUTE=100
 # API_KEY_MAX_PER_WALLET=10
 # API_KEY_DEFAULT_EXPIRATION_DAYS=90
-# API_KEY_DEFAULT_PERMISSIONS=read
+# API_KEY_DEFAULT_PERMISSIONS=["read"]
+
+# Note: API_KEY_DEFAULT_PERMISSIONS must be in JSON array format
+# Examples: ["read"], ["read","write"], ["read","write","delete"]
 
 # Redis Configuration (Optional - for API key rate limiting)
 # REDIS_URL=redis://localhost:6379

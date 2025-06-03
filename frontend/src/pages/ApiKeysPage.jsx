@@ -1,10 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import apiKeyService from '../services/apiKeyService';
+import useApiKeysStatus from '../hooks/useApiKeysStatus';
 import './ApiKeysPage.css';
+
+const ApiKeysDisabledMessage = ({ onRefresh, isRefreshing }) => (
+  <div className="api-keys-disabled">
+    <div className="disabled-message">
+      <h2>🔑 API Keys Feature Not Available</h2>
+      <p>
+        The API keys feature is currently disabled on this instance of FuseVault.
+      </p>
+      <div className="refresh-section">
+        <button 
+          className="btn btn-secondary" 
+          onClick={onRefresh}
+          disabled={isRefreshing}
+        >
+          {isRefreshing ? 'Checking...' : 'Check Again'}
+        </button>
+        <p className="refresh-note">
+          If you've just enabled API keys in the backend configuration, 
+          click "Check Again" to refresh the status.
+        </p>
+      </div>
+      <div className="info-box">
+        <h3>What are API Keys?</h3>
+        <p>
+          API keys allow you to programmatically access your FuseVault assets and perform operations 
+          without needing to connect your wallet each time. This is useful for:
+        </p>
+        <ul>
+          <li>Building applications that integrate with FuseVault</li>
+          <li>Automating asset management tasks</li>
+          <li>Creating backend services that interact with your data</li>
+          <li>Developing mobile applications</li>
+        </ul>
+      </div>
+      <div className="info-box">
+        <h3>For Administrators</h3>
+        <p>
+          To enable API keys, set <code>API_KEY_AUTH_ENABLED=true</code> in your backend configuration 
+          and ensure <code>API_KEY_SECRET_KEY</code> is properly configured.
+        </p>
+      </div>
+    </div>
+  </div>
+);
 
 const ApiKeysPage = () => {
   const { account, isAuthenticated } = useAuth();
+  const { status: apiKeysStatus, loading: statusLoading, isEnabled, refresh: refreshStatus } = useApiKeysStatus({
+    pollingInterval: 60000, // Poll every minute on API keys page
+    refetchOnFocus: true
+  });
   const [apiKeys, setApiKeys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -18,10 +67,12 @@ const ApiKeysPage = () => {
   });
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && isEnabled) {
       fetchApiKeys();
+    } else {
+      setLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isEnabled]);
 
   const fetchApiKeys = async () => {
     try {
@@ -30,8 +81,13 @@ const ApiKeysPage = () => {
       setApiKeys(keys);
       setError(null);
     } catch (err) {
-      setError('Failed to fetch API keys');
-      console.error('Error fetching API keys:', err);
+      if (err.response?.status === 400 && err.response?.data?.detail?.includes('not enabled')) {
+        // This shouldn't happen now since we check status first, but handle it anyway
+        setError('API key authentication is not enabled on this server');
+      } else {
+        setError('Failed to fetch API keys');
+        console.error('Error fetching API keys:', err);
+      }
     } finally {
       setLoading(false);
     }
@@ -72,7 +128,11 @@ const ApiKeysPage = () => {
       // Refresh the list
       await fetchApiKeys();
     } catch (err) {
-      setError('Failed to create API key');
+      if (err.response?.status === 400 && err.response?.data?.detail?.includes('not enabled')) {
+        setError('API key authentication is not enabled on this server');
+      } else {
+        setError('Failed to create API key');
+      }
       console.error('Error creating API key:', err);
     } finally {
       setLoading(false);
@@ -90,7 +150,11 @@ const ApiKeysPage = () => {
       await fetchApiKeys();
       setError(null);
     } catch (err) {
-      setError('Failed to revoke API key');
+      if (err.response?.status === 400 && err.response?.data?.detail?.includes('not enabled')) {
+        setError('API key authentication is not enabled on this server');
+      } else {
+        setError('Failed to revoke API key');
+      }
       console.error('Error revoking API key:', err);
     } finally {
       setLoading(false);
@@ -128,6 +192,32 @@ const ApiKeysPage = () => {
         <div className="container">
           <h1>API Keys</h1>
           <p>Please connect your wallet to manage API keys.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while checking status
+  if (statusLoading) {
+    return (
+      <div className="api-keys-page">
+        <div className="container">
+          <h1>API Keys</h1>
+          <p>Checking API keys availability...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show disabled message if API keys are not enabled
+  if (!isEnabled) {
+    return (
+      <div className="api-keys-page">
+        <div className="container">
+          <ApiKeysDisabledMessage 
+            onRefresh={refreshStatus}
+            isRefreshing={statusLoading}
+          />
         </div>
       </div>
     );

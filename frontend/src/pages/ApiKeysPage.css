@@ -311,6 +311,92 @@
   color: #555;
 }
 
+/* API Keys Disabled State */
+.api-keys-disabled {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+}
+
+.disabled-message {
+  max-width: 600px;
+  text-align: center;
+  padding: 2rem;
+}
+
+.disabled-message h2 {
+  color: #666;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.disabled-message > p {
+  color: #888;
+  margin-bottom: 2rem;
+  font-size: 1.1rem;
+}
+
+.refresh-section {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  background: #f0f8ff;
+  border: 1px solid #b3d9ff;
+  border-radius: 8px;
+}
+
+.refresh-section .btn {
+  margin-bottom: 1rem;
+}
+
+.refresh-note {
+  color: #666;
+  font-size: 0.9rem;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.disabled-message .info-box {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+  text-align: left;
+}
+
+.disabled-message .info-box h3 {
+  color: #495057;
+  margin-bottom: 0.75rem;
+  font-size: 1.1rem;
+}
+
+.disabled-message .info-box p {
+  color: #6c757d;
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.disabled-message .info-box ul {
+  color: #6c757d;
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.disabled-message .info-box li {
+  margin-bottom: 0.25rem;
+  line-height: 1.4;
+}
+
+.disabled-message .info-box code {
+  background: #e9ecef;
+  color: #495057;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.9rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .page-header {
