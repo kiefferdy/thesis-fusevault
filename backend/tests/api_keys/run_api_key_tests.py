@@ -63,11 +63,15 @@ def main():
     
     args = parser.parse_args()
     
-    # Change to backend directory
-    backend_dir = Path(__file__).parent
+    # Change to backend directory (we're now in tests/api_keys, need to go up 2 levels)
+    backend_dir = Path(__file__).parent.parent.parent
     if backend_dir.name != 'backend':
         print("❌ This script must be run from the backend directory")
         sys.exit(1)
+    
+    # Change to backend directory for pytest to work correctly
+    import os
+    os.chdir(backend_dir)
     
     # Determine what tests to run
     test_files = []
@@ -75,29 +79,29 @@ def main():
     if args.all or not any([args.utils, args.repo, args.service, args.auth, args.routes, args.integration]):
         # Default to all tests if no specific tests selected
         test_files = [
-            'tests/test_api_key_utils.py',
-            'tests/test_api_key_repository.py', 
-            'tests/test_api_key_service.py',
-            'tests/test_api_key_auth_provider.py',
-            'tests/test_api_key_routes.py',
-            'tests/test_api_key_integration.py'
+            'tests/api_keys/test_api_key_utils.py',
+            'tests/api_keys/test_api_key_repository.py', 
+            'tests/api_keys/test_api_key_service.py',
+            'tests/api_keys/test_api_key_auth_provider.py',
+            'tests/api_keys/test_api_key_routes.py',
+            'tests/api_keys/test_api_key_integration.py'
         ]
     else:
         if args.utils:
-            test_files.append('tests/test_api_key_utils.py')
+            test_files.append('tests/api_keys/test_api_key_utils.py')
         if args.repo:
-            test_files.append('tests/test_api_key_repository.py')
+            test_files.append('tests/api_keys/test_api_key_repository.py')
         if args.service:
-            test_files.append('tests/test_api_key_service.py')
+            test_files.append('tests/api_keys/test_api_key_service.py')
         if args.auth:
-            test_files.append('tests/test_api_key_auth_provider.py')
+            test_files.append('tests/api_keys/test_api_key_auth_provider.py')
         if args.routes:
-            test_files.append('tests/test_api_key_routes.py')
+            test_files.append('tests/api_keys/test_api_key_routes.py')
         if args.integration:
-            test_files.append('tests/test_api_key_integration.py')
+            test_files.append('tests/api_keys/test_api_key_integration.py')
     
     # Build pytest command
-    cmd = ['python', '-m', 'pytest']
+    cmd = ['python3', '-m', 'pytest']
     
     # Add test files
     cmd.extend(test_files)

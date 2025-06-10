@@ -12,7 +12,7 @@ FuseVault is a secure digital asset management platform combining blockchain, IP
 - **Run all tests**: `cd backend && python -m pytest`
 - **Run specific test**: `python -m pytest tests/test_services.py -v`
 - **Run with coverage**: `python -m pytest --cov=app tests/`
-- **Diagnose connectivity**: `python diagnose.py`
+- **Diagnose connectivity**: `python scripts/diagnose.py`
 
 ### Frontend (React)
 - **Run dev server**: `cd frontend && npm run dev` (runs on port 3001)

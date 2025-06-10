@@ -44,8 +44,9 @@ This directory contains comprehensive tests for the API Keys feature implementat
 
 ### Test Infrastructure
 
-- **`conftest.py`** - Updated with API key fixtures and mocks
-- **`README_API_KEY_TESTS.md`** - This documentation file
+- **`run_api_key_tests.py`** - Dedicated test runner script for API key tests
+- **`README.md`** - This documentation file
+- **`../conftest.py`** - Shared fixtures and mocks (in parent tests directory)
 
 ## Running the Tests
 
@@ -59,67 +60,87 @@ cd backend
 pip install -r requirements.txt
 ```
 
-### Running Individual Test Files
+### Using the Dedicated Test Runner (Recommended)
+
+```bash
+# Run all API key tests (default)
+python3 tests/api_keys/run_api_key_tests.py
+
+# Run specific test categories
+python3 tests/api_keys/run_api_key_tests.py --utils      # Utility tests only
+python3 tests/api_keys/run_api_key_tests.py --repo       # Repository tests only  
+python3 tests/api_keys/run_api_key_tests.py --service    # Service tests only
+python3 tests/api_keys/run_api_key_tests.py --auth       # Auth provider tests only
+python3 tests/api_keys/run_api_key_tests.py --routes     # Route tests only
+python3 tests/api_keys/run_api_key_tests.py --integration # Integration tests only
+
+# Output options
+python3 tests/api_keys/run_api_key_tests.py --quick      # Minimal output
+python3 tests/api_keys/run_api_key_tests.py --verbose    # Detailed output
+python3 tests/api_keys/run_api_key_tests.py --coverage   # With coverage report
+```
+
+### Running Individual Test Files (Alternative)
 
 ```bash
 # Test utility functions
-python -m pytest tests/test_api_key_utils.py -v
+python -m pytest tests/api_keys/test_api_key_utils.py -v
 
 # Test repository layer
-python -m pytest tests/test_api_key_repository.py -v
+python -m pytest tests/api_keys/test_api_key_repository.py -v
 
 # Test service layer
-python -m pytest tests/test_api_key_service.py -v
+python -m pytest tests/api_keys/test_api_key_service.py -v
 
 # Test authentication provider
-python -m pytest tests/test_api_key_auth_provider.py -v
+python -m pytest tests/api_keys/test_api_key_auth_provider.py -v
 
 # Test HTTP routes
-python -m pytest tests/test_api_key_routes.py -v
+python -m pytest tests/api_keys/test_api_key_routes.py -v
 
 # Test integration scenarios
-python -m pytest tests/test_api_key_integration.py -v
+python -m pytest tests/api_keys/test_api_key_integration.py -v
 ```
 
-### Running All API Key Tests
+### Running All API Key Tests (Alternative)
 
 ```bash
 # Run all API key related tests
-python -m pytest tests/test_api_key_* -v
+python -m pytest tests/api_keys/ -v
 
 # Run with coverage report
-python -m pytest tests/test_api_key_* --cov=app.services.api_key_service --cov=app.repositories.api_key_repo --cov=app.utilities.api_key_utils --cov=app.services.api_key_auth_provider --cov=app.api.api_keys_routes --cov-report=html
+python -m pytest tests/api_keys/ --cov=app.services.api_key_service --cov=app.repositories.api_key_repo --cov=app.utilities.api_key_utils --cov=app.services.api_key_auth_provider --cov=app.api.api_keys_routes --cov-report=html
 
 # Run with detailed output
-python -m pytest tests/test_api_key_* -v -s
+python -m pytest tests/api_keys/ -v -s
 ```
 
 ### Running Tests by Category
 
 ```bash
 # Security and cryptography tests
-python -m pytest tests/test_api_key_utils.py::TestApiKeyUtilities::test_signature_constant_time_comparison -v
-python -m pytest tests/test_api_key_utils.py::TestApiKeyUtilities::test_hmac_signature_length -v
+python -m pytest tests/api_keys/test_api_key_utils.py::TestApiKeyUtilities::test_signature_constant_time_comparison -v
+python -m pytest tests/api_keys/test_api_key_utils.py::TestApiKeyUtilities::test_hmac_signature_length -v
 
 # Database operation tests
-python -m pytest tests/test_api_key_repository.py::TestAPIKeyRepository::test_validate_and_get_api_key_expired -v
-python -m pytest tests/test_api_key_repository.py::TestAPIKeyRepository::test_cleanup_expired_keys -v
+python -m pytest tests/api_keys/test_api_key_repository.py::TestAPIKeyRepository::test_validate_and_get_api_key_expired -v
+python -m pytest tests/api_keys/test_api_key_repository.py::TestAPIKeyRepository::test_cleanup_expired_keys -v
 
 # Business logic tests
-python -m pytest tests/test_api_key_service.py::TestAPIKeyService::test_create_api_key_max_limit_reached -v
-python -m pytest tests/test_api_key_service.py::TestAPIKeyService::test_update_permissions_invalid_permissions -v
+python -m pytest tests/api_keys/test_api_key_service.py::TestAPIKeyService::test_create_api_key_max_limit_reached -v
+python -m pytest tests/api_keys/test_api_key_service.py::TestAPIKeyService::test_update_permissions_invalid_permissions -v
 
 # Authentication tests
-python -m pytest tests/test_api_key_auth_provider.py::TestAPIKeyAuthProvider::test_authenticate_rate_limited -v
-python -m pytest tests/test_api_key_auth_provider.py::TestAPIKeyAuthProvider::test_check_permission_admin -v
+python -m pytest tests/api_keys/test_api_key_auth_provider.py::TestAPIKeyAuthProvider::test_authenticate_rate_limited -v
+python -m pytest tests/api_keys/test_api_key_auth_provider.py::TestAPIKeyAuthProvider::test_check_permission_admin -v
 
 # HTTP endpoint tests
-python -m pytest tests/test_api_key_routes.py::TestAPIKeyRoutes::test_create_api_key_success -v
-python -m pytest tests/test_api_key_routes.py::TestAPIKeyRoutes::test_authentication_required -v
+python -m pytest tests/api_keys/test_api_key_routes.py::TestAPIKeyRoutes::test_create_api_key_success -v
+python -m pytest tests/api_keys/test_api_key_routes.py::TestAPIKeyRoutes::test_authentication_required -v
 
 # Integration tests
-python -m pytest tests/test_api_key_integration.py::TestAPIKeyIntegration::test_complete_api_key_lifecycle -v
-python -m pytest tests/test_api_key_integration.py::TestAPIKeyIntegration::test_api_key_permission_enforcement -v
+python -m pytest tests/api_keys/test_api_key_integration.py::TestAPIKeyIntegration::test_complete_api_key_lifecycle -v
+python -m pytest tests/api_keys/test_api_key_integration.py::TestAPIKeyIntegration::test_api_key_permission_enforcement -v
 ```
 
 ## Test Coverage Areas
@@ -229,13 +250,13 @@ The tests use comprehensive mocking to:
 
 ```bash
 # Run a single test with maximum verbosity
-python -m pytest tests/test_api_key_utils.py::TestApiKeyUtilities::test_generate_api_key_format -v -s --tb=long
+python -m pytest tests/api_keys/test_api_key_utils.py::TestApiKeyUtilities::test_generate_api_key_format -v -s --tb=long
 
 # Run tests with pdb debugger on failure
-python -m pytest tests/test_api_key_service.py --pdb
+python -m pytest tests/api_keys/test_api_key_service.py --pdb
 
 # Generate detailed test report
-python -m pytest tests/test_api_key_* --html=reports/api_key_tests.html --self-contained-html
+python -m pytest tests/api_keys/ --html=reports/api_key_tests.html --self-contained-html
 ```
 
 ## Integration with CI/CD
@@ -246,7 +267,7 @@ python -m pytest tests/test_api_key_* --html=reports/api_key_tests.html --self-c
 - name: Run API Key Tests
   run: |
     cd backend
-    python -m pytest tests/test_api_key_* --cov=app --cov-report=xml
+    python3 tests/api_keys/run_api_key_tests.py --coverage
     
 - name: Upload Coverage
   uses: codecov/codecov-action@v3
@@ -259,7 +280,7 @@ python -m pytest tests/test_api_key_* --html=reports/api_key_tests.html --self-c
 ```bash
 #!/bin/sh
 # Run API key tests before commit
-cd backend && python -m pytest tests/test_api_key_* --quiet
+cd backend && python3 tests/api_keys/run_api_key_tests.py --quick
 ```
 
 ## Contributing to Tests
