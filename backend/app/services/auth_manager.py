@@ -89,16 +89,12 @@ class AuthManager:
         
         Args:
             auth_context: The authentication context from authenticate()
-            required_permission: The permission required (read, write, delete, admin)
+            required_permission: The permission required (read, write, delete)
             
         Returns:
             True if permission granted, False otherwise
         """
         permissions = auth_context.get("permissions", [])
-        
-        # Admin permission grants all access
-        if "admin" in permissions:
-            return True
             
         # Check specific permission
         return required_permission in permissions

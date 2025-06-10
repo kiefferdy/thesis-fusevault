@@ -348,10 +348,8 @@ class TestAPIKeyService:
             ["read"],
             ["write"],
             ["delete"],
-            ["admin"],
             ["read", "write"],
             ["read", "write", "delete"],
-            ["read", "write", "delete", "admin"],
         ]
         
         key_name = "Test API Key"

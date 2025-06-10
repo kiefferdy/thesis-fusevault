@@ -156,7 +156,7 @@ class APIKeyService:
             True if updated, False if not found
         """
         # Validate permissions
-        valid_permissions = {"read", "write", "delete", "admin"}
+        valid_permissions = {"read", "write", "delete"}
         if not all(perm in valid_permissions for perm in permissions):
             raise ValueError("Invalid permissions")
             

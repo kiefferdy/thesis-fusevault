@@ -93,7 +93,6 @@ const apiKeyService = {
    */
   formatPermissions: (permissions) => {
     if (!permissions || permissions.length === 0) return 'None';
-    if (permissions.includes('admin')) return 'Admin (Full Access)';
     return permissions.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ');
   },
 
@@ -103,7 +102,7 @@ const apiKeyService = {
    * @returns {boolean} Whether the permission is valid
    */
   isValidPermission: (permission) => {
-    const validPermissions = ['read', 'write', 'delete', 'admin'];
+    const validPermissions = ['read', 'write', 'delete'];
     return validPermissions.includes(permission);
   },
 
@@ -114,8 +113,7 @@ const apiKeyService = {
   getAvailablePermissions: () => [
     { value: 'read', label: 'Read - View assets and data' },
     { value: 'write', label: 'Write - Create and update assets' },
-    { value: 'delete', label: 'Delete - Remove assets' },
-    { value: 'admin', label: 'Admin - Full access' }
+    { value: 'delete', label: 'Delete - Remove assets' }
   ]
 };
 

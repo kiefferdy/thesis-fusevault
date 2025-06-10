@@ -167,16 +167,6 @@ const ApiKeysPage = () => {
         ? prev.permissions.filter(p => p !== permission)
         : [...prev.permissions, permission];
       
-      // If admin is selected, it overrides all other permissions
-      if (permission === 'admin' && newPermissions.includes('admin')) {
-        return { ...prev, permissions: ['admin'] };
-      }
-      
-      // If other permissions are selected, remove admin
-      if (permission !== 'admin' && newPermissions.includes('admin')) {
-        return { ...prev, permissions: newPermissions.filter(p => p !== 'admin') };
-      }
-      
       return { ...prev, permissions: newPermissions };
     });
   };

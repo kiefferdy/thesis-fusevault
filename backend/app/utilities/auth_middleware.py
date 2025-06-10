@@ -302,7 +302,7 @@ def check_permission(permission: str):
     Create a dependency that checks for a specific permission.
 
     Args:
-        permission: The required permission (read, write, delete, admin)
+        permission: The required permission (read, write, delete)
 
     Returns:
         A dependency function that validates the permission
@@ -316,8 +316,8 @@ def check_permission(permission: str):
 
         permissions = request.state.auth_context.get("permissions", [])
 
-        # Admin permission grants all access
-        if "admin" in permissions or permission in permissions:
+        # Check specific permission
+        if permission in permissions:
             return request.state.auth_context
 
         raise HTTPException(

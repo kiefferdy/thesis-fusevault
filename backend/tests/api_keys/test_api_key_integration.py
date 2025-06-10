@@ -131,7 +131,6 @@ class TestAPIKeyIntegration:
         assert auth_manager.check_permission(auth_context, "read") is True
         assert auth_manager.check_permission(auth_context, "write") is True
         assert auth_manager.check_permission(auth_context, "delete") is True
-        assert auth_manager.check_permission(auth_context, "admin") is False
 
     @pytest.mark.asyncio
     async def test_api_key_vs_wallet_auth_priority(self, mock_settings, test_wallet_address):
@@ -387,7 +386,7 @@ class TestAPIKeyIntegration:
         
         # Create API keys with different permissions
         read_only_key, read_hash = generate_api_key(test_wallet_address, mock_settings.api_key_secret_key)
-        admin_key, admin_hash = generate_api_key(test_wallet_address, mock_settings.api_key_secret_key)
+        full_access_key, full_hash = generate_api_key(test_wallet_address, mock_settings.api_key_secret_key)
         
         read_only_data = APIKeyInDB(
             key_hash=read_hash,
@@ -400,11 +399,11 @@ class TestAPIKeyIntegration:
             metadata={}
         )
         
-        admin_data = APIKeyInDB(
-            key_hash=admin_hash,
+        full_access_data = APIKeyInDB(
+            key_hash=full_hash,
             wallet_address=test_wallet_address,
-            name="Admin Key",
-            permissions=["admin"],
+            name="Full Access Key",
+            permissions=["read", "write", "delete"],
             created_at=datetime.now(timezone.utc),
             expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=True,
@@ -415,8 +414,8 @@ class TestAPIKeyIntegration:
         def mock_validate_key(key_hash):
             if key_hash == read_hash:
                 return read_only_data
-            elif key_hash == admin_hash:
-                return admin_data
+            elif key_hash == full_hash:
+                return full_access_data
             return None
         
         mock_repo = MagicMock()
@@ -438,18 +437,17 @@ class TestAPIKeyIntegration:
         assert auth_provider.check_permission("write", read_auth["permissions"]) is False
         assert auth_provider.check_permission("delete", read_auth["permissions"]) is False
         
-        # Test admin key
-        admin_request = MagicMock()
-        admin_request.headers = {"X-API-Key": admin_key}
+        # Test full access key
+        full_request = MagicMock()
+        full_request.headers = {"X-API-Key": full_access_key}
         
         with patch('app.services.api_key_auth_provider.settings', mock_settings):
-            admin_auth = await auth_provider.authenticate(admin_request)
+            full_auth = await auth_provider.authenticate(full_request)
         
-        assert admin_auth["permissions"] == ["admin"]
-        assert auth_provider.check_permission("read", admin_auth["permissions"]) is True
-        assert auth_provider.check_permission("write", admin_auth["permissions"]) is True
-        assert auth_provider.check_permission("delete", admin_auth["permissions"]) is True
-        assert auth_provider.check_permission("admin", admin_auth["permissions"]) is True
+        assert full_auth["permissions"] == ["read", "write", "delete"]
+        assert auth_provider.check_permission("read", full_auth["permissions"]) is True
+        assert auth_provider.check_permission("write", full_auth["permissions"]) is True
+        assert auth_provider.check_permission("delete", full_auth["permissions"]) is True
 
     @pytest.mark.asyncio
     async def test_api_key_error_propagation(self, mock_settings, test_wallet_address):

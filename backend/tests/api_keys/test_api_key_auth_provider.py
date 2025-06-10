@@ -265,16 +265,6 @@ class TestAPIKeyAuthProvider:
         # Should allow request when Redis fails (graceful degradation)
         assert result is False
 
-    def test_check_permission_admin(self, auth_provider):
-        """Test permission checking with admin permission."""
-        permissions = ["admin"]
-        
-        # Admin should have access to all permissions
-        assert auth_provider.check_permission("read", permissions) is True
-        assert auth_provider.check_permission("write", permissions) is True
-        assert auth_provider.check_permission("delete", permissions) is True
-        assert auth_provider.check_permission("admin", permissions) is True
-
     def test_check_permission_specific(self, auth_provider):
         """Test permission checking with specific permissions."""
         permissions = ["read", "write"]
@@ -285,7 +275,6 @@ class TestAPIKeyAuthProvider:
         
         # Should not have permissions not granted
         assert auth_provider.check_permission("delete", permissions) is False
-        assert auth_provider.check_permission("admin", permissions) is False
 
     def test_check_permission_empty(self, auth_provider):
         """Test permission checking with no permissions."""
@@ -295,7 +284,6 @@ class TestAPIKeyAuthProvider:
         assert auth_provider.check_permission("read", permissions) is False
         assert auth_provider.check_permission("write", permissions) is False
         assert auth_provider.check_permission("delete", permissions) is False
-        assert auth_provider.check_permission("admin", permissions) is False
 
     @pytest.mark.asyncio
     async def test_rate_limit_key_format(self, auth_provider, mock_redis, mock_settings):

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class APIKeyBase(BaseModel):
     name: str = Field(..., description="User-friendly name for the API key")
-    permissions: List[str] = Field(default=["read"], description="Array of permissions (read, write, delete, admin)")
+    permissions: List[str] = Field(default=["read"], description="Array of permissions (read, write, delete)")
     expires_at: Optional[datetime] = Field(None, description="Optional expiration date")
     metadata: Optional[dict] = Field(None, description="Additional user-specified information")
 

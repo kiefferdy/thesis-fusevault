@@ -132,7 +132,7 @@ python -m pytest tests/api_keys/test_api_key_service.py::TestAPIKeyService::test
 
 # Authentication tests
 python -m pytest tests/api_keys/test_api_key_auth_provider.py::TestAPIKeyAuthProvider::test_authenticate_rate_limited -v
-python -m pytest tests/api_keys/test_api_key_auth_provider.py::TestAPIKeyAuthProvider::test_check_permission_admin -v
+python -m pytest tests/api_keys/test_api_key_auth_provider.py::TestAPIKeyAuthProvider::test_check_permission_specific -v
 
 # HTTP endpoint tests
 python -m pytest tests/api_keys/test_api_key_routes.py::TestAPIKeyRoutes::test_create_api_key_success -v
