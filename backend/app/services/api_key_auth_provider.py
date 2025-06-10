@@ -1,9 +1,12 @@
 from typing import Optional, Dict
-from datetime import datetime
+from datetime import datetime, timezone
+import logging
 import redis.asyncio as redis
 from fastapi import Request, HTTPException, status
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 from app.repositories.api_key_repo import APIKeyRepository
 from app.utilities.api_key_utils import (
     validate_api_key_format,
@@ -32,52 +35,69 @@ class APIKeyAuthProvider:
         """
         if not self.enabled:
             return None
-            
-        # Check for API key in header
-        api_key = request.headers.get("X-API-Key")
-        if not api_key:
-            return None
-            
-        # Validate format
-        if not validate_api_key_format(api_key):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid API key format"
-            )
-            
-        # Validate signature
-        if not validate_api_key_signature(api_key, settings.api_key_secret_key):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid API key signature"
-            )
-            
-        # Get key hash
-        key_hash = get_api_key_hash(api_key)
         
-        # Check rate limit if Redis is available
-        if self.redis_client:
-            is_rate_limited = await self._check_rate_limit(key_hash)
-            if is_rate_limited:
+        try:
+            # Check for API key in header
+            api_key = request.headers.get("X-API-Key")
+            if not api_key:
+                return None
+            
+            # Strip whitespace that might cause issues
+            api_key = api_key.strip()
+            if not api_key:
+                return None
+                
+            # Validate format
+            if not validate_api_key_format(api_key):
                 raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Rate limit exceeded"
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid API key format"
                 )
-        
-        # Validate and get API key from database
-        api_key_data = await self.api_key_repo.validate_and_get_api_key(key_hash)
-        if not api_key_data:
+                
+            # Validate signature
+            if not validate_api_key_signature(api_key, settings.api_key_secret_key):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid API key signature"
+                )
+                
+            # Get key hash
+            key_hash = get_api_key_hash(api_key)
+            
+            # Check rate limit if Redis is available
+            if self.redis_client:
+                is_rate_limited = await self._check_rate_limit(key_hash)
+                if is_rate_limited:
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Rate limit exceeded"
+                    )
+            
+            # Validate and get API key from database
+            api_key_data = await self.api_key_repo.validate_and_get_api_key(key_hash)
+            if not api_key_data:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired API key"
+                )
+                
+            # Return wallet context
+            return {
+                "wallet_address": api_key_data.wallet_address,
+                "auth_method": "api_key",
+                "permissions": api_key_data.permissions
+            }
+            
+        except HTTPException:
+            # Re-raise HTTP exceptions as-is
+            raise
+        except Exception as e:
+            # Catch any unexpected errors and convert to 401
+            logger.error(f"Unexpected error during API key authentication: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired API key"
+                detail="Authentication failed"
             )
-            
-        # Return wallet context
-        return {
-            "wallet_address": api_key_data.wallet_address,
-            "auth_method": "api_key",
-            "permissions": api_key_data.permissions
-        }
     
     async def _check_rate_limit(self, key_hash: str) -> bool:
         """
@@ -94,7 +114,7 @@ class APIKeyAuthProvider:
             rate_limit_key = f"rate_limit:api_key:{key_hash}"
             
             # Get current minute timestamp
-            current_minute = int(datetime.utcnow().timestamp() / 60)
+            current_minute = int(datetime.now(timezone.utc).timestamp() / 60)
             minute_key = f"{rate_limit_key}:{current_minute}"
             
             # Increment counter

@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pymongo.errors import DuplicateKeyError
 from motor.motor_asyncio import AsyncIOMotorCollection
 
@@ -37,9 +37,9 @@ class TestAPIKeyRepository:
             wallet_address=test_wallet_address,
             name="Test API Key",
             permissions=["read", "write"],
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             metadata={"test": "value"},
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             is_active=True
         )
 
@@ -53,7 +53,7 @@ class TestAPIKeyRepository:
         
         # Check the indexes that should be created
         call_args = mock_collection.create_indexes.call_args[0][0]
-        index_keys = [list(index.document.keys()) for index in call_args]
+        index_keys = [list(index.document['key'].keys()) for index in call_args]
         
         # Should have indexes on key_hash (unique), wallet_address, is_active, expires_at
         expected_indexes = [
@@ -173,8 +173,9 @@ class TestAPIKeyRepository:
         mock_collection.update_one.return_value = mock_result
         
         with patch('app.repositories.api_key_repo.datetime') as mock_datetime:
-            fixed_time = datetime(2025, 1, 1, 12, 0, 0)
-            mock_datetime.utcnow.return_value = fixed_time
+            fixed_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+            mock_datetime.now.return_value = fixed_time
+            mock_datetime.timezone = timezone
             
             result = await api_key_repo.update_last_used(test_api_key_hash)
         
@@ -275,8 +276,9 @@ class TestAPIKeyRepository:
         mock_collection.delete_many.return_value = mock_result
         
         with patch('app.repositories.api_key_repo.datetime') as mock_datetime:
-            fixed_time = datetime(2025, 1, 1, 12, 0, 0)
-            mock_datetime.utcnow.return_value = fixed_time
+            fixed_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+            mock_datetime.now.return_value = fixed_time
+            mock_datetime.timezone = timezone
             
             result = await api_key_repo.cleanup_expired_keys()
         
@@ -296,7 +298,8 @@ class TestAPIKeyRepository:
         # Create active, non-expired key data
         active_key_data = test_api_key_data.copy()
         active_key_data["is_active"] = True
-        active_key_data["expires_at"] = datetime.utcnow() + timedelta(days=30)
+        active_key_data["expires_at"] = datetime.now(timezone.utc) + timedelta(days=30)
+        active_key_data["key_hash"] = test_api_key_hash  # Use the correct hash
         
         # Mock finding the key
         mock_collection.find_one.return_value = active_key_data
@@ -348,7 +351,7 @@ class TestAPIKeyRepository:
         # Create expired key data
         expired_key_data = test_api_key_data.copy()
         expired_key_data["is_active"] = True
-        expired_key_data["expires_at"] = datetime.utcnow() - timedelta(days=1)  # Expired
+        expired_key_data["expires_at"] = datetime.now(timezone.utc) - timedelta(days=1)  # Expired
         
         # Mock finding the expired key
         mock_collection.find_one.return_value = expired_key_data
@@ -375,6 +378,7 @@ class TestAPIKeyRepository:
         no_expiry_key_data = test_api_key_data.copy()
         no_expiry_key_data["is_active"] = True
         no_expiry_key_data["expires_at"] = None
+        no_expiry_key_data["key_hash"] = test_api_key_hash  # Use the correct hash
         
         # Mock finding the key
         mock_collection.find_one.return_value = no_expiry_key_data

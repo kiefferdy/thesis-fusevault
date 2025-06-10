@@ -282,9 +282,9 @@ def test_api_key_data():
         "wallet_address": "0xa87a09e1c8E5F2256CDCAF96B2c3Dbff231D7D7f",
         "name": "Test API Key",
         "permissions": ["read", "write"],
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "last_used_at": None,
-        "expires_at": datetime.utcnow() + timedelta(days=90),
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=90),
         "is_active": True,
         "metadata": {"test": "value"}
     }

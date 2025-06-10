@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
@@ -47,8 +47,8 @@ class TestAPIKeyIntegration:
             wallet_address=test_wallet_address,
             name="Integration Test Key",
             permissions=["read", "write"],
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=True,
             metadata={"test": "integration"}
         )
@@ -87,8 +87,8 @@ class TestAPIKeyIntegration:
             wallet_address=test_wallet_address,
             name="Auth Flow Test Key",
             permissions=["read", "write", "delete"],
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=True,
             metadata={}
         )
@@ -185,8 +185,8 @@ class TestAPIKeyIntegration:
             wallet_address=test_wallet_address,
             name="Rate Limit Test Key",
             permissions=["read"],
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=True,
             metadata={}
         )
@@ -240,8 +240,8 @@ class TestAPIKeyIntegration:
             wallet_address=test_wallet_address,
             name="Expired Test Key",
             permissions=["read"],
-            created_at=datetime.utcnow() - timedelta(days=100),
-            expires_at=datetime.utcnow() - timedelta(days=1),  # Expired
+            created_at=datetime.now(timezone.utc) - timedelta(days=100),
+            expires_at=datetime.now(timezone.utc) - timedelta(days=1),  # Expired
             is_active=True,
             metadata={}
         )
@@ -255,7 +255,7 @@ class TestAPIKeyIntegration:
         
         def mock_validate_and_get(key_hash):
             # Simulate repository expiration logic
-            if expired_key_data.expires_at < datetime.utcnow():
+            if expired_key_data.expires_at < datetime.now(timezone.utc):
                 # Deactivate expired key
                 expired_key_data.is_active = False
                 return None
@@ -393,8 +393,8 @@ class TestAPIKeyIntegration:
             wallet_address=test_wallet_address,
             name="Read Only Key",
             permissions=["read"],
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=True,
             metadata={}
         )
@@ -404,8 +404,8 @@ class TestAPIKeyIntegration:
             wallet_address=test_wallet_address,
             name="Admin Key",
             permissions=["admin"],
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=True,
             metadata={}
         )

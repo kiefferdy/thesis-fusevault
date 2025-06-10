@@ -119,7 +119,7 @@ class TestApiKeyUtilities:
         # Test with different wallet tags
         valid_keys = [
             "fv.v1.12345678.dGVzdGluZw.c2lnbmF0dXJl",
-            "fv.v1.abcdef12.bm9uY2U.c2lnZ",
+            "fv.v1.abcdef12.bm9uY2U.c2lnbmF0dXJl",
             "fv.v1.00000000.YWJjZGVmZ2g.ZGVmYWJjZGVmZw"
         ]
         
@@ -266,10 +266,10 @@ class TestApiKeyUtilities:
         ]
         
         for case in edge_cases:
-            with pytest.raises(AttributeError):
-                # The function doesn't handle these cases, which is expected
-                # In real usage, this function should only receive strings
-                extract_wallet_tag(case)
+            # The function handles these cases gracefully by returning None
+            # In real usage, this function should only receive strings
+            result = extract_wallet_tag(case)
+            assert result is None
 
     def test_signature_constant_time_comparison(self, test_wallet_address, test_api_key_secret):
         """Test that signature validation uses constant-time comparison."""

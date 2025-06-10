@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
@@ -9,6 +9,39 @@ from app.schemas.api_key_schema import APIKeyCreate, APIKeyResponse, APIKeyCreat
 
 class TestAPIKeyRoutes:
     """Test suite for API key HTTP routes."""
+
+    @pytest.fixture
+    def mock_auth_bypass(self, mock_current_user):
+        """Mock authentication to bypass auth for tests."""
+        def auth_bypass():
+            # Mock the auth manager to return successful authentication
+            mock_auth_context = {
+                "wallet_address": mock_current_user["walletAddress"],
+                "auth_method": "wallet",
+                "permissions": ["read", "write", "delete"]
+            }
+            return patch('app.utilities.auth_middleware.AuthManager.authenticate', 
+                        new_callable=AsyncMock, return_value=mock_auth_context)
+        return auth_bypass
+    
+    def setup_dependency_overrides(self, mock_service=None, wallet_address=None, enabled=True):
+        """Helper to setup FastAPI dependency overrides."""
+        from app.api.api_keys_routes import get_api_key_service, get_wallet_address, check_api_keys_enabled
+        from app.main import app
+        
+        if mock_service:
+            app.dependency_overrides[get_api_key_service] = lambda: mock_service
+        if wallet_address:
+            app.dependency_overrides[get_wallet_address] = lambda: wallet_address
+        if enabled:
+            app.dependency_overrides[check_api_keys_enabled] = lambda: None
+        
+        return app
+    
+    def cleanup_dependency_overrides(self):
+        """Clean up FastAPI dependency overrides."""
+        from app.main import app
+        app.dependency_overrides.clear()
 
     @pytest.fixture
     def mock_settings(self):
@@ -31,7 +64,7 @@ class TestAPIKeyRoutes:
         return {
             "name": "Test API Key",
             "permissions": ["read", "write"],
-            "expires_at": (datetime.utcnow() + timedelta(days=30)).isoformat(),
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
             "metadata": {"purpose": "testing"}
         }
 
@@ -41,9 +74,9 @@ class TestAPIKeyRoutes:
         return APIKeyResponse(
             name="Test API Key",
             permissions=["read", "write"],
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             last_used_at=None,
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=True,
             metadata={"purpose": "testing"}
         )
@@ -55,8 +88,8 @@ class TestAPIKeyRoutes:
             api_key=test_api_key,
             name="Test API Key",
             permissions=["read", "write"],
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=True,
             metadata={"purpose": "testing"},
             last_used_at=None
@@ -95,24 +128,27 @@ class TestAPIKeyRoutes:
         assert response.status_code == 200
 
     def test_create_api_key_success(self, client, mock_settings, sample_api_key_create_data, 
-                                  sample_api_key_create_response, mock_current_user):
+                                  sample_api_key_create_response, mock_current_user, mock_auth_bypass):
         """Test successful API key creation."""
-        with patch('app.api.api_keys_routes.settings', mock_settings), \
-             patch('app.api.api_keys_routes.get_wallet_address', return_value=mock_current_user["walletAddress"]), \
-             patch('app.api.api_keys_routes.get_api_key_service') as mock_get_service:
-            
-            # Mock service
-            mock_service = MagicMock()
-            mock_service.create_api_key = AsyncMock(return_value=sample_api_key_create_response)
-            mock_get_service.return_value = mock_service
-            
-            response = client.post("/api-keys/create", json=sample_api_key_create_data)
+        # Mock service
+        mock_service = MagicMock()
+        mock_service.create_api_key = AsyncMock(return_value=sample_api_key_create_response)
         
-        assert response.status_code == 200
-        data = response.json()
-        assert "api_key" in data
-        assert data["name"] == sample_api_key_create_data["name"]
-        assert data["permissions"] == sample_api_key_create_data["permissions"]
+        self.setup_dependency_overrides(mock_service, mock_current_user["walletAddress"])
+        
+        try:
+            with patch('app.api.api_keys_routes.settings', mock_settings), \
+                 mock_auth_bypass():
+                
+                response = client.post("/api-keys/create", json=sample_api_key_create_data)
+            
+            assert response.status_code == 200
+            data = response.json()
+            assert "api_key" in data
+            assert data["name"] == sample_api_key_create_data["name"]
+            assert data["permissions"] == sample_api_key_create_data["permissions"]
+        finally:
+            self.cleanup_dependency_overrides()
 
     def test_create_api_key_disabled(self, client, sample_api_key_create_data, mock_current_user):
         """Test API key creation when feature is disabled."""
@@ -120,7 +156,16 @@ class TestAPIKeyRoutes:
         mock_settings.api_key_auth_enabled = False
         
         with patch('app.api.api_keys_routes.settings', mock_settings), \
-             patch('app.api.api_keys_routes.get_wallet_address', return_value=mock_current_user["walletAddress"]):
+             patch('app.api.api_keys_routes.get_wallet_address', return_value=mock_current_user["walletAddress"]), \
+             patch('app.utilities.auth_middleware.AuthMiddleware.dispatch') as mock_dispatch:
+            
+            # Mock auth middleware to bypass authentication
+            async def mock_auth_dispatch(request, call_next):
+                request.state.wallet_address = mock_current_user["walletAddress"]
+                request.state.auth_method = "wallet"
+                return await call_next(request)
+            
+            mock_dispatch.side_effect = mock_auth_dispatch
             
             response = client.post("/api-keys/create", json=sample_api_key_create_data)
         
@@ -136,7 +181,16 @@ class TestAPIKeyRoutes:
         
         with patch('app.api.api_keys_routes.settings', mock_settings), \
              patch('app.api.api_keys_routes.get_wallet_address', return_value=mock_current_user["walletAddress"]), \
-             patch('app.api.api_keys_routes.get_api_key_service') as mock_get_service:
+             patch('app.api.api_keys_routes.get_api_key_service') as mock_get_service, \
+             patch('app.utilities.auth_middleware.AuthMiddleware.dispatch') as mock_dispatch:
+            
+            # Mock auth middleware to bypass authentication
+            async def mock_auth_dispatch(request, call_next):
+                request.state.wallet_address = mock_current_user["walletAddress"]
+                request.state.auth_method = "wallet"
+                return await call_next(request)
+            
+            mock_dispatch.side_effect = mock_auth_dispatch
             
             # Mock service to raise ValueError
             mock_service = MagicMock()

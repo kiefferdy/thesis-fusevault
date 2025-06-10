@@ -1,5 +1,5 @@
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 
 from app.repositories.api_key_repo import APIKeyRepository
@@ -54,7 +54,7 @@ class APIKeyService:
         # Set expiration if not provided
         expires_at = api_key_data.expires_at
         if not expires_at:
-            expires_at = datetime.utcnow() + timedelta(days=settings.api_key_default_expiration_days)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=settings.api_key_default_expiration_days)
             
         # Create API key record
         api_key_db = APIKeyInDB(
@@ -64,7 +64,7 @@ class APIKeyService:
             permissions=api_key_data.permissions or settings.api_key_default_permissions,
             expires_at=expires_at,
             metadata=api_key_data.metadata,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             is_active=True
         )
         

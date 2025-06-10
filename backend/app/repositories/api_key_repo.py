@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import ASCENDING, IndexModel
@@ -100,7 +100,7 @@ class APIKeyRepository:
         """
         result = await self.collection.update_one(
             {"key_hash": key_hash},
-            {"$set": {"last_used_at": datetime.utcnow()}}
+            {"$set": {"last_used_at": datetime.now(timezone.utc)}}
         )
         
         return result.modified_count > 0
@@ -150,7 +150,7 @@ class APIKeyRepository:
             Number of keys cleaned up
         """
         result = await self.collection.delete_many({
-            "expires_at": {"$lt": datetime.utcnow()},
+            "expires_at": {"$lt": datetime.now(timezone.utc)},
             "is_active": True
         })
         
@@ -176,7 +176,7 @@ class APIKeyRepository:
             return None
         
         # Check expiration
-        if api_key.expires_at and api_key.expires_at < datetime.utcnow():
+        if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
             # Deactivate expired key
             await self.collection.update_one(
                 {"key_hash": key_hash},

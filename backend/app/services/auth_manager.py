@@ -69,10 +69,16 @@ class AuthManager:
         
         # Try API key authentication if enabled
         if settings.api_key_auth_enabled:
-            auth_context = await self.api_key_provider.authenticate(request)
-            if auth_context:
-                logger.debug(f"Authenticated via API key: {auth_context.get('wallet_address')}")
-                return auth_context
+            try:
+                auth_context = await self.api_key_provider.authenticate(request)
+                if auth_context:
+                    logger.debug(f"Authenticated via API key: {auth_context.get('wallet_address')}")
+                    return auth_context
+            except Exception as e:
+                # Log the error but let it propagate to be handled by middleware
+                logger.debug(f"API key authentication failed: {str(e)}")
+                # Re-raise to let middleware handle the proper HTTP response
+                raise
                 
         # No authentication method succeeded
         return None

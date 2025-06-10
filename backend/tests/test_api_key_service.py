@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.services.api_key_service import APIKeyService
 from app.schemas.api_key_schema import APIKeyCreate, APIKeyInDB, APIKeyResponse, APIKeyCreateResponse
@@ -31,7 +31,7 @@ class TestAPIKeyService:
         return APIKeyCreate(
             name="Test API Key",
             permissions=["read", "write"],
-            expires_at=datetime.utcnow() + timedelta(days=30),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
             metadata={"purpose": "testing"}
         )
 
@@ -43,9 +43,9 @@ class TestAPIKeyService:
             wallet_address=test_wallet_address,
             name="Test API Key",
             permissions=["read", "write"],
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             last_used_at=None,
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=True,
             metadata={"purpose": "testing"}
         )
@@ -119,8 +119,9 @@ class TestAPIKeyService:
              patch('app.services.api_key_service.datetime') as mock_datetime:
             
             # Mock current time
-            current_time = datetime(2025, 1, 1, 12, 0, 0)
-            mock_datetime.utcnow.return_value = current_time
+            current_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+            mock_datetime.now.return_value = current_time
+            mock_datetime.timezone = timezone
             
             # Mock key generation
             mock_generate.return_value = ("test_key", "test_hash")
@@ -139,7 +140,7 @@ class TestAPIKeyService:
         # Create request without permissions
         api_key_create = APIKeyCreate(
             name="Test Key",
-            expires_at=datetime.utcnow() + timedelta(days=30)
+            expires_at=datetime.now(timezone.utc) + timedelta(days=30)
         )
         
         mock_api_key_repo.count_active_keys_for_wallet.return_value = 0
@@ -236,8 +237,8 @@ class TestAPIKeyService:
             wallet_address=test_wallet_address,
             name=key_name,
             permissions=["read"],
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=False,  # Already inactive
             metadata={}
         )
@@ -323,8 +324,8 @@ class TestAPIKeyService:
             wallet_address=test_wallet_address,
             name=key_name,
             permissions=["read"],
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=False,  # Inactive
             metadata={}
         )
@@ -386,8 +387,8 @@ class TestAPIKeyService:
             wallet_address=test_wallet_address,
             name="Test Key",
             permissions=["read"],
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=True,
             metadata={}
         )
@@ -397,8 +398,8 @@ class TestAPIKeyService:
             wallet_address=test_wallet_address,
             name="test key",  # Different case
             permissions=["read"],
-            created_at=datetime.utcnow(),
-            expires_at=datetime.utcnow() + timedelta(days=90),
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
             is_active=True,
             metadata={}
         )

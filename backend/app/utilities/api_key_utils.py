@@ -91,10 +91,14 @@ def validate_api_key_format(api_key: str) -> bool:
         if len(wallet_tag) != 8 or not all(c in '0123456789abcdef' for c in wallet_tag):
             return False
             
-        # Check nonce can be decoded
+        # Check nonce can be decoded and is not empty
+        if not nonce:
+            return False
         _b64url_decode(nonce)
         
-        # Check signature can be decoded
+        # Check signature can be decoded and is not empty
+        if not sig:
+            return False
         _b64url_decode(sig)
         
         return True
@@ -165,8 +169,12 @@ def extract_wallet_tag(api_key: str) -> Optional[str]:
         The wallet tag if valid, None otherwise
     """
     try:
+        # Handle non-string inputs gracefully
+        if not isinstance(api_key, str):
+            return None
+            
         parts = api_key.split('.')
-        if len(parts) == 5 and parts[0] == 'fv':
+        if len(parts) == 5 and parts[0] == 'fv' and parts[1] in ['v1']:
             return parts[2]
         return None
     except Exception:

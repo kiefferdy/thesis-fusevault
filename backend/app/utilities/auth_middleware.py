@@ -86,7 +86,22 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Try to authenticate using the AuthManager
-        auth_context = await self.auth_manager.authenticate(request)
+        try:
+            auth_context = await self.auth_manager.authenticate(request)
+        except HTTPException as http_exc:
+            # Handle authentication errors (e.g., invalid API key format/signature)
+            logger.warning(f"Authentication failed for {path}: {http_exc.detail}")
+            return JSONResponse(
+                status_code=http_exc.status_code,
+                content={"detail": http_exc.detail}
+            )
+        except Exception as e:
+            # Handle unexpected errors during authentication
+            logger.error(f"Unexpected authentication error for {path}: {str(e)}")
+            return JSONResponse(
+                status_code=500,
+                content={"detail": "Internal authentication error"}
+            )
 
         if not auth_context:
             logger.warning(
