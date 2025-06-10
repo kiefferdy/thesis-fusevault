@@ -1,19 +1,18 @@
-import os
 import logging
 from web3 import Web3
-from dotenv import load_dotenv
 from typing import Any, Dict
 from fastapi import HTTPException
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 class BlockchainService:
     def __init__(self):
-        load_dotenv()
-        self.provider_url = os.getenv("ALCHEMY_SEPOLIA_URL")
-        self.wallet_address = os.getenv("WALLET_ADDRESS")
-        self.private_key = os.getenv("PRIVATE_KEY")
-        self.contract_address = os.getenv("CONTRACT_ADDRESS")
+        self.provider_url = settings.alchemy_sepolia_url
+        self.wallet_address = settings.wallet_address
+        self.private_key = settings.private_key
+        self.contract_address = settings.contract_address
         self.contract_abi = [
             # Asset Update Functions
             {

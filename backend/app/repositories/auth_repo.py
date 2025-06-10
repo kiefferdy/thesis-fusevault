@@ -30,7 +30,7 @@ class AuthRepository:
             Auth record if found, None otherwise
         """
         try:
-            auth_record = self.auth_collection.find_one({"walletAddress": wallet_address})
+            auth_record = await self.auth_collection.find_one({"walletAddress": wallet_address})
             
             if auth_record:
                 auth_record["_id"] = str(auth_record["_id"])
@@ -53,7 +53,7 @@ class AuthRepository:
             True if successful, False otherwise
         """
         try:
-            result = self.auth_collection.update_one(
+            result = await self.auth_collection.update_one(
                 {"walletAddress": wallet_address},
                 {"$set": data},
                 upsert=True
@@ -76,7 +76,7 @@ class AuthRepository:
             Session ID if successful
         """
         try:
-            result = self.sessions_collection.insert_one(session_data)
+            result = await self.sessions_collection.insert_one(session_data)
             session_id = session_data.get("sessionId", str(result.inserted_id))
             
             return session_id
@@ -96,7 +96,7 @@ class AuthRepository:
             Session document if found, None otherwise
         """
         try:
-            session = self.sessions_collection.find_one(query)
+            session = await self.sessions_collection.find_one(query)
             
             if session:
                 session["_id"] = str(session["_id"])
@@ -119,7 +119,7 @@ class AuthRepository:
             True if update was successful, False otherwise
         """
         try:
-            result = self.sessions_collection.update_one(
+            result = await self.sessions_collection.update_one(
                 {"sessionId": session_id},
                 {"$set": update}
             )
@@ -141,7 +141,7 @@ class AuthRepository:
             True if deletion was successful, False otherwise
         """
         try:
-            result = self.sessions_collection.delete_one({"sessionId": session_id})
+            result = await self.sessions_collection.delete_one({"sessionId": session_id})
             
             return result.deleted_count > 0
             

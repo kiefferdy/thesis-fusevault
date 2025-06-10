@@ -29,7 +29,7 @@ class UserRepository:
             String ID of the inserted user
         """
         try:
-            result = self.users_collection.insert_one(user_data)
+            result = await self.users_collection.insert_one(user_data)
             user_id = str(result.inserted_id)
             
             logger.info(f"User inserted with ID: {user_id}")
@@ -50,7 +50,7 @@ class UserRepository:
             User document if found, None otherwise
         """
         try:
-            user = self.users_collection.find_one(query)
+            user = await self.users_collection.find_one(query)
             
             if user:
                 user["_id"] = str(user["_id"])
@@ -73,7 +73,7 @@ class UserRepository:
         """
         try:
             cursor = self.users_collection.find(query)
-            users = list(cursor)
+            users = await cursor.to_list(length=None)
             
             for user in users:
                 user["_id"] = str(user["_id"])
@@ -96,7 +96,7 @@ class UserRepository:
             True if update was successful, False otherwise
         """
         try:
-            result = self.users_collection.update_one(query, update)
+            result = await self.users_collection.update_one(query, update)
             
             return result.modified_count > 0
             
@@ -115,7 +115,7 @@ class UserRepository:
             True if deletion was successful, False otherwise
         """
         try:
-            result = self.users_collection.delete_one(query)
+            result = await self.users_collection.delete_one(query)
             
             return result.deleted_count > 0
             

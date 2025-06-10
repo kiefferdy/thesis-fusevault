@@ -212,12 +212,96 @@ def mock_delete_handler():
     handler.batch_delete_assets = AsyncMock()
     return handler
 
+# API Key Test Fixtures
+@pytest.fixture
+def mock_api_key_repo():
+    """Create mock APIKeyRepository."""
+    repo = MagicMock()
+    repo.create_api_key = AsyncMock()
+    repo.get_api_key_by_hash = AsyncMock()
+    repo.get_api_keys_by_wallet = AsyncMock()
+    repo.count_active_keys_for_wallet = AsyncMock()
+    repo.update_last_used = AsyncMock()
+    repo.update_permissions = AsyncMock()
+    repo.deactivate_api_key = AsyncMock()
+    repo.validate_and_get_api_key = AsyncMock()
+    repo.cleanup_expired_keys = AsyncMock()
+    repo.create_indexes = AsyncMock()
+    return repo
+
+@pytest.fixture
+def mock_api_key_service():
+    """Create mock APIKeyService."""
+    service = MagicMock()
+    service.create_api_key = AsyncMock()
+    service.list_api_keys = AsyncMock()
+    service.revoke_api_key = AsyncMock()
+    service.update_permissions = AsyncMock()
+    return service
+
+@pytest.fixture
+def mock_api_key_auth_provider():
+    """Create mock APIKeyAuthProvider."""
+    provider = MagicMock()
+    provider.authenticate = AsyncMock()
+    provider.check_permission = MagicMock()
+    provider.enabled = True
+    return provider
+
+@pytest.fixture
+def mock_auth_manager():
+    """Create mock AuthManager."""
+    manager = MagicMock()
+    manager.authenticate = AsyncMock()
+    manager.check_permission = MagicMock()
+    return manager
+
+@pytest.fixture
+def test_wallet_address():
+    """Return a test wallet address."""
+    return "0xa87a09e1c8E5F2256CDCAF96B2c3Dbff231D7D7f"
+
+@pytest.fixture
+def test_api_key():
+    """Return a test API key."""
+    return "fv.v1.231d7d7f.t2FC1oOt1BQDBisHMjXAyw.k0xpsz3t1GLzyyJiVvj8sWF9t6unlrFG91JdHUQb"
+
+@pytest.fixture
+def test_api_key_hash():
+    """Return a test API key hash."""
+    import hashlib
+    test_key = "fv.v1.231d7d7f.t2FC1oOt1BQDBisHMjXAyw.k0xpsz3t1GLzyyJiVvj8sWF9t6unlrFG91JdHUQb"
+    return hashlib.sha256(test_key.encode('utf-8')).hexdigest()
+
+@pytest.fixture
+def test_api_key_data():
+    """Return test API key database record."""
+    from datetime import datetime, timedelta
+    return {
+        "key_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "wallet_address": "0xa87a09e1c8E5F2256CDCAF96B2c3Dbff231D7D7f",
+        "name": "Test API Key",
+        "permissions": ["read", "write"],
+        "created_at": datetime.now(timezone.utc),
+        "last_used_at": None,
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=90),
+        "is_active": True,
+        "metadata": {"test": "value"}
+    }
+
+@pytest.fixture
+def test_api_key_secret():
+    """Return a test API key secret for signing."""
+    return "test_secret_key_for_api_key_signing_minimum_32_characters"
+
 # Web Request/Response Mocks
 @pytest.fixture
 def mock_request():
     """Create mock FastAPI Request."""
     request = MagicMock()
     request.cookies = {}
+    request.headers = {}
+    request.state = MagicMock()
     return request
 
 @pytest.fixture

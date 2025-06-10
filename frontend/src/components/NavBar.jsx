@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   AppBar, 
   Toolbar, 
@@ -22,18 +22,34 @@ import {
   History, 
   Person, 
   Home,
-  CloudOff
+  CloudOff,
+  VpnKey,
+  Block
 } from '@mui/icons-material';
 import { Link, useLocation } from 'react-router-dom';
 import WalletButton from './WalletButton';
 import { useAuth } from '../contexts/AuthContext';
+import useApiKeysStatus from '../hooks/useApiKeysStatus';
 
 function NavBar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { isAuthenticated, backendAvailable } = useAuth();
+  const { isDisabled: apiKeysDisabled, isEnabled: apiKeysEnabled, refresh: refreshApiKeysStatus } = useApiKeysStatus({
+    pollingInterval: 0, // Disable polling in NavBar
+    refetchOnFocus: true // But still refresh on window focus
+  });
   const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // Debug logging
+  useEffect(() => {
+    console.log('NavBar - API Keys Status:', { 
+      disabled: apiKeysDisabled, 
+      enabled: apiKeysEnabled,
+      backendAvailable
+    });
+  }, [apiKeysDisabled, apiKeysEnabled, backendAvailable]);
 
   const navigationItems = [
     { text: 'Home', icon: <Home />, path: '/', requiresAuth: false },
@@ -41,6 +57,7 @@ function NavBar() {
     { text: 'Upload', icon: <CloudUpload />, path: '/upload', requiresAuth: true },
     { text: 'History', icon: <History />, path: '/history', requiresAuth: true },
     { text: 'Profile', icon: <Person />, path: '/profile', requiresAuth: true },
+    { text: 'API Keys', icon: <VpnKey />, path: '/api-keys', requiresAuth: true },
   ];
 
   const filteredItems = navigationItems.filter(item => 
@@ -118,11 +135,18 @@ function NavBar() {
                     backgroundColor: isActivePath(item.path) ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 1
+                    gap: 1,
+                    position: 'relative'
                   }}
                 >
                   {item.icon}
                   <Typography>{item.text}</Typography>
+                  {/* Show disabled indicator for API Keys */}
+                  {item.path === '/api-keys' && apiKeysDisabled && (
+                    <Tooltip title={`API Keys feature is disabled${!backendAvailable ? ' (backend unavailable)' : ''}`}>
+                      <Block sx={{ fontSize: 16, color: 'orange', ml: 0.5 }} />
+                    </Tooltip>
+                  )}
                 </Box>
               ))}
             </Box>
@@ -170,6 +194,12 @@ function NavBar() {
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText primary={item.text} />
+                {/* Show disabled indicator for API Keys */}
+                {item.path === '/api-keys' && apiKeysDisabled && (
+                  <Tooltip title={`API Keys feature is disabled${!backendAvailable ? ' (backend unavailable)' : ''}`}>
+                    <Block sx={{ fontSize: 20, color: 'orange' }} />
+                  </Tooltip>
+                )}
               </ListItem>
             ))}
           </List>

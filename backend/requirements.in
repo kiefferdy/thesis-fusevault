@@ -8,12 +8,16 @@ email-validator
 # Ethereum blockchain interaction
 web3
 
-# MongoDB driver
-pymongo
+# MongoDB async driver
+motor
 
 # Dependency management
 pip-tools
 python-dotenv
+pydantic-settings
+
+# API keys dependencies
+redis
 
 # API testing
 pytest
