@@ -140,19 +140,15 @@ export const AuthProvider = ({ children }) => {
       
       
       // Call logout API
-      try {
-        const response = await authService.logout();
-        
-        if (response.status === 'success') {
-          setIsAuthenticated(false);
-          localStorage.removeItem('isAuthenticated');
-          toast.success('Logged out successfully');
-          navigate('/');
-        } else {
-          toast.error('Logout failed: ' + response.message);
-        }
-      } catch (error) {
-        throw error;
+      const response = await authService.logout();
+      
+      if (response.status === 'success') {
+        setIsAuthenticated(false);
+        localStorage.removeItem('isAuthenticated');
+        toast.success('Logged out successfully');
+        navigate('/');
+      } else {
+        toast.error('Logout failed: ' + response.message);
       }
       
       setIsLoading(false);

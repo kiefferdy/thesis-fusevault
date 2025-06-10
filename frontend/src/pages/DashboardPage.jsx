@@ -53,7 +53,7 @@ import { useAssets } from '../hooks/useAssets';
 import { useTransactions } from '../hooks/useTransactions';
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../hooks/useUser';
-import { formatWalletAddress, formatDate } from '../utils/formatters';
+import { formatWalletAddress } from '../utils/formatters';
 
 function DashboardPage() {
   const [tabValue, setTabValue] = useState(0);
@@ -70,7 +70,6 @@ function DashboardPage() {
     allTransactions,
     isSummaryLoading, 
     isRecentLoading,
-    isAllTransactionsLoading,
     getAllTransactions
   } = useTransactions();
   

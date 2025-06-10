@@ -11,7 +11,7 @@ import {
   Box,
   CircularProgress
 } from '@mui/material';
-import { formatDate, formatWalletAddress, formatTransactionHash } from '../utils/formatters';
+import { formatDate, formatWalletAddress } from '../utils/formatters';
 
 function TransactionsList({ transactions, isLoading }) {
   if (isLoading) {
@@ -48,14 +48,6 @@ function TransactionsList({ transactions, isLoading }) {
     return 'default';
   };
   
-  // Function to format action text for display
-  const formatAction = (action) => {
-    // Replace underscores with spaces and capitalize each word
-    return action
-      .split('_')
-      .map(word => word.charAt(0) + word.slice(1).toLowerCase())
-      .join(' ');
-  };
 
   return (
     <TableContainer component={Paper}>

@@ -40,7 +40,6 @@ function AssetForm({ existingAsset = null }) {
   
   // Additional state for metadata templates and custom fields
   const [newTag, setNewTag] = useState('');
-  const [fieldType, setFieldType] = useState('text');
   const [uploadStep, setUploadStep] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   
@@ -53,15 +52,6 @@ function AssetForm({ existingAsset = null }) {
     'Recording transaction'
   ];
   
-  // Common field types
-  const fieldTypes = [
-    { value: 'text', label: 'Text' },
-    { value: 'number', label: 'Number' },
-    { value: 'date', label: 'Date' },
-    { value: 'url', label: 'URL' },
-    { value: 'email', label: 'Email' },
-    { value: 'boolean', label: 'Yes/No' }
-  ];
   
   // Example templates
   const templates = [

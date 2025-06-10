@@ -50,7 +50,7 @@ const ApiKeysDisabledMessage = ({ onRefresh, isRefreshing }) => (
 
 const ApiKeysPage = () => {
   const { account, isAuthenticated } = useAuth();
-  const { status: apiKeysStatus, loading: statusLoading, isEnabled, refresh: refreshStatus } = useApiKeysStatus({
+  const { loading: statusLoading, isEnabled, refresh: refreshStatus } = useApiKeysStatus({
     pollingInterval: 60000, // Poll every minute on API keys page
     refetchOnFocus: true
   });

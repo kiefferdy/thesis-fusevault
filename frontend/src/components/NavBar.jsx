@@ -34,7 +34,7 @@ import useApiKeysStatus from '../hooks/useApiKeysStatus';
 function NavBar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { isAuthenticated } = useAuth();
-  const { isDisabled: apiKeysDisabled, isEnabled: apiKeysEnabled, refresh: refreshApiKeysStatus } = useApiKeysStatus({
+  const { isDisabled: apiKeysDisabled, isEnabled: apiKeysEnabled } = useApiKeysStatus({
     pollingInterval: 0, // Disable polling in NavBar
     refetchOnFocus: true // But still refresh on window focus
   });

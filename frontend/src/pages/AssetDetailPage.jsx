@@ -32,19 +32,17 @@ import { toast } from 'react-hot-toast';
 import { assetService } from '../services/assetService';
 import { transactionService } from '../services/transactionService';
 import { useAssets } from '../hooks/useAssets';
-import { useAuth } from '../contexts/AuthContext';
 import { formatDate, formatWalletAddress, formatTransactionHash } from '../utils/formatters';
 
 function AssetDetailPage() {
   const { assetId } = useParams();
   const [asset, setAsset] = useState(null);
-  const [version, setVersion] = useState(null);
+  const [version] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tabValue, setTabValue] = useState(0);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const { currentAccount } = useAuth();
   const { deleteAsset, isDeleting } = useAssets();
   const navigate = useNavigate();
 
