@@ -142,6 +142,10 @@ class APIKeyAuthProvider:
         Returns:
             True if permission granted, False otherwise
         """
+        # Handle edge cases
+        if not permissions or not isinstance(permissions, list):
+            return False
+        
         # Admin permission grants all access
         if "admin" in permissions:
             return True

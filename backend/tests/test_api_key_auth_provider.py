@@ -393,12 +393,20 @@ class TestAPIKeyAuthProvider:
         with patch('app.services.api_key_auth_provider.settings', mock_settings), \
              patch('app.services.api_key_auth_provider.validate_api_key_format') as mock_validate:
             
-            # The implementation should handle whitespace appropriately
-            await auth_provider.authenticate(request)
+            mock_validate.return_value = False  # Format validation will fail
             
-            # Check what was passed to validation (should it be trimmed?)
-            called_key = mock_validate.call_args[0][0] if mock_validate.called else None
-            # This test documents the current behavior - adjust based on requirements
+            # The implementation should handle whitespace appropriately and raise HTTPException
+            with pytest.raises(HTTPException) as exc_info:
+                await auth_provider.authenticate(request)
+            
+            # Should be a 401 error due to format validation failure
+            assert exc_info.value.status_code == 401
+            assert "Invalid API key format" in str(exc_info.value.detail)
+            
+            # Check that the API key was trimmed before validation
+            if mock_validate.called:
+                called_key = mock_validate.call_args[0][0]
+                assert called_key == "fv.v1.231d7d7f.nonce.sig"  # Should be trimmed
 
     @pytest.mark.asyncio
     async def test_permission_edge_cases(self, auth_provider):

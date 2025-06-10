@@ -104,7 +104,8 @@ class TestAPIKeyIntegration:
         from app.services.auth_manager import AuthManager
         
         with patch('app.services.auth_manager.get_db_client') as mock_get_db, \
-             patch('app.services.auth_manager.settings', mock_settings):
+             patch('app.services.auth_manager.settings', mock_settings), \
+             patch('app.services.api_key_auth_provider.settings', mock_settings):
             
             # Mock database client
             mock_db_client = MagicMock()
