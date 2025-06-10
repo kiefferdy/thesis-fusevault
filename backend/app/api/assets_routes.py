@@ -54,7 +54,7 @@ async def get_user_assets(
                 logger.warning(f"Unauthorized access attempt: {authenticated_wallet} tried to access assets of {wallet_address}")
                 return {"status": "success", "assets": []}
         
-        # Get assets (will work in both authenticated and demo modes)
+        # Get assets
         assets = await asset_service.get_user_assets(wallet_address)
         return {"status": "success", "assets": assets}
     except Exception as e:

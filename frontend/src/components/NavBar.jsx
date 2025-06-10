@@ -33,7 +33,7 @@ import useApiKeysStatus from '../hooks/useApiKeysStatus';
 
 function NavBar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { isAuthenticated, backendAvailable } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { isDisabled: apiKeysDisabled, isEnabled: apiKeysEnabled, refresh: refreshApiKeysStatus } = useApiKeysStatus({
     pollingInterval: 0, // Disable polling in NavBar
     refetchOnFocus: true // But still refresh on window focus
@@ -46,10 +46,9 @@ function NavBar() {
   useEffect(() => {
     console.log('NavBar - API Keys Status:', { 
       disabled: apiKeysDisabled, 
-      enabled: apiKeysEnabled,
-      backendAvailable
+      enabled: apiKeysEnabled
     });
-  }, [apiKeysDisabled, apiKeysEnabled, backendAvailable]);
+  }, [apiKeysDisabled, apiKeysEnabled]);
 
   const navigationItems = [
     { text: 'Home', icon: <Home />, path: '/', requiresAuth: false },
@@ -106,18 +105,6 @@ function NavBar() {
             FuseVault
           </Typography>
           
-          {/* Backend status indicator */}
-          {isAuthenticated && !backendAvailable && (
-            <Tooltip title="Backend server is not available. Running in demo mode.">
-              <Chip
-                icon={<CloudOff />}
-                label="Demo Mode"
-                color="warning"
-                size="small"
-                sx={{ mr: 2 }}
-              />
-            </Tooltip>
-          )}
           
           {!isMobile && (
             <Box sx={{ display: 'flex', gap: 2, mx: 2 }}>
@@ -143,7 +130,7 @@ function NavBar() {
                   <Typography>{item.text}</Typography>
                   {/* Show disabled indicator for API Keys */}
                   {item.path === '/api-keys' && apiKeysDisabled && (
-                    <Tooltip title={`API Keys feature is disabled${!backendAvailable ? ' (backend unavailable)' : ''}`}>
+                    <Tooltip title="API Keys feature is disabled">
                       <Block sx={{ fontSize: 16, color: 'orange', ml: 0.5 }} />
                     </Tooltip>
                   )}
@@ -168,18 +155,6 @@ function NavBar() {
           onClick={toggleDrawer(false)}
           onKeyDown={toggleDrawer(false)}
         >
-          {/* Backend status in drawer */}
-          {isAuthenticated && !backendAvailable && (
-            <Box sx={{ p: 2 }}>
-              <Chip
-                icon={<CloudOff />}
-                label="Demo Mode - Backend Unavailable"
-                color="warning"
-                size="small"
-                sx={{ width: '100%' }}
-              />
-            </Box>
-          )}
           
           <List>
             {filteredItems.map((item) => (
@@ -196,7 +171,7 @@ function NavBar() {
                 <ListItemText primary={item.text} />
                 {/* Show disabled indicator for API Keys */}
                 {item.path === '/api-keys' && apiKeysDisabled && (
-                  <Tooltip title={`API Keys feature is disabled${!backendAvailable ? ' (backend unavailable)' : ''}`}>
+                  <Tooltip title="API Keys feature is disabled">
                     <Block sx={{ fontSize: 20, color: 'orange' }} />
                   </Tooltip>
                 )}

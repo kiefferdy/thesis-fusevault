@@ -60,14 +60,14 @@ async def get_user(
     Returns:
         UserResponse containing user information
     """
-    # Check if in demo mode or unauthenticated
-    demo_mode = getattr(request.state, "demo_mode", False)
+    # Check if authenticated
     is_authenticated = hasattr(request.state, "user") and request.state.user is not None
     
-    # If in demo mode or not authenticated, return demo data
-    if demo_mode or not is_authenticated:
-        logger.info(f"Demo mode or unauthenticated: Allowing public access to user profile for {wallet_address}")
-        return await user_handler.get_user(wallet_address, demo_mode=True)
+    if not is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
     
     # If authenticated, get user from request state
     current_user = request.state.user
@@ -86,7 +86,7 @@ async def get_user(
             detail="You can only view your own user profile"
         )
         
-    return await user_handler.get_user(wallet_address, demo_mode=False)
+    return await user_handler.get_user(wallet_address)
 
 @router.put("/{wallet_address}", response_model=UserResponse)
 async def update_user(

@@ -155,7 +155,7 @@ async def get_pending_transfers(
 ) -> PendingTransfersResponse:
     """
     Get all pending transfers for a wallet address.
-    This is a read operation that can work in both authenticated and demo modes.
+    This is a read operation.
     
     Args:
         wallet_address: The wallet address to get pending transfers for

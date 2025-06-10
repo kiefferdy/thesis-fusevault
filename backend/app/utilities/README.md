@@ -142,10 +142,6 @@ The following routes are configured as public (no authentication required):
 - `/auth/logout` - Logout endpoint
 - `/users/register` - Register a new user
 
-Additionally, these data endpoints are public for read access (demo mode):
-- `/users/{wallet_address}` - Get user profile
-- `/assets/user/{wallet_address}` - Get user assets
-- `/transactions/*` - Get transaction data
 
 Public routes can be configured in two ways:
 1. Exact path matches via the `public_paths` list in `AuthMiddleware.__init__`
@@ -153,17 +149,3 @@ Public routes can be configured in two ways:
 
 For example, `/auth/nonce/{wallet_address}` is configured as a prefix match with `/auth/nonce/` to allow any wallet address.
 
-## Demo Mode
-
-The system supports a "demo mode" for unauthenticated users. This allows the frontend to function in a limited way even when no user is logged in.
-
-Demo mode is automatically enabled when:
-1. A request is made to a read-only (GET) endpoint for user, asset, or transaction data
-2. No valid session cookie is present
-
-In demo mode:
-1. Endpoints can access `request.state.demo_mode` (boolean) to detect demo mode
-2. For path-based endpoints, `request.state.demo_wallet` contains the wallet address from the path
-3. Endpoints should return suitable placeholder or example data
-
-This allows the frontend to display the UI without being blocked by authentication failures, showing sample data instead.

@@ -83,8 +83,8 @@ export const testApiKeyAuth = async (apiKey) => {
 };
 
 /**
- * Demo helper to use API key authentication instead of wallet
- * This is useful for testing and demos
+ * Testing helper to use API key authentication instead of wallet
+ * This is useful for development and testing
  */
 export const useApiKeyAuth = (apiKey, persist = false) => {
   if (!apiKey) {

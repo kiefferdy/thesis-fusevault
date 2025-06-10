@@ -61,7 +61,7 @@ function DashboardPage() {
   const [openSetupDialog, setOpenSetupDialog] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const { currentAccount, isAuthenticated, backendAvailable } = useAuth();
+  const { currentAccount } = useAuth();
   const { user, isLoading: userLoading, register, isRegistering, error: userError } = useUser();
   const { assets, isLoading: assetsLoading } = useAssets();
   const { 
@@ -107,10 +107,10 @@ function DashboardPage() {
   // Check if we need to show the setup dialog
   useEffect(() => {
     // If user data failed to load and we're not already registering
-    if (userError && !userLoading && !isRegistering && currentAccount && backendAvailable) {
+    if (userError && !userLoading && !isRegistering && currentAccount) {
       setOpenSetupDialog(true);
     }
-  }, [userError, userLoading, isRegistering, currentAccount, backendAvailable]);
+  }, [userError, userLoading, isRegistering, currentAccount]);
   
   // Handle setup form submission
   const handleSetupSubmit = () => {
@@ -168,7 +168,7 @@ function DashboardPage() {
   const storageUsage = Math.min(
     ((summary?.total_asset_size || 0) / (100 * 1024 * 1024)) * 100, 
     100
-  ); // Assuming 100MB limit for demo
+  ); // Assuming 100MB storage limit
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -223,11 +223,6 @@ function DashboardPage() {
         </Button>
       </Box>
 
-      {!backendAvailable && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          Running in demo mode. Some features may be limited.
-        </Alert>
-      )}
       
       {/* User Profile Summary Card & Stats */}
       <Grid container spacing={3} sx={{ mb: 4 }}>

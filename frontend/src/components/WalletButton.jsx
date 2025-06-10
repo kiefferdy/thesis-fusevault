@@ -9,8 +9,7 @@ function WalletButton() {
     connectWallet, 
     signIn, 
     signOut, 
-    isLoading,
-    backendAvailable
+    isLoading
   } = useAuth();
 
   const handleAction = async () => {
@@ -33,11 +32,6 @@ function WalletButton() {
     if (isLoading) return 'Loading...';
     if (!currentAccount) return 'Connect Wallet';
     if (!isAuthenticated) return 'Sign In';
-    
-    // If in demo mode, show a different message
-    if (!backendAvailable) {
-      return `${formatWalletAddress(currentAccount)} (Demo) | Sign Out`;
-    }
     
     return `${formatWalletAddress(currentAccount)} | Sign Out`;
   };

@@ -47,12 +47,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/redoc/",
             "/openapi/",
             "/auth/nonce/",  # Nonce endpoints for any wallet address
-            # Demo mode and read-only endpoints
-            "/users/",
-            "/assets/user/",
-            "/transactions/",
-            "/transfers/pending/",
-            "/retrieve/",
         ]
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
@@ -82,7 +76,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Skip authentication for public paths
         if self._is_public_path(path):
             logger.debug(f"Path {path} is public, skipping authentication")
-            await self._handle_public_path(request, path, method, session_id)
             return await call_next(request)
 
         # Try to authenticate using the AuthManager
@@ -122,48 +115,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         return await call_next(request)
 
-    async def _handle_public_path(
-        self, 
-        request: Request, 
-        path: str, 
-        method: str, 
-        session_id: Optional[str]
-    ) -> None:
-        """
-        Handle public path logic including demo mode setup.
-
-        Args:
-            request: The incoming request
-            path: The request path
-            method: HTTP method
-            session_id: Session ID from cookies
-        """
-        is_read_operation = method == "GET"
-        is_data_path = any(
-            path.startswith(prefix) 
-            for prefix in ["/users/", "/assets/", "/transactions/"]
-        )
-
-        if is_read_operation and is_data_path:
-            if not session_id:
-                # Set demo mode flag
-                request.state.demo_mode = True
-                logger.info(f"Demo mode enabled for {path}")
-
-                # Extract wallet address from path for demo mode
-                path_parts = path.split("/")
-                if len(path_parts) > 2:
-                    wallet_addr = path_parts[2]
-                    if wallet_addr:
-                        request.state.demo_wallet = wallet_addr
-                        logger.debug(f"Demo wallet address: {wallet_addr}")
-            else:
-                # Try to validate auth credentials for public paths
-                auth_context = await self.auth_manager.authenticate(request)
-                if auth_context:
-                    logger.debug(f"Valid authentication found for public path: {path}")
-                    self._set_auth_state(request, auth_context)
-                    request.state.demo_mode = False
 
     def _set_auth_state(self, request: Request, auth_context: Dict[str, Any]) -> None:
         """
@@ -177,7 +128,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request.state.wallet_address = auth_context.get("wallet_address")
         request.state.auth_method = auth_context.get("auth_method")
         request.state.permissions = auth_context.get("permissions", [])
-        request.state.demo_mode = False
 
         # For backward compatibility
         if auth_context.get("session_data"):
