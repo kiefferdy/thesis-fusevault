@@ -17,8 +17,6 @@ class Settings(BaseSettings):
     contract_address: Optional[str] = Field(None, alias="CONTRACT_ADDRESS")
     
     # Web3 Storage settings
-    web3_storage_did_key: str = Field(alias="WEB3_STORAGE_DID_KEY")
-    web3_storage_email: str = Field(alias="WEB3_STORAGE_EMAIL")
     web3_storage_service_url: str = Field(default="http://localhost:8080", alias="WEB3_STORAGE_SERVICE_URL")
     
     # JWT settings
