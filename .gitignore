@@ -17,7 +17,6 @@ env/
 Thumbs.db
 
 # Docker-specific
-*.dockerignore
 docker-compose.override.yml
 
 # Miscellaneous

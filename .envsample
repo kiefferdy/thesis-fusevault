@@ -21,6 +21,7 @@ JWT_EXPIRATION_MINUTES=1440
 # Application Configuration
 DEBUG=false
 CORS_ORIGINS=http://localhost:3001,http://localhost:3000
+VITE_API_URL=http://localhost:8000
 
 # API Key Configuration (Optional - disabled by default)
 API_KEY_AUTH_ENABLED=false
