@@ -8,28 +8,8 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
-    environment:
-      - MONGODB_URI=${MONGODB_URI}
-      - MONGO_DB_NAME=${MONGO_DB_NAME:-fusevault}
-      - WALLET_ADDRESS=${WALLET_ADDRESS}
-      - PRIVATE_KEY=${PRIVATE_KEY}
-      - ALCHEMY_SEPOLIA_URL=${ALCHEMY_SEPOLIA_URL}
-      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS}
-      - WEB3_STORAGE_DID_KEY=${WEB3_STORAGE_DID_KEY}
-      - WEB3_STORAGE_EMAIL=${WEB3_STORAGE_EMAIL}
-      - WEB3_STORAGE_SERVICE_URL=${WEB3_STORAGE_SERVICE_URL:-http://localhost:8080}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
-      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-1440}
-      - DEBUG=${DEBUG:-false}
-      - CORS_ORIGINS=${CORS_ORIGINS:-*}
-      - API_KEY_AUTH_ENABLED=${API_KEY_AUTH_ENABLED:-false}
-      - API_KEY_SECRET_KEY=${API_KEY_SECRET_KEY}
-      - API_KEY_RATE_LIMIT_PER_MINUTE=${API_KEY_RATE_LIMIT_PER_MINUTE:-100}
-      - API_KEY_MAX_PER_WALLET=${API_KEY_MAX_PER_WALLET:-10}
-      - API_KEY_DEFAULT_EXPIRATION_DAYS=${API_KEY_DEFAULT_EXPIRATION_DAYS:-90}
-      - API_KEY_DEFAULT_PERMISSIONS=${API_KEY_DEFAULT_PERMISSIONS:-read}
-      - REDIS_URL=${REDIS_URL}
+    env_file:
+      - ./backend/.env
     networks:
       - fusevault-network
     deploy:
@@ -48,9 +28,9 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    env_file:
+      - ./web3-storage-service/.env
     environment:
-      - WEB3_STORAGE_DID_KEY=${WEB3_STORAGE_DID_KEY}
-      - WEB3_STORAGE_EMAIL=${WEB3_STORAGE_EMAIL}
       - NODE_ENV=production
     volumes:
       - web3_storage_uploads:/app/upload_queue
@@ -68,12 +48,12 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
     container_name: fusevault-frontend-prod
     restart: unless-stopped
     ports:
       - "3001:80"
-    environment:
-      - VITE_API_URL=${VITE_API_URL}
     depends_on:
       - backend
       - web3-storage

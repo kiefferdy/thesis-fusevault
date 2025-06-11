@@ -79,13 +79,50 @@ FuseVault is a secure digital asset management platform combining blockchain, IP
 - Event emission for state changes
 
 ## Environment Setup
-Required environment variables (.env at project root):
+Each service has its own .env file for better separation of concerns:
+
+### Backend (.env in backend/ directory):
+#### Database Configuration
 - `MONGODB_URI` - MongoDB connection string
-- `IPFS_API_URL` - IPFS node endpoint
-- `INFURA_URL` - Ethereum node access
-- `WEB3_STORAGE_API_TOKEN` - Web3.Storage API key
-- `ALCHEMY_SEPOLIA_URL` - Sepolia testnet RPC
-- `PRIVATE_KEY` - Deployment wallet private key
+- `MONGO_DB_NAME` - MongoDB database name (default: fusevault)
+
+#### Blockchain Configuration
+- `WALLET_ADDRESS` - Server wallet address for blockchain operations
+- `PRIVATE_KEY` - Server wallet private key
+- `ALCHEMY_SEPOLIA_URL` - Sepolia testnet RPC URL
+- `CONTRACT_ADDRESS` - Deployed smart contract address
+
+#### JWT Configuration
+- `JWT_SECRET_KEY` - Secret key for JWT tokens (minimum 32 characters)
+- `JWT_ALGORITHM` - JWT algorithm (default: HS256)
+- `JWT_EXPIRATION_MINUTES` - JWT token expiration in minutes (default: 1440)
+
+#### Application Configuration
+- `DEBUG` - Enable debug mode (default: false)
+- `CORS_ORIGINS` - Comma-separated list of allowed frontend origins
+- `WEB3_STORAGE_SERVICE_URL` - URL to Web3 Storage service
+
+#### API Key Configuration
+- `API_KEY_AUTH_ENABLED` - Enable API key authentication (default: false)
+- `API_KEY_SECRET_KEY` - Secret key for API key generation (minimum 32 characters)
+- `API_KEY_RATE_LIMIT_PER_MINUTE` - Rate limit per minute for API keys (default: 100)
+- `API_KEY_MAX_PER_WALLET` - Maximum API keys per wallet (default: 10)
+- `API_KEY_DEFAULT_EXPIRATION_DAYS` - Default API key expiration in days (default: 90)
+- `API_KEY_DEFAULT_PERMISSIONS` - Default permissions for new API keys (default: ["read"])
+
+#### Redis Configuration
+- `REDIS_URL` - Redis connection URL for rate limiting (optional)
+
+### Web3 Storage Service (.env in web3-storage-service/ directory):
+- `WEB3_STORAGE_DID_KEY` - Web3.Storage DID key
+- `WEB3_STORAGE_EMAIL` - Email for Web3.Storage authentication
+
+### Frontend (.env in frontend/ directory):
+- `VITE_API_URL` - Backend API URL for local development (default: http://localhost:8000)
+
+**Note**: For Docker deployments, the API URL is set via build arguments in docker-compose files, not the .env file.
+
+Use the .env.example files in each directory as templates.
 
 ## Development Workflow
 1. Backend changes: Run tests with `pytest`, ensure handlers/services/repos are tested

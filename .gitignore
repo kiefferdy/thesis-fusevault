@@ -1,6 +1,8 @@
 # Environment variables
 .env
 .env.*
+# Allow .env.example files to be tracked
+!.env.example
 
 # Virtual environments
 venv/

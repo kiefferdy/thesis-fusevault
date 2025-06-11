@@ -3,7 +3,7 @@ import { create } from '@web3-storage/w3up-client';
 import { filesFromPaths } from 'files-from-path';
 import fetch from 'node-fetch';
 
-dotenv.config({ path: '../.env' });
+dotenv.config({ path: './.env' });
 
 async function initializeClient() {
   const DID_KEY = process.env.WEB3_STORAGE_DID_KEY;

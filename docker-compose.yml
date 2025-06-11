@@ -21,24 +21,8 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
-    environment:
-      - MONGODB_URI=${MONGODB_URI}
-      - MONGO_DB_NAME=${MONGO_DB_NAME:-fusevault}
-      - WALLET_ADDRESS=${WALLET_ADDRESS}
-      - PRIVATE_KEY=${PRIVATE_KEY}
-      - ALCHEMY_SEPOLIA_URL=${ALCHEMY_SEPOLIA_URL}
-      - CONTRACT_ADDRESS=${CONTRACT_ADDRESS}
-      - WEB3_STORAGE_DID_KEY=${WEB3_STORAGE_DID_KEY}
-      - WEB3_STORAGE_EMAIL=${WEB3_STORAGE_EMAIL}
-      - WEB3_STORAGE_SERVICE_URL=${WEB3_STORAGE_SERVICE_URL:-http://localhost:8080}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
-      - JWT_EXPIRATION_MINUTES=${JWT_EXPIRATION_MINUTES:-1440}
-      - DEBUG=${DEBUG:-false}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3001}
-      - API_KEY_AUTH_ENABLED=${API_KEY_AUTH_ENABLED:-false}
-      - API_KEY_SECRET_KEY=${API_KEY_SECRET_KEY}
-      - REDIS_URL=${REDIS_URL}
+    env_file:
+      - ./backend/.env
     volumes:
       - ./backend:/app
       - /app/__pycache__
@@ -63,9 +47,8 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
-    environment:
-      - WEB3_STORAGE_DID_KEY=${WEB3_STORAGE_DID_KEY}
-      - WEB3_STORAGE_EMAIL=${WEB3_STORAGE_EMAIL}
+    env_file:
+      - ./web3-storage-service/.env
     volumes:
       - ./web3-storage-service:/app
       - /app/node_modules
@@ -88,12 +71,12 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8000
     container_name: fusevault-frontend
     restart: unless-stopped
     ports:
       - "3001:80"
-    environment:
-      - VITE_API_URL=http://localhost:8000
     depends_on:
       - backend
       - web3-storage
