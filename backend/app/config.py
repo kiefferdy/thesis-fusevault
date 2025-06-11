@@ -60,7 +60,8 @@ class Settings(BaseSettings):
         return self.cors_origins
     
     class Config:
-        env_file = "../.env"
+        # Try multiple .env locations for local/Docker compatibility
+        env_file = [".env", "../.env"]  # Pydantic tries in order
         case_sensitive = False
         
         
