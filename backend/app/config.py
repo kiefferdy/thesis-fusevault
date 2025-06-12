@@ -58,8 +58,10 @@ class Settings(BaseSettings):
         return self.cors_origins
     
     class Config:
-        # Load from backend-specific .env file
-        env_file = [".env", "../backend/.env"]  # Pydantic tries in order
+        # Load from backend-specific .env file (for local development)
+        # Railway deployment uses environment variables directly
+        env_file = [".env"]
+        env_file_encoding = 'utf-8'
         case_sensitive = False
         
         
