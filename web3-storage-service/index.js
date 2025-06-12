@@ -7,6 +7,10 @@ import { computeCID } from './utilities.js';
 const app = express();
 const PORT = process.env.PORT || 8080;
 const UPLOAD_DIR = 'upload_queue';
+
+// Determine host binding based on environment
+// Railway requires IPv6 (::) for private networking, localhost uses IPv4 (0.0.0.0)
+const HOST = process.env.RAILWAY_ENVIRONMENT_NAME ? '::' : '0.0.0.0';
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
@@ -108,17 +112,16 @@ app.get('/health', (req, res) => {
     status: 'OK', 
     timestamp: new Date().toISOString(),
     port: PORT,
-    host: req.get('host'),
-    url: req.url
+    bind_host: HOST,
+    request_host: req.get('host'),
+    url: req.url,
+    railway_env: process.env.RAILWAY_ENVIRONMENT_NAME || 'local'
   });
 });
 
-// Start Express server with environment-appropriate binding
-// Railway requires IPv6 (::) for private networking, localhost uses IPv4 (0.0.0.0)
-const HOST = process.env.RAILWAY_ENVIRONMENT ? '::' : '0.0.0.0';
-
+// Start Express server
 app.listen(PORT, HOST, () => {
-  console.log(`API server running on ${HOST}:${PORT}`);
+  console.log(`API server running on ${HOST}:${PORT} (Railway env: ${process.env.RAILWAY_ENVIRONMENT_NAME || 'local'})`);
 });
 
 /**
