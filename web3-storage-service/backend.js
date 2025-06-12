@@ -2,8 +2,14 @@ import dotenv from 'dotenv';
 import { create } from '@web3-storage/w3up-client';
 import { filesFromPaths } from 'files-from-path';
 import fetch from 'node-fetch';
+import dns from 'dns';
 
 dotenv.config({ path: './.env' });
+
+// Force IPv4 for DNS resolution on Railway to fix Web3.Storage API connectivity
+if (process.env.RAILWAY_ENVIRONMENT_NAME) {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 async function initializeClient() {
   const DID_KEY = process.env.WEB3_STORAGE_DID_KEY;
