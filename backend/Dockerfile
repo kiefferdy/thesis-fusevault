@@ -31,10 +31,10 @@ USER fusevault
 # Expose port
 EXPOSE 8000
 
-# Health check - environment-appropriate for IPv4/IPv6
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD sh -c 'if [ "$RAILWAY_ENVIRONMENT_NAME" ]; then python -c "import requests; requests.get(\"http://[::1]:8000/docs\")"; else python -c "import requests; requests.get(\"http://localhost:8000/docs\")"; fi' || exit 1
+    CMD python -c "import requests; requests.get('http://localhost:8000/docs')" || exit 1
 
-# Run the application with environment-appropriate binding
-# Use IPv6 (::) on Railway for private networking, IPv4 (0.0.0.0) locally
-CMD ["sh", "-c", "if [ \"$RAILWAY_ENVIRONMENT_NAME\" ]; then uvicorn app.main:app --host :: --port 8000; else uvicorn app.main:app --host 0.0.0.0 --port 8000; fi"]
+# Run the application with Hypercorn for dual-stack IPv4/IPv6 support
+# Hypercorn properly supports both public (IPv4) and private network (IPv6) access
+CMD ["hypercorn", "app.main:app", "--bind", "[::]:8000"]

@@ -1,4 +1,5 @@
 import httpx
+import json
 import logging
 from typing import Dict, Any, List
 from fastapi import UploadFile, HTTPException
@@ -15,7 +16,9 @@ class IPFSService:
     async def test_connection(self) -> Dict[str, Any]:
         """Test connection to web3 storage service for debugging."""
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            # Configure httpx for IPv6 support on Railway
+            limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+            async with httpx.AsyncClient(timeout=30.0, limits=limits) as client:
                 response = await client.get(f"{self.storage_service_url}/health")
                 response.raise_for_status()
                 result = response.json()
@@ -23,6 +26,7 @@ class IPFSService:
                 return {"status": "connected", "health_data": result}
         except Exception as exc:
             logger.error(f"Web3 storage service health check failed: {exc}")
+            logger.error(f"Service URL: {self.storage_service_url}")
             return {"status": "failed", "error": str(exc), "url": self.storage_service_url}
 
     async def store_metadata(self, metadata: Dict[str, Any]) -> str:

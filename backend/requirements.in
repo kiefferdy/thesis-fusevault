@@ -1,6 +1,7 @@
 # FastAPI app dependencies
 fastapi
 uvicorn[standard]
+hypercorn
 python-multipart
 httpx
 email-validator
