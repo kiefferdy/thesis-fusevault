@@ -5,7 +5,7 @@ import { uploadFile, getFileUrl, displayFileContents } from './backend.js';
 import { computeCID } from './utilities.js';
 
 const app = express();
-const PORT = 8080;
+const PORT = process.env.PORT || 8080;
 const UPLOAD_DIR = 'upload_queue';
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -100,8 +100,8 @@ app.get('/file/:cid/contents', async (req, res) => {
 });
 
 // Start Express server
-app.listen(PORT, () => {
-  console.log(`API server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`API server running on http://0.0.0.0:${PORT}`);
 });
 
 /**
