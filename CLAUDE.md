@@ -124,6 +124,35 @@ Each service has its own .env file for better separation of concerns:
 
 Use the .env.example files in each directory as templates.
 
+## Deployment
+
+### Railway Deployment
+The project is optimized for Railway deployment with the following setup:
+
+#### Environment Variables
+- **Local Development**: Uses .env files for convenience
+- **Docker Compose**: Uses environment variables with shell references and .env fallbacks
+- **Railway Production**: Uses Railway's environment variable dashboard
+
+#### Railway Setup Steps:
+1. Create separate Railway services for each component:
+   - Backend service (FastAPI)
+   - Web3 Storage service (Node.js)  
+   - Frontend service (React)
+   - Redis service (optional, use Railway's Redis add-on)
+
+2. Set environment variables for each service (see .env.example files in each directory)
+
+3. Configure service URLs:
+   - `WEB3_STORAGE_SERVICE_URL`: Use Railway-generated URL for web3 storage service
+   - `VITE_API_URL`: Use Railway-generated URL for backend service
+   - `CORS_ORIGINS`: Include Railway-generated frontend URL
+
+#### Docker Environment Strategy:
+- **Local Development**: `docker-compose.yml` uses service-specific .env files
+- **Production Docker**: `docker-compose.prod.yml` uses service-specific .env files  
+- **Railway Deployment**: Individual services deployed separately, environment variables set in Railway dashboard
+
 ## Development Workflow
 1. Backend changes: Run tests with `pytest`, ensure handlers/services/repos are tested
 2. Frontend changes: Run `npm run lint` before committing

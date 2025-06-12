@@ -30,8 +30,6 @@ services:
       - "8080:8080"
     env_file:
       - ./web3-storage-service/.env
-    environment:
-      - NODE_ENV=production
     volumes:
       - web3_storage_uploads:/app/upload_queue
     networks:
