@@ -105,23 +105,18 @@ app.get('/file/:cid/contents', async (req, res) => {
 
 /**
  * GET /health
- * Health check endpoint for debugging Railway connectivity.
+ * Health check endpoint.
  */
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
-    timestamp: new Date().toISOString(),
-    port: PORT,
-    bind_host: HOST,
-    request_host: req.get('host'),
-    url: req.url,
-    railway_env: process.env.RAILWAY_ENVIRONMENT_NAME || 'local'
+    timestamp: new Date().toISOString()
   });
 });
 
 // Start Express server
 app.listen(PORT, HOST, () => {
-  console.log(`API server running on ${HOST}:${PORT} (Railway env: ${process.env.RAILWAY_ENVIRONMENT_NAME || 'local'})`);
+  console.log(`Web3.Storage service running on ${HOST}:${PORT}`);
 });
 
 /**
