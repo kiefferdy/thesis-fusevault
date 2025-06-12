@@ -11,6 +11,19 @@ class IPFSService:
     def __init__(self):
         self.storage_service_url = settings.web3_storage_service_url
         logger.info(f"Using Web3 Storage service at: {self.storage_service_url}")
+        
+    async def test_connection(self) -> Dict[str, Any]:
+        """Test connection to web3 storage service for debugging."""
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(f"{self.storage_service_url}/health")
+                response.raise_for_status()
+                result = response.json()
+                logger.info(f"Web3 storage service health check successful: {result}")
+                return {"status": "connected", "health_data": result}
+        except Exception as exc:
+            logger.error(f"Web3 storage service health check failed: {exc}")
+            return {"status": "failed", "error": str(exc), "url": self.storage_service_url}
 
     async def store_metadata(self, metadata: Dict[str, Any]) -> str:
         """
@@ -51,8 +64,14 @@ class IPFSService:
             logger.info(f"Successfully stored metadata on IPFS. CID: {cid}")
             return cid
 
+        except httpx.ConnectError as exc:
+            logger.error(f"Connection error to Web3 storage service: {exc}")
+            logger.error(f"Attempted URL: {self.storage_service_url}/upload")
+            raise HTTPException(status_code=503, detail=f"Cannot connect to Web3 storage service at {self.storage_service_url}")
         except httpx.HTTPError as exc:
             logger.error(f"HTTP error uploading to IPFS: {str(exc)}")
+            logger.error(f"Response status: {getattr(exc.response, 'status_code', 'unknown')}")
+            logger.error(f"Response body: {getattr(exc.response, 'text', 'unknown')}")
             raise
         except Exception as e:
             logger.error(f"General error uploading metadata to IPFS: {str(e)}")

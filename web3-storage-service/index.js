@@ -99,9 +99,26 @@ app.get('/file/:cid/contents', async (req, res) => {
   }
 });
 
-// Start Express server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`API server running on http://0.0.0.0:${PORT}`);
+/**
+ * GET /health
+ * Health check endpoint for debugging Railway connectivity.
+ */
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    port: PORT,
+    host: req.get('host'),
+    url: req.url
+  });
+});
+
+// Start Express server with environment-appropriate binding
+// Railway requires IPv6 (::) for private networking, localhost uses IPv4 (0.0.0.0)
+const HOST = process.env.RAILWAY_ENVIRONMENT ? '::' : '0.0.0.0';
+
+app.listen(PORT, HOST, () => {
+  console.log(`API server running on ${HOST}:${PORT}`);
 });
 
 /**
