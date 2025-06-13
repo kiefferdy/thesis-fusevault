@@ -30,6 +30,19 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
+// Dynamic timeouts are set per endpoint:
+// - /upload: 30 seconds per file (minimum 60s)
+// - /file/:cid/contents: 60 seconds for IPFS fetching
+// - /calculate-cid: 30 seconds for single file processing
+
+// Add CORS headers if needed for Railway
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
+
 /**
  * POST /upload
  * Accept multiple files, each stored in 'upload_queue/'.
@@ -40,6 +53,12 @@ app.post('/upload', upload.array('files'), async (req, res) => {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No file(s) uploaded' });
     }
+
+    // Set dynamic timeout: minimum 60 seconds, or 30 seconds per file
+    const dynamicTimeout = Math.max(60000, req.files.length * 30000);
+    req.setTimeout(dynamicTimeout);
+    res.setTimeout(dynamicTimeout);
+    console.log(`Set timeout to ${dynamicTimeout/1000} seconds for ${req.files.length} files`);
 
     // Array to store { filename, cid } for each uploaded file
     const cids = [];
@@ -95,6 +114,10 @@ app.get('/file/:cid', async (req, res) => {
  */
 app.get('/file/:cid/contents', async (req, res) => {
   try {
+    // Set 60-second timeout for IPFS content fetching
+    req.setTimeout(60000);
+    res.setTimeout(60000);
+    
     const contents = await displayFileContents(req.params.cid);
     return res.send(contents);
   } catch (error) {
@@ -114,11 +137,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Start Express server
-app.listen(PORT, HOST, () => {
-  console.log(`Web3.Storage service running on ${HOST}:${PORT}`);
-});
-
 /**
  * POST /calculate-cid
  * New endpoint that calculates the exact IPFS CID for a given file using ipfs-only-hash.
@@ -127,6 +145,10 @@ app.post('/calculate-cid', upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
+  
+  // Set 30-second timeout for CID calculation
+  req.setTimeout(30000);
+  res.setTimeout(30000);
   
   const filePath = req.file.path;
   try {
@@ -143,4 +165,18 @@ app.post('/calculate-cid', upload.single('file'), async (req, res) => {
       console.error('Error deleting uploaded file:', err);
     }
   }
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Express error:', err);
+  res.status(500).json({ 
+    error: 'Internal server error', 
+    message: err.message 
+  });
+});
+
+// Start Express server
+app.listen(PORT, HOST, () => {
+  console.log(`Web3.Storage service running on ${HOST}:${PORT}`);
 });

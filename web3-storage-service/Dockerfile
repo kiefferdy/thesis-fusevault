@@ -1,6 +1,9 @@
 # Use Node.js 22 Alpine image (latest LTS)
 FROM node:22-alpine
 
+# Install dnsutils for better DNS resolution
+RUN apk add --no-cache bind-tools
+
 # Set working directory
 WORKDIR /app
 
@@ -25,9 +28,9 @@ USER fusevault
 # Expose port
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+# Health check with increased timeout
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Run the application
 CMD ["npm", "start"]
