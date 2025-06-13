@@ -22,6 +22,8 @@ import AssetDetailPage from './pages/AssetDetailPage';
 import HistoryPage from './pages/HistoryPage';
 import ProfilePage from './pages/ProfilePage';
 import ApiKeysPage from './pages/ApiKeysPage';
+import AssetHistoryPage from './pages/AssetHistoryPage';
+
 
 // Create a new QueryClient instance
 const queryClient = new QueryClient({
@@ -52,11 +54,11 @@ const theme = createTheme({
 const ProtectedRoute = ({ children }) => {
   // Check if the user is authenticated client-side first
   const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
-  
+
   if (!isAuthenticated) {
     return <Navigate to="/" replace />;
   }
-  
+
   return children;
 };
 
@@ -67,7 +69,7 @@ function App() {
       setupDebugHelpers();
     }
   }, []);
-  
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
@@ -78,70 +80,79 @@ function App() {
             <main>
               <Routes>
                 <Route path="/" element={<HomePage />} />
-                
-                <Route 
-                  path="/dashboard" 
+
+                <Route
+                  path="/dashboard"
                   element={
                     <ProtectedRoute>
                       <DashboardPage />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                
-                <Route 
-                  path="/upload" 
+
+                <Route
+                  path="/upload"
                   element={
                     <ProtectedRoute>
                       <UploadPage />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                
-                <Route 
-                  path="/assets/:assetId" 
+
+                <Route
+                  path="/assets/:assetId"
                   element={
                     <ProtectedRoute>
                       <AssetDetailPage />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                
-                <Route 
-                  path="/assets/:assetId/edit" 
+
+                <Route
+                  path="/assets/:assetId/edit"
                   element={
                     <ProtectedRoute>
                       <UploadPage />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                
-                <Route 
-                  path="/history" 
+
+                <Route
+                  path="/history"
                   element={
                     <ProtectedRoute>
                       <HistoryPage />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                
-                <Route 
-                  path="/profile" 
+
+                <Route
+                  path="/profile"
                   element={
                     <ProtectedRoute>
                       <ProfilePage />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                
-                <Route 
-                  path="/api-keys" 
+
+                <Route
+                  path="/api-keys"
                   element={
                     <ProtectedRoute>
                       <ApiKeysPage />
                     </ProtectedRoute>
-                  } 
+                  }
                 />
-                
+
+                <Route
+                  path="/assets/:assetId/history"
+                  element={
+                    <ProtectedRoute>
+                      <AssetHistoryPage />
+                    </ProtectedRoute>
+                  }
+                />
+
                 {/* Fallback route */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

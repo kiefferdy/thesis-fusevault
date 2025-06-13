@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { 
+import {
   Box,
   Button,
   TextField,
@@ -20,9 +20,9 @@ import {
   Select,
   Tooltip
 } from '@mui/material';
-import { 
-  Add as AddIcon, 
-  Close as CloseIcon, 
+import {
+  Add as AddIcon,
+  Close as CloseIcon,
   Info as InfoIcon,
   HelpOutline,
   CheckCircle as CheckCircleIcon
@@ -37,13 +37,8 @@ function AssetForm({ existingAsset = null }) {
   const { currentAccount } = useAuth();
   const { uploadMetadata, isUploading } = useAssets();
   const navigate = useNavigate();
-  
-  // Additional state for metadata templates and custom fields
-  const [newTag, setNewTag] = useState('');
-  const [uploadStep, setUploadStep] = useState(0);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  
-  // Steps for the upload process with more detailed backend steps
+
+  // Steps for the upload process
   const uploadSteps = [
     'Parsing metadata',
     'Uploading asset data to IPFS',
@@ -51,8 +46,7 @@ function AssetForm({ existingAsset = null }) {
     'Storing asset data in MongoDB',
     'Recording transaction'
   ];
-  
-  
+
   // Example templates
   const templates = [
     { name: 'Document', fields: { 'document_type': '', 'author': '', 'version': '', 'creation_date': '' } },
@@ -60,23 +54,91 @@ function AssetForm({ existingAsset = null }) {
     { name: 'Certificate', fields: { 'issuer': '', 'recipient': '', 'issue_date': '', 'expiration_date': '' } },
     { name: 'Custom', fields: {} }
   ];
-  
-  // Initialize form state based on existing asset or with defaults
-  const [formData, setFormData] = useState({
+
+  // State initialization function
+  const getInitialFormData = () => ({
     assetId: existingAsset?.assetId || uuidv4(),
     walletAddress: currentAccount,
     criticalMetadata: {
       name: existingAsset?.criticalMetadata?.name || '',
       description: existingAsset?.criticalMetadata?.description || '',
       tags: existingAsset?.criticalMetadata?.tags || [],
-      ...existingAsset?.criticalMetadata
+      ...(existingAsset?.criticalMetadata ?
+        Object.fromEntries(
+          Object.entries(existingAsset.criticalMetadata).filter(
+            ([key]) => !['name', 'description', 'tags'].includes(key)
+          )
+        ) : {}
+      )
     },
     nonCriticalMetadata: existingAsset?.nonCriticalMetadata || {}
   });
-  
-  // Selected template
+
+  // Initialize form state
+  const [formData, setFormData] = useState(getInitialFormData);
   const [selectedTemplate, setSelectedTemplate] = useState('Custom');
-  
+  const [newTag, setNewTag] = useState('');
+  const [uploadStep, setUploadStep] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [criticalFieldName, setCriticalFieldName] = useState('');
+  const [criticalFieldValue, setCriticalFieldValue] = useState('');
+  const [nonCriticalFieldName, setNonCriticalFieldName] = useState('');
+  const [nonCriticalFieldValue, setNonCriticalFieldValue] = useState('');
+
+  // Update form data when existingAsset changes
+  useEffect(() => {
+    if (existingAsset) {
+      const newFormData = getInitialFormData();
+      setFormData(newFormData);
+
+      // Set template based on existing asset structure
+      if (existingAsset.criticalMetadata) {
+        const assetFields = Object.keys(existingAsset.criticalMetadata);
+        const matchingTemplate = templates.find(template => {
+          const templateFields = Object.keys(template.fields);
+          return templateFields.some(field => assetFields.includes(field));
+        });
+
+        if (matchingTemplate) {
+          setSelectedTemplate(matchingTemplate.name);
+        }
+      }
+    }
+  }, [existingAsset, currentAccount]);
+
+  // Handle upload progress
+  useEffect(() => {
+    let progressInterval;
+
+    if (isUploading) {
+      setUploadProgress(0);
+      setUploadStep(0);
+
+      progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          const newProgress = prev + 1;
+          const stepsCount = uploadSteps.length;
+          const progressPerStep = 100 / stepsCount;
+
+          // Change steps at appropriate thresholds
+          for (let i = 1; i < stepsCount; i++) {
+            if (newProgress >= i * progressPerStep && newProgress < (i + 1) * progressPerStep) {
+              setUploadStep(i);
+            }
+          }
+
+          return newProgress < 99 ? newProgress : 99;
+        });
+      }, 350);
+    } else {
+      clearInterval(progressInterval);
+      setUploadProgress(0);
+      setUploadStep(0);
+    }
+
+    return () => clearInterval(progressInterval);
+  }, [isUploading, uploadSteps.length]);
+
   // Handle form field changes for critical metadata
   const handleCriticalMetadataChange = (field) => (event) => {
     setFormData({
@@ -91,19 +153,15 @@ function AssetForm({ existingAsset = null }) {
   // Handle adding a new tag
   const handleAddTag = () => {
     if (newTag.trim() === '') return;
-    
-    if (!formData.criticalMetadata.tags) {
-      formData.criticalMetadata.tags = [];
-    }
-    
+
     setFormData({
       ...formData,
       criticalMetadata: {
         ...formData.criticalMetadata,
-        tags: [...formData.criticalMetadata.tags, newTag.trim()]
+        tags: [...(formData.criticalMetadata.tags || []), newTag.trim()]
       }
     });
-    
+
     setNewTag('');
   };
 
@@ -118,16 +176,10 @@ function AssetForm({ existingAsset = null }) {
     });
   };
 
-  // Fields for critical and non-critical metadata
-  const [criticalFieldName, setCriticalFieldName] = useState('');
-  const [criticalFieldValue, setCriticalFieldValue] = useState('');
-  const [nonCriticalFieldName, setNonCriticalFieldName] = useState('');
-  const [nonCriticalFieldValue, setNonCriticalFieldValue] = useState('');
-
   // Handle adding a custom field to non-critical metadata
   const handleAddCustomField = () => {
     if (nonCriticalFieldName.trim() === '') return;
-    
+
     setFormData({
       ...formData,
       nonCriticalMetadata: {
@@ -135,7 +187,7 @@ function AssetForm({ existingAsset = null }) {
         [nonCriticalFieldName.trim()]: nonCriticalFieldValue
       }
     });
-    
+
     setNonCriticalFieldName('');
     setNonCriticalFieldValue('');
   };
@@ -144,7 +196,7 @@ function AssetForm({ existingAsset = null }) {
   const handleRemoveCustomField = (fieldName) => {
     const updatedMetadata = { ...formData.nonCriticalMetadata };
     delete updatedMetadata[fieldName];
-    
+
     setFormData({
       ...formData,
       nonCriticalMetadata: updatedMetadata
@@ -155,11 +207,10 @@ function AssetForm({ existingAsset = null }) {
   const applyTemplate = (templateName) => {
     const template = templates.find(t => t.name === templateName);
     if (!template) return;
-    
+
     setSelectedTemplate(templateName);
-    
+
     if (templateName === 'Custom') {
-      // Reset to just the basic fields for custom template
       setFormData(prev => ({
         ...prev,
         criticalMetadata: {
@@ -170,91 +221,48 @@ function AssetForm({ existingAsset = null }) {
       }));
       return;
     }
-    
+
     // Add template fields to critical metadata
     setFormData(prev => ({
       ...prev,
       criticalMetadata: {
-        // Keep basic fields
         name: prev.criticalMetadata.name || '',
         description: prev.criticalMetadata.description || '',
         tags: prev.criticalMetadata.tags || [],
-        // Add template fields
         ...template.fields
       }
     }));
   };
-  
-  // Effect to update progress simulation
-  useEffect(() => {
-    let progressInterval;
-    
-    if (isUploading) {
-      setUploadProgress(0);
-      setUploadStep(0);
-      
-      // Longer duration between updates for each step to account for backend processing time
-      progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          const newProgress = prev + 1;
-          const stepsCount = uploadSteps.length;
-          const progressPerStep = 100 / stepsCount;
-          
-          // Change steps at appropriate thresholds based on number of steps
-          for (let i = 1; i < stepsCount; i++) {
-            if (newProgress >= i * progressPerStep && newProgress < (i + 1) * progressPerStep) {
-              setUploadStep(i);
-            }
-          }
-          
-          return newProgress < 99 ? newProgress : 99;
-        });
-      }, 350); // Slower progress to account for longer backend processing
-    } else {
-      // When upload completes or fails
-      clearInterval(progressInterval);
-    }
-    
-    return () => clearInterval(progressInterval);
-  }, [isUploading, uploadSteps.length]);
-  
+
   // Handle form submission
   const handleSubmit = (event) => {
     event.preventDefault();
-    
+
     if (!formData.criticalMetadata.name) {
       toast.error('Asset name is required');
       return;
     }
-    
-    try {
-      uploadMetadata(formData, {
-        onSuccess: () => {
-          // Show 100% completion
-          setUploadProgress(100);
-          
-          // Navigate to dashboard after a moment
-          setTimeout(() => {
-            navigate('/dashboard');
-          }, 1000);
-        }
-      });
-    } catch (error) {
-      toast.error(`Error: ${error.message}`);
-    }
+
+    uploadMetadata(formData, {
+      onSuccess: () => {
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 1000);
+      }
+    });
   };
 
   return (
     <Paper sx={{ p: 3, position: 'relative' }}>
       {/* Upload progress overlay */}
       {isUploading && (
-        <Box sx={{ 
-          position: 'absolute', 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          bottom: 0, 
-          bgcolor: 'rgba(255,255,255,0.9)', 
+        <Box sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          bgcolor: 'rgba(255,255,255,0.9)',
           zIndex: 10,
           display: 'flex',
           flexDirection: 'column',
@@ -265,24 +273,23 @@ function AssetForm({ existingAsset = null }) {
           <Card sx={{ maxWidth: 400, mb: 3, p: 3, boxShadow: 3 }}>
             <CardContent>
               <Typography variant="h6" color="primary" gutterBottom textAlign="center">
-                {uploadProgress === 100 ? 'Upload Complete!' : 'Uploading Asset'}
+                {uploadProgress === 100 ? 'Upload Complete!' : (existingAsset ? 'Updating Asset' : 'Creating Asset')}
               </Typography>
-              
+
               <Box sx={{ mb: 3, mt: 2 }}>
                 {uploadProgress < 100 ? (
                   <Box sx={{ width: '100%' }}>
-                    {/* Step indicator with stepper */}
                     <Box sx={{ mb: 3 }}>
                       <Typography variant="subtitle1" gutterBottom fontWeight="medium">
                         Current step: {uploadSteps[uploadStep]}
                       </Typography>
-                      
+
                       {/* Step progress indicators */}
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                         {uploadSteps.map((step, index) => (
-                          <Box 
-                            key={index} 
-                            sx={{ 
+                          <Box
+                            key={index}
+                            sx={{
                               flex: 1,
                               display: 'flex',
                               flexDirection: 'column',
@@ -300,10 +307,10 @@ function AssetForm({ existingAsset = null }) {
                               }
                             }}
                           >
-                            <Box sx={{ 
-                              width: 28, 
-                              height: 28, 
-                              borderRadius: '50%', 
+                            <Box sx={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: '50%',
                               backgroundColor: index <= uploadStep ? 'primary.main' : 'grey.300',
                               display: 'flex',
                               alignItems: 'center',
@@ -323,12 +330,12 @@ function AssetForm({ existingAsset = null }) {
                         ))}
                       </Box>
                     </Box>
-                    
+
                     {/* Overall progress */}
                     <Box sx={{ width: '100%', mr: 1, mb: 1 }}>
-                      <LinearProgress 
-                        variant="determinate" 
-                        value={uploadProgress} 
+                      <LinearProgress
+                        variant="determinate"
+                        value={uploadProgress}
                         sx={{ height: 10, borderRadius: 5 }}
                       />
                     </Box>
@@ -344,12 +351,14 @@ function AssetForm({ existingAsset = null }) {
                 ) : (
                   <Box sx={{ textAlign: 'center' }}>
                     <CheckCircleIcon color="success" sx={{ fontSize: 60, mb: 2 }} />
-                    <Typography variant="h6" color="success.main" gutterBottom>Upload Successful!</Typography>
+                    <Typography variant="h6" color="success.main" gutterBottom>
+                      {existingAsset ? 'Update' : 'Upload'} Successful!
+                    </Typography>
                     <Typography>Redirecting to dashboard...</Typography>
                   </Box>
                 )}
               </Box>
-              
+
               <Typography variant="caption" color="text.secondary" textAlign="center" display="block">
                 This process can take a few minutes. Please don't close this window.
               </Typography>
@@ -357,14 +366,14 @@ function AssetForm({ existingAsset = null }) {
           </Card>
         </Box>
       )}
-      
+
       <Typography variant="h5" gutterBottom>
         {existingAsset ? 'Edit Asset' : 'Create New Asset'}
       </Typography>
-      
+
       <form onSubmit={handleSubmit}>
         <Grid container spacing={3}>
-          {/* Asset ID (readonly if editing) */}
+          {/* Asset ID (readonly) */}
           <Grid item xs={12}>
             <TextField
               label="Asset ID"
@@ -374,14 +383,14 @@ function AssetForm({ existingAsset = null }) {
               helperText="Asset ID is automatically generated and cannot be changed"
             />
           </Grid>
-          
+
           {/* Critical Metadata Section */}
           <Grid item xs={12}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">
                 Critical Metadata
               </Typography>
-              
+
               <Tooltip title="During retrieval, critical metadata undergo a strict verification process to ensure their authenticity.">
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <HelpOutline fontSize="small" color="primary" sx={{ mr: 1 }} />
@@ -391,11 +400,11 @@ function AssetForm({ existingAsset = null }) {
                 </Box>
               </Tooltip>
             </Box>
-            
+
             <Alert severity="info" sx={{ mb: 2 }}>
               Metadata can be considered critical if they define your asset. Note that modifying these in the future take longer to process.
             </Alert>
-            
+
             {/* Template selection */}
             <FormControl fullWidth sx={{ mb: 3 }}>
               <InputLabel>Metadata Template</InputLabel>
@@ -411,7 +420,7 @@ function AssetForm({ existingAsset = null }) {
                 ))}
               </Select>
             </FormControl>
-            
+
             <Grid container spacing={2}>
               <Grid item xs={12}>
                 <TextField
@@ -422,7 +431,7 @@ function AssetForm({ existingAsset = null }) {
                   required
                 />
               </Grid>
-              
+
               <Grid item xs={12}>
                 <TextField
                   label="Description"
@@ -433,9 +442,9 @@ function AssetForm({ existingAsset = null }) {
                   rows={3}
                 />
               </Grid>
-              
+
               {/* Display all custom critical metadata fields */}
-              {Object.entries(formData.criticalMetadata).filter(([key]) => 
+              {Object.entries(formData.criticalMetadata).filter(([key]) =>
                 !['name', 'description', 'tags'].includes(key)
               ).map(([key, value]) => (
                 <Grid item xs={12} sm={6} key={key}>
@@ -447,7 +456,7 @@ function AssetForm({ existingAsset = null }) {
                   />
                 </Grid>
               ))}
-              
+
               {/* Custom critical field addition */}
               <Grid item xs={12}>
                 <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, mt: 1 }}>
@@ -458,7 +467,7 @@ function AssetForm({ existingAsset = null }) {
                     size="small"
                     sx={{ flexGrow: 1 }}
                   />
-                  
+
                   <TextField
                     label="Value"
                     value={criticalFieldValue}
@@ -466,8 +475,8 @@ function AssetForm({ existingAsset = null }) {
                     size="small"
                     sx={{ flexGrow: 1 }}
                   />
-                  
-                  <Button 
+
+                  <Button
                     variant="contained"
                     startIcon={<AddIcon />}
                     onClick={() => {
@@ -488,7 +497,7 @@ function AssetForm({ existingAsset = null }) {
                   </Button>
                 </Box>
               </Grid>
-              
+
               {/* Tags input */}
               <Grid item xs={12}>
                 <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
@@ -508,7 +517,7 @@ function AssetForm({ existingAsset = null }) {
                       }
                     }}
                   />
-                  <Button 
+                  <Button
                     variant="contained"
                     startIcon={<AddIcon />}
                     onClick={handleAddTag}
@@ -518,7 +527,7 @@ function AssetForm({ existingAsset = null }) {
                     Add
                   </Button>
                 </Box>
-                
+
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
                   {formData.criticalMetadata.tags?.map((tag, index) => (
                     <Chip
@@ -532,7 +541,7 @@ function AssetForm({ existingAsset = null }) {
               </Grid>
             </Grid>
           </Grid>
-          
+
           {/* Non-Critical Metadata Section */}
           <Grid item xs={12}>
             <Divider sx={{ my: 2 }} />
@@ -540,7 +549,7 @@ function AssetForm({ existingAsset = null }) {
               <Typography variant="h6">
                 Non-Critical Metadata
               </Typography>
-              
+
               <Tooltip title="Non-critical metadata go through standard security procedures, allowing for faster updates and modifications.">
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <HelpOutline fontSize="small" color="secondary" sx={{ mr: 1 }} />
@@ -550,11 +559,11 @@ function AssetForm({ existingAsset = null }) {
                 </Box>
               </Tooltip>
             </Box>
-            
+
             <Alert severity="info" sx={{ mb: 2 }}>
               Non-critical metadata include supplementary information that can be quickly updated. These can be modified with fewer computational resources.
             </Alert>
-            
+
             {/* Custom fields */}
             <Box sx={{ mb: 2 }}>
               {Object.entries(formData.nonCriticalMetadata).map(([key, value]) => (
@@ -572,7 +581,7 @@ function AssetForm({ existingAsset = null }) {
                     fullWidth
                     size="small"
                   />
-                  <IconButton 
+                  <IconButton
                     onClick={() => handleRemoveCustomField(key)}
                     color="error"
                     size="small"
@@ -582,7 +591,7 @@ function AssetForm({ existingAsset = null }) {
                 </Box>
               ))}
             </Box>
-            
+
             {/* Add custom field */}
             <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
               <TextField
@@ -599,7 +608,7 @@ function AssetForm({ existingAsset = null }) {
                 size="small"
                 sx={{ flexGrow: 1 }}
               />
-              <Button 
+              <Button
                 variant="contained"
                 startIcon={<AddIcon />}
                 onClick={handleAddCustomField}
@@ -610,7 +619,7 @@ function AssetForm({ existingAsset = null }) {
               </Button>
             </Box>
           </Grid>
-          
+
           {/* Submit Button */}
           <Grid item xs={12}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
