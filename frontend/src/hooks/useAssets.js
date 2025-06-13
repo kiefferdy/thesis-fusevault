@@ -30,18 +30,32 @@ export const useAssets = () => {
       queryClient.invalidateQueries(['transactions', 'recent', currentAccount]);
       queryClient.invalidateQueries(['transactions', 'summary', currentAccount]);
       
-      toast.success('Asset metadata uploaded successfully!');
+      // Determine if this is an update based on the presence of existing data
+      // We'll check if the assetId already existed in our assets list
+      const existingAssets = queryClient.getQueryData(['assets', currentAccount]);
+      const isUpdate = existingAssets?.assets?.some(asset => asset.assetId === variables.assetId);
+      
+      toast.success(isUpdate ? 'Asset updated successfully!' : 'Asset created successfully!');
       
       // Call onSuccess callback if provided
       if (context?.onSuccess) {
         context.onSuccess(data);
       }
     },
-    onError: (error) => {
-      toast.error(`Error uploading metadata: ${error.message}`);
+    onError: (error, variables, context) => {
+      // Determine if this is an update based on the presence of existing data
+      const existingAssets = queryClient.getQueryData(['assets', currentAccount]);
+      const isUpdate = existingAssets?.assets?.some(asset => asset.assetId === variables.assetId);
+      
+      toast.error(`Error ${isUpdate ? 'updating' : 'creating'} asset: ${error.message}`);
+      
+      // Call onError callback if provided
+      if (context?.onError) {
+        context.onError(error);
+      }
     }
   });
-
+  
   // Mutation for uploading JSON files
   const uploadJsonMutation = useMutation({
     mutationFn: ({ files }) => assetService.uploadJsonFiles(files, currentAccount),

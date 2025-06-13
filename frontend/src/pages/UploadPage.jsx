@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { 
-  Container, 
-  Typography, 
-  Box, 
-  Paper, 
-  Tabs, 
+import { useState, useEffect } from 'react';
+import {
+  Container,
+  Typography,
+  Box,
+  Paper,
+  Tabs,
   Tab,
   Divider,
   Grid,
@@ -27,6 +27,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAssets } from '../hooks/useAssets';
 import { toast } from 'react-hot-toast';
 
+// Simple function to check if we're in edit mode and get asset ID
+function getEditModeInfo() {
+  const pathname = window.location.pathname;
+  const isEditMode = pathname.includes('/edit');
+  const assetId = isEditMode ? pathname.split('/')[2] : null;
+  return { isEditMode, assetId };
+}
+
 function UploadPage() {
   const [tabValue, setTabValue] = useState(0);
   const [files, setFiles] = useState([]);
@@ -34,14 +42,57 @@ function UploadPage() {
   const [criticalFields, setCriticalFields] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStep, setUploadStep] = useState(0);
+
+  // Edit mode state
+  const [existingAsset, setExistingAsset] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
   const { currentAccount } = useAuth();
   const { uploadJson, isUploading } = useAssets();
   const navigate = useNavigate();
-  
+
+  // Get edit mode info
+  const { isEditMode, assetId } = getEditModeInfo();
+
   // Steps for the upload process
   const uploadSteps = ['Preparing files', 'Uploading to IPFS', 'Storing on blockchain', 'Finalizing'];
 
+  // Fetch existing asset data when in edit mode
+  useEffect(() => {
+    if (!isEditMode || !assetId) return;
+
+    const fetchAsset = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const response = await fetch(`${apiUrl}/retrieve/${assetId}`, {
+          credentials: 'include'
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch asset');
+        }
+
+        const data = await response.json();
+        setExistingAsset(data);
+      } catch (err) {
+        console.error('Error fetching asset:', err);
+        setError('Failed to load asset data');
+        toast.error('Error loading asset data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAsset();
+  }, [isEditMode, assetId]);
+
   const handleTabChange = (event, newValue) => {
+    // Don't allow tab changes in edit mode
+    if (isEditMode) return;
     setTabValue(newValue);
   };
 
@@ -55,31 +106,31 @@ function UploadPage() {
       toast.error('Please select files to upload');
       return;
     }
-    
+
     try {
       setUploadProgress(0);
       setUploadStep(0);
-      
+
       // Simulate progress for each step
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
           const newProgress = prev + 1;
-          
+
           // Change steps at certain thresholds
           if (newProgress === 25) setUploadStep(1);
           if (newProgress === 50) setUploadStep(2);
           if (newProgress === 75) setUploadStep(3);
-          
+
           return newProgress < 99 ? newProgress : 99;
         });
       }, 150);
-      
+
       if (fileType === 'json') {
         await uploadJson({ files }, {
           onSuccess: () => {
             clearInterval(progressInterval);
             setUploadProgress(100);
-            
+
             // Wait a moment before navigating to give user visual feedback
             setTimeout(() => {
               navigate('/dashboard');
@@ -97,20 +148,46 @@ function UploadPage() {
     }
   };
 
+  // Show loading state when fetching asset data for edit
+  if (isEditMode && loading) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 4, textAlign: 'center' }}>
+        <CircularProgress />
+        <Typography variant="body1" mt={2}>
+          Loading asset data for editing...
+        </Typography>
+      </Container>
+    );
+  }
+
+  // Show error state if asset couldn't be loaded
+  if (isEditMode && error) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Alert severity="error">{error}</Alert>
+        <Box sx={{ mt: 2, textAlign: 'center' }}>
+          <Button variant="contained" onClick={() => navigate('/dashboard')}>
+            Back to Dashboard
+          </Button>
+        </Box>
+      </Container>
+    );
+  }
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Typography variant="h4" component="h1" gutterBottom>
-        Upload Assets
+        {isEditMode ? 'Edit Asset' : 'Upload Assets'}
       </Typography>
-      
+
       {/* Upload Progress Backdrop */}
       <Backdrop open={isUploading} sx={{ zIndex: 9999, flexDirection: 'column', color: '#fff' }}>
         <Card sx={{ maxWidth: 400, mb: 3, p: 3, bgcolor: 'background.paper' }}>
           <CardContent>
             <Typography variant="h6" color="primary" gutterBottom textAlign="center">
-              Uploading Asset{files.length > 1 ? 's' : ''}
+              {isEditMode ? 'Updating Asset' : `Uploading Asset${files.length > 1 ? 's' : ''}`}
             </Typography>
-            
+
             <Stepper activeStep={uploadStep} alternativeLabel sx={{ mb: 3 }}>
               {uploadSteps.map((label) => (
                 <Step key={label}>
@@ -118,13 +195,13 @@ function UploadPage() {
                 </Step>
               ))}
             </Stepper>
-            
-            <LinearProgress 
-              variant="determinate" 
-              value={uploadProgress} 
-              sx={{ height: 10, borderRadius: 5, mb: 2 }} 
+
+            <LinearProgress
+              variant="determinate"
+              value={uploadProgress}
+              sx={{ height: 10, borderRadius: 5, mb: 2 }}
             />
-            
+
             <Typography variant="body2" color="text.secondary" textAlign="center">
               {uploadSteps[uploadStep]}... ({uploadProgress}%)
             </Typography>
@@ -134,43 +211,53 @@ function UploadPage() {
           </CardContent>
         </Card>
       </Backdrop>
-      
+
       <Paper sx={{ mb: 4 }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          indicatorColor="primary"
-          textColor="primary"
-          variant="fullWidth"
-        >
-          <Tab label="Create Single Asset" />
-          <Tab label="Batch Upload" />
-        </Tabs>
-        
-        <Divider />
-        
-        {/* Single Asset Form */}
-        {tabValue === 0 && (
+        {/* Only show tabs when not in edit mode */}
+        {!isEditMode && (
+          <>
+            <Tabs
+              value={tabValue}
+              onChange={handleTabChange}
+              indicatorColor="primary"
+              textColor="primary"
+              variant="fullWidth"
+            >
+              <Tab label="Create Single Asset" />
+              <Tab label="Batch Upload" />
+            </Tabs>
+            <Divider />
+          </>
+        )}
+
+        {/* Single Asset Form (or Edit Mode) */}
+        {(tabValue === 0 || isEditMode) && (
           <Box sx={{ p: 3 }}>
-            <Alert severity="info" sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
-              <Info sx={{ mr: 1 }} />
-              <div>
-                <Typography variant="body2" fontWeight="bold">Creating an asset involves five phases:</Typography>
-                <Typography variant="body2">1. The metadata is parsed and validated.</Typography>
-                <Typography variant="body2">2. Critical metadata is stored on decentralized storage (IPFS).</Typography>
-                <Typography variant="body2">3. The asset is logged on the blockchain.</Typography>
-                <Typography variant="body2">4. The asset is stored on the database.</Typography>
-                <Typography variant="body2">5. The transaction is recorded.</Typography>
-                <Typography variant="body2" sx={{ mt: 0.5 }}>This process can take 1-3 minutes. Please wait for the confirmation.</Typography>
-              </div>
-            </Alert>
+            {isEditMode ? (
+              <Alert severity="info" sx={{ mb: 3 }}>
+                You are editing an existing asset. Make your changes and click "Update Asset" to save.
+              </Alert>
+            ) : (
+              <Alert severity="info" sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
+                <Info sx={{ mr: 1 }} />
+                <div>
+                  <Typography variant="body2" fontWeight="bold">Creating an asset involves five phases:</Typography>
+                  <Typography variant="body2">1. The metadata is parsed and validated.</Typography>
+                  <Typography variant="body2">2. Critical metadata is stored on decentralized storage (IPFS).</Typography>
+                  <Typography variant="body2">3. The asset is logged on the blockchain.</Typography>
+                  <Typography variant="body2">4. The asset is stored on the database.</Typography>
+                  <Typography variant="body2">5. The transaction is recorded.</Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>This process can take 1-3 minutes. Please wait for the confirmation.</Typography>
+                </div>
+              </Alert>
+            )}
             <Box data-navigate onClick={() => navigate('/dashboard')} style={{ display: 'none' }} />
-            <AssetForm />
+            <AssetForm existingAsset={existingAsset} />
           </Box>
         )}
-        
-        {/* Batch Upload */}
-        {tabValue === 1 && (
+
+        {/* Batch Upload - only show when not in edit mode */}
+        {!isEditMode && tabValue === 1 && (
           <Box sx={{ p: 3 }}>
             <Grid container spacing={3}>
               <Grid item xs={12}>
@@ -189,13 +276,13 @@ function UploadPage() {
                   </div>
                 </Alert>
               </Grid>
-              
+
               <Grid item xs={12} md={6}>
                 <Paper variant="outlined" sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom>
                     Upload Format
                   </Typography>
-                  
+
                   <Box sx={{ mb: 2 }}>
                     <Tabs
                       value={fileType}
@@ -207,7 +294,7 @@ function UploadPage() {
                       <Tab value="csv" label="CSV" disabled />
                     </Tabs>
                   </Box>
-                  
+
                   {fileType === 'json' && (
                     <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1 }}>
                       <Typography variant="body2" color="text.primary" fontWeight="medium">
@@ -232,14 +319,14 @@ function UploadPage() {
                       </Box>
                     </Box>
                   )}
-                  
+
                   {fileType === 'csv' && (
                     <>
                       <Typography variant="body2" color="text.secondary" paragraph>
                         Your CSV must include 'asset_id' and 'wallet_address' columns.
                         Specify which other columns should be treated as critical metadata:
                       </Typography>
-                      
+
                       <TextField
                         label="Critical Fields (comma-separated)"
                         value={criticalFields}
@@ -252,7 +339,7 @@ function UploadPage() {
                   )}
                 </Paper>
               </Grid>
-              
+
               <Grid item xs={12} md={6}>
                 <Paper
                   variant="outlined"
@@ -283,30 +370,30 @@ function UploadPage() {
                     accept={fileType === 'json' ? '.json' : '.csv'}
                     style={{ display: 'none' }}
                   />
-                  
+
                   <CloudUpload fontSize="large" color="primary" sx={{ mb: 2, fontSize: 60 }} />
-                  
+
                   <Typography variant="h6" color="primary.main" gutterBottom>
                     Click to select files
                   </Typography>
-                  
+
                   <Typography variant="body2" color="text.secondary">
                     or drag and drop here
                   </Typography>
-                  
+
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
                     Accepted format: {fileType === 'json' ? '*.json' : '*.csv'}
                   </Typography>
                 </Paper>
               </Grid>
-              
+
               {files.length > 0 && (
                 <Grid item xs={12}>
                   <Paper variant="outlined" sx={{ p: 2 }}>
                     <Typography variant="subtitle1" gutterBottom>
                       Selected Files ({files.length})
                     </Typography>
-                    
+
                     {files.map((file, index) => (
                       <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                         <Description fontSize="small" sx={{ mr: 1 }} />
@@ -318,7 +405,7 @@ function UploadPage() {
                   </Paper>
                 </Grid>
               )}
-              
+
               <Grid item xs={12}>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
                   <Button
