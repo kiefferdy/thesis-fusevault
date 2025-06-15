@@ -8,10 +8,12 @@ from app.services.asset_service import AssetService
 from app.services.ipfs_service import IPFSService
 from app.services.blockchain_service import BlockchainService
 from app.services.transaction_service import TransactionService
+from app.services.transaction_state_service import TransactionStateService
 from app.repositories.asset_repo import AssetRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.database import get_db_client
 from app.utilities.auth_middleware import get_current_user, get_wallet_address
+from pydantic import BaseModel
 
 # Setup router
 router = APIRouter(
@@ -22,7 +24,18 @@ router = APIRouter(
 
 logger = logging.getLogger(__name__)
 
-def get_upload_handler(db_client=Depends(get_db_client)) -> UploadHandler:
+# Pydantic models for completion endpoints
+class UploadCompletionRequest(BaseModel):
+    pending_tx_id: str
+    blockchain_tx_hash: str
+
+class PendingTransactionResponse(BaseModel):
+    pending_tx_id: str
+    status: str
+    transaction_data: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+def get_upload_handler(db_client=Depends(get_db_client), request: Request = None) -> UploadHandler:
     """Dependency to get the upload handler with all required dependencies."""
     asset_repo = AssetRepository(db_client)
     transaction_repo = TransactionRepository(db_client)
@@ -31,12 +44,20 @@ def get_upload_handler(db_client=Depends(get_db_client)) -> UploadHandler:
     ipfs_service = IPFSService()
     blockchain_service = BlockchainService()
     transaction_service = TransactionService(transaction_repo)
+    transaction_state_service = TransactionStateService()
+    
+    # Get auth context from request state if available
+    auth_context = None
+    if request and hasattr(request.state, "auth_context"):
+        auth_context = request.state.auth_context
     
     return UploadHandler(
         asset_service=asset_service,
         ipfs_service=ipfs_service,
         blockchain_service=blockchain_service,
-        transaction_service=transaction_service
+        transaction_service=transaction_service,
+        transaction_state_service=transaction_state_service,
+        auth_context=auth_context
     )
 
 @router.post("/metadata", response_model=MetadataUploadResponse)
@@ -185,3 +206,161 @@ async def process_metadata(
         file_info=metadata_request.file_info
     )
     return MetadataUploadResponse(**result)
+
+@router.post("/complete", response_model=MetadataUploadResponse)
+async def complete_upload(
+    completion_request: UploadCompletionRequest,
+    upload_handler: UploadHandler = Depends(get_upload_handler),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> MetadataUploadResponse:
+    """
+    Complete upload after blockchain transaction is confirmed.
+    Only available for wallet-authenticated users.
+    """
+    try:
+        # Get the authenticated user's wallet address
+        authenticated_wallet = current_user.get("walletAddress")
+        
+        if not authenticated_wallet:
+            raise HTTPException(status_code=401, detail="Unable to determine wallet address")
+        
+        # Complete the blockchain upload
+        result = await upload_handler.complete_blockchain_upload(
+            pending_tx_id=completion_request.pending_tx_id,
+            blockchain_tx_hash=completion_request.blockchain_tx_hash,
+            initiator_address=authenticated_wallet
+        )
+        
+        if result.get("status") == "error":
+            raise HTTPException(status_code=400, detail=result.get("detail", "Upload completion failed"))
+        
+        return MetadataUploadResponse(**result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error completing upload: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/pending/{pending_tx_id}", response_model=PendingTransactionResponse)
+async def get_pending_transaction(
+    pending_tx_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> PendingTransactionResponse:
+    """
+    Get details of a pending transaction.
+    Only returns transactions belonging to the authenticated user.
+    """
+    try:
+        # Get the authenticated user's wallet address
+        authenticated_wallet = current_user.get("walletAddress")
+        
+        if not authenticated_wallet:
+            raise HTTPException(status_code=401, detail="Unable to determine wallet address")
+        
+        # Get transaction state service
+        transaction_state_service = TransactionStateService()
+        
+        # Get pending transaction
+        pending_data = await transaction_state_service.get_pending_transaction(pending_tx_id)
+        
+        if not pending_data:
+            return PendingTransactionResponse(
+                pending_tx_id=pending_tx_id,
+                status="not_found",
+                error="Pending transaction not found or expired"
+            )
+        
+        # Verify ownership
+        if pending_data.get("initiator_address", "").lower() != authenticated_wallet.lower():
+            raise HTTPException(status_code=403, detail="Access denied: not your transaction")
+        
+        return PendingTransactionResponse(
+            pending_tx_id=pending_tx_id,
+            status="found",
+            transaction_data=pending_data
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting pending transaction: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/pending", response_model=List[PendingTransactionResponse])
+async def list_pending_transactions(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> List[PendingTransactionResponse]:
+    """
+    List all pending transactions for the authenticated user.
+    """
+    try:
+        # Get the authenticated user's wallet address
+        authenticated_wallet = current_user.get("walletAddress")
+        
+        if not authenticated_wallet:
+            raise HTTPException(status_code=401, detail="Unable to determine wallet address")
+        
+        # Get transaction state service
+        transaction_state_service = TransactionStateService()
+        
+        # Get user's pending transactions
+        pending_transactions = await transaction_state_service.get_user_pending_transactions(authenticated_wallet)
+        
+        # Format response
+        response = []
+        for tx_data in pending_transactions:
+            response.append(PendingTransactionResponse(
+                pending_tx_id=tx_data.get("tx_id", "unknown"),
+                status="found",
+                transaction_data=tx_data
+            ))
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error listing pending transactions: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/pending/{pending_tx_id}")
+async def cancel_pending_transaction(
+    pending_tx_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, str]:
+    """
+    Cancel a pending transaction.
+    Only allows canceling transactions belonging to the authenticated user.
+    """
+    try:
+        # Get the authenticated user's wallet address
+        authenticated_wallet = current_user.get("walletAddress")
+        
+        if not authenticated_wallet:
+            raise HTTPException(status_code=401, detail="Unable to determine wallet address")
+        
+        # Get transaction state service
+        transaction_state_service = TransactionStateService()
+        
+        # Get pending transaction to verify ownership
+        pending_data = await transaction_state_service.get_pending_transaction(pending_tx_id)
+        
+        if not pending_data:
+            raise HTTPException(status_code=404, detail="Pending transaction not found or expired")
+        
+        # Verify ownership
+        if pending_data.get("initiator_address", "").lower() != authenticated_wallet.lower():
+            raise HTTPException(status_code=403, detail="Access denied: not your transaction")
+        
+        # Remove the pending transaction
+        success = await transaction_state_service.remove_pending_transaction(pending_tx_id)
+        
+        if success:
+            return {"message": "Pending transaction cancelled successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to cancel pending transaction")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error canceling pending transaction: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
