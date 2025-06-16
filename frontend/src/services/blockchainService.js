@@ -271,7 +271,7 @@ export const transactionFlow = {
   // Complete upload flow with user signing
   uploadWithSigning: async (assetData, onProgress = () => {}) => {
     try {
-      onProgress('Preparing upload...', 10);
+      onProgress('Uploading asset to IPFS...', 10);
       
       // Validate input data
       if (!assetData?.assetId || !assetData?.walletAddress) {
@@ -669,7 +669,7 @@ export const transactionFlow = {
         attempts++;
         
         const progress = 60 + (attempts / maxAttempts) * 20; // Progress from 60% to 80%
-        onProgress(`Waiting for confirmation... (${attempts}/${maxAttempts})`, progress);
+        onProgress(`Waiting for blockchain confirmation... (${attempts}/${maxAttempts})`, progress);
       } catch (error) {
         lastError = error;
         

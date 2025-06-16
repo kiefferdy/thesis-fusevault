@@ -80,6 +80,7 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
     operationData,
     showUploadSigner,
     showEditSigner,
+    checkEditRequiresSignature,
     hideSigner,
     onSuccess,
     onError
@@ -209,6 +210,34 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
     }));
   };
 
+  // Check if critical metadata has changed (client-side comparison)
+  const hasCriticalMetadataChanged = (newCriticalMetadata, existingCriticalMetadata) => {
+    if (!existingCriticalMetadata) return true;
+    
+    // Get all keys from both objects
+    const newKeys = Object.keys(newCriticalMetadata || {});
+    const existingKeys = Object.keys(existingCriticalMetadata || {});
+    const allKeys = [...new Set([...newKeys, ...existingKeys])];
+    
+    // Compare each key
+    for (const key of allKeys) {
+      const newValue = newCriticalMetadata[key];
+      const existingValue = existingCriticalMetadata[key];
+      
+      // Handle arrays (like tags)
+      if (Array.isArray(newValue) && Array.isArray(existingValue)) {
+        if (newValue.length !== existingValue.length) return true;
+        if (!newValue.every((val, index) => val === existingValue[index])) return true;
+      }
+      // Handle other values
+      else if (newValue !== existingValue) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
   // Form validation
   const validateForm = () => {
     const errors = [];
@@ -257,35 +286,59 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
     const isEditMode = !!existingAsset;
     
     if (isEditMode) {
-      // For edits, show TransactionSigner modal first, then check if signing is needed
-      showEditSigner(
-        uploadData, // Don't pass editResult - let the modal do the check
-        (result) => {
-          console.log('Edit successful:', result);
-          setIsUploading(false);
-          
-          // Check if this was a non-critical metadata update
-          if (result && result.status !== 'pending_signature' && !result.blockchain_tx_hash) {
-            // Only non-critical metadata changed
-            toast.success('Asset updated successfully! (Only non-critical metadata changed)');
+      // For edits, do a client-side check first to determine if critical metadata changed
+      const criticalMetadataChanged = hasCriticalMetadataChanged(uploadData.criticalMetadata, existingAsset.criticalMetadata);
+      
+      if (criticalMetadataChanged) {
+        // Critical metadata changed - show TransactionSigner modal first, upload happens when user clicks "Initiate Transaction"
+        console.log('Critical metadata changed, showing MetaMask signer');
+        showEditSigner(
+          uploadData, // Don't pass editResult - let the modal do the upload when user clicks
+          (result) => {
+            console.log('Edit with signing successful:', result);
+            setIsUploading(false);
+            
+            if (onUploadSuccess) {
+              // Mark this as a critical metadata update
+              onUploadSuccess({ ...result, criticalMetadataUpdated: true });
+            }
+          },
+          (error) => {
+            console.error('Edit with signing failed:', error);
+            setIsUploading(false);
+            
+            let errorMessage = 'Edit failed';
+            if (error?.message) {
+              errorMessage = error.message;
+            }
+            
+            toast.error(errorMessage);
           }
-          
-          if (onUploadSuccess) {
-            onUploadSuccess(result);
-          }
-        },
-        (error) => {
-          console.error('Edit failed:', error);
-          setIsUploading(false);
-          
-          let errorMessage = 'Edit failed';
-          if (error?.message) {
-            errorMessage = error.message;
-          }
-          
-          toast.error(errorMessage);
-        }
-      );
+        );
+      } else {
+        // Only non-critical metadata changed - complete directly without modal
+        console.log('Only non-critical metadata changed, uploading directly');
+        checkEditRequiresSignature(uploadData)
+          .then(({ result }) => {
+            setIsUploading(false);
+            
+            if (onUploadSuccess) {
+              // Mark this as a non-critical metadata update
+              onUploadSuccess({ ...result, criticalMetadataUpdated: false });
+            }
+          })
+          .catch((error) => {
+            console.error('Edit failed:', error);
+            setIsUploading(false);
+            
+            let errorMessage = 'Edit failed';
+            if (error?.message) {
+              errorMessage = error.message;
+            }
+            
+            toast.error(errorMessage);
+          });
+      }
     } else {
       // For uploads, use the UI-based transaction signer
       showUploadSigner(

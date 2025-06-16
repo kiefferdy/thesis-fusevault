@@ -396,13 +396,13 @@ const TransactionSigner = ({
               <div className="progress-bar">
                 <div 
                   className="progress-fill" 
-                  style={{ width: `${progress}%` }}
+                  style={{ width: `${Math.round(progress)}%` }}
                 ></div>
               </div>
               
               <div className="progress-info">
                 <p className="progress-text">{currentStep}</p>
-                <p className="progress-percentage">{progress}%</p>
+                <p className="progress-percentage">{Math.round(progress)}%</p>
               </div>
               
               <p className="progress-note">This process can take several minutes. Please don't close this window.</p>

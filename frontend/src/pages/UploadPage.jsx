@@ -224,10 +224,18 @@ function UploadPage() {
             <UploadFormWithSigning 
               existingAsset={isEditMode ? existingAsset : null}
               onUploadSuccess={(result) => {
-                // Only show generic success message if it wasn't a non-critical metadata update
-                // (non-critical updates already show their own specific message)
-                if (!isEditMode || !result || result.status === 'pending_signature' || result.blockchain_tx_hash) {
-                  toast.success(isEditMode ? 'Asset updated successfully!' : 'Asset created successfully!');
+                if (!isEditMode) {
+                  // Asset creation
+                  toast.success('Asset created successfully!');
+                } else {
+                  // Asset editing - use the explicit flag we added
+                  if (result && result.criticalMetadataUpdated === false) {
+                    // Only non-critical metadata changed
+                    toast.success('Asset updated successfully! (Only non-critical metadata changed)');
+                  } else {
+                    // Critical metadata changed or regular asset creation
+                    toast.success('Asset updated successfully!');
+                  }
                 }
                 setTimeout(() => {
                   navigate('/dashboard');
