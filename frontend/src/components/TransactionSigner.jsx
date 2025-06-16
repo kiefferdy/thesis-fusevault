@@ -87,6 +87,13 @@ const TransactionSigner = ({
           gasPrice: 20000000000,
           estimatedCostEth: '0.003'
         });
+      } else if (operation === 'edit' && operationData) {
+        // For edits, similar to uploads
+        setGasEstimate({
+          estimatedGas: 200000,
+          gasPrice: 20000000000, // 20 gwei
+          estimatedCostEth: '0.004'
+        });
       }
     } catch (error) {
       console.error('Error estimating gas:', error);
@@ -109,6 +116,10 @@ const TransactionSigner = ({
     } else if (operation === 'delete') {
       if (!operationData.assetId || !operationData.walletAddress) {
         throw new Error('Asset ID and wallet address are required for deletion');
+      }
+    } else if (operation === 'edit') {
+      if (!operationData.assetId || !operationData.walletAddress) {
+        throw new Error('Asset ID and wallet address are required for edit');
       }
     }
   };
@@ -171,6 +182,14 @@ const TransactionSigner = ({
           operationData.assetId,
           operationData.walletAddress,
           operationData.reason,
+          (step, progressValue) => {
+            setCurrentStep(step);
+            setProgress(progressValue);
+          }
+        );
+      } else if (operation === 'edit') {
+        result = await transactionFlow.editWithSigning(
+          operationData,
           (step, progressValue) => {
             setCurrentStep(step);
             setProgress(progressValue);
@@ -269,6 +288,14 @@ const TransactionSigner = ({
                 {operationData.reason && <p><strong>Reason:</strong> {operationData.reason}</p>}
               </div>
             )}
+            
+            {operation === 'edit' && operationData && (
+              <div className="operation-details">
+                <p><strong>Asset ID:</strong> {operationData.assetId}</p>
+                <p><strong>Wallet:</strong> {operationData.walletAddress}</p>
+                {operationData.criticalMetadata?.name && <p><strong>Asset Name:</strong> {operationData.criticalMetadata.name}</p>}
+              </div>
+            )}
           </div>
 
           {networkStatus && (
@@ -324,9 +351,14 @@ const TransactionSigner = ({
               {/* Step progress indicators */}
               <div className="step-indicators">
                 {(() => {
-                  const steps = operation === 'delete' 
-                    ? ['Waiting for signature', 'Confirming transaction', 'Updating database']
-                    : ['Preparing upload', 'Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Storing to database'];
+                  let steps;
+                  if (operation === 'delete') {
+                    steps = ['Waiting for signature', 'Confirming transaction', 'Updating database'];
+                  } else if (operation === 'edit') {
+                    steps = ['Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Updating database'];
+                  } else {
+                    steps = ['Preparing upload', 'Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Storing to database'];
+                  }
                   
                   const stepCount = steps.length;
                   const stepProgress = (progress / 100) * stepCount;

@@ -89,6 +89,7 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
     operation,
     operationData,
     showUploadSigner,
+    showEditSigner,
     hideSigner,
     onSuccess,
     onError
@@ -268,30 +269,36 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
       nonCriticalMetadata: formData.nonCriticalMetadata
     };
 
-    // Use the UI-based transaction signer
-    showUploadSigner(
+    // Use the appropriate transaction signer based on mode
+    const isEditMode = !!existingAsset;
+    const signerFunction = isEditMode ? showEditSigner : showUploadSigner;
+    const operationName = isEditMode ? 'Edit' : 'Upload';
+    
+    signerFunction(
       uploadData,
       (result) => {
-        console.log('Upload successful:', result);
+        console.log(`${operationName} successful:`, result);
         setIsUploading(false);
         setUploadProgress(100);
         hideSigner();
         
-        // Reset form
-        setFormData(getInitialFormData());
-        setSelectedTemplate('Custom');
+        // Reset form only for create mode, not edit mode
+        if (!isEditMode) {
+          setFormData(getInitialFormData());
+          setSelectedTemplate('Custom');
+        }
         
         if (onUploadSuccess) {
           onUploadSuccess(result);
         }
       },
       (error) => {
-        console.error('Upload failed:', error);
+        console.error(`${operationName} failed:`, error);
         setIsUploading(false);
         setUploadProgress(0);
         hideSigner();
         
-        let errorMessage = 'Upload failed';
+        let errorMessage = `${operationName} failed`;
         if (error?.message) {
           errorMessage = error.message;
         }

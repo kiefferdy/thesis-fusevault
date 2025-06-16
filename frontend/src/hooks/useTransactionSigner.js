@@ -24,6 +24,14 @@ export const useTransactionSigner = () => {
     setIsVisible(true);
   }, []);
 
+  const showEditSigner = useCallback((assetData, successCallback, errorCallback) => {
+    setOperation('edit');
+    setOperationData(assetData);
+    setOnSuccess(() => successCallback || (() => {}));
+    setOnError(() => errorCallback || (() => {}));
+    setIsVisible(true);
+  }, []);
+
   const hideSigner = useCallback(() => {
     setIsVisible(false);
     setOperation(null);
@@ -39,6 +47,10 @@ export const useTransactionSigner = () => {
     return await transactionFlow.deleteWithSigning(assetId, walletAddress, reason, onProgress);
   }, []);
 
+  const editWithSigning = useCallback(async (assetData, onProgress) => {
+    return await transactionFlow.editWithSigning(assetData, onProgress);
+  }, []);
+
   return {
     // UI-based signing
     isVisible,
@@ -46,12 +58,14 @@ export const useTransactionSigner = () => {
     operationData,
     showUploadSigner,
     showDeleteSigner,
+    showEditSigner,
     hideSigner,
     onSuccess,
     onError,
     
     // Direct methods
     uploadWithSigning,
-    deleteWithSigning
+    deleteWithSigning,
+    editWithSigning
   };
 };

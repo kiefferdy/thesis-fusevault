@@ -221,20 +221,15 @@ function UploadPage() {
               </Alert>
             )}
             <Box data-navigate onClick={() => navigate('/dashboard')} style={{ display: 'none' }} />
-            {isEditMode ? (
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                Edit mode with MetaMask signing is not yet implemented. Please use the API for editing existing assets.
-              </Alert>
-            ) : (
-              <UploadFormWithSigning 
-                onUploadSuccess={(result) => {
-                  toast.success('Asset created successfully!');
-                  setTimeout(() => {
-                    navigate('/dashboard');
-                  }, 1000);
-                }}
-              />
-            )}
+            <UploadFormWithSigning 
+              existingAsset={isEditMode ? existingAsset : null}
+              onUploadSuccess={(result) => {
+                toast.success(isEditMode ? 'Asset updated successfully!' : 'Asset created successfully!');
+                setTimeout(() => {
+                  navigate('/dashboard');
+                }, 1000);
+              }}
+            />
           </Box>
         )}
 
