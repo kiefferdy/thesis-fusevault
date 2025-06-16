@@ -24,9 +24,19 @@ class MetadataUploadResponse(BaseModel):
     detail: Optional[str] = Field(None, description="Error details if status is error")
     owner_address: Optional[str] = Field(None, description="The wallet address of the asset owner", alias="ownerAddress")
     initiator_address: Optional[str] = Field(None, description="The wallet address that initiated the operation", alias="initiatorAddress")
+    
+    # Fields for pending transactions (when status is 'pending_signature')
+    pending_tx_id: Optional[str] = Field(None, description="Pending transaction ID for user signing", alias="pendingTxId")
+    transaction: Optional[Dict[str, Any]] = Field(None, description="Transaction data for MetaMask signing")
+    estimated_gas: Optional[int] = Field(None, description="Estimated gas limit", alias="estimatedGas")
+    gas_price: Optional[int] = Field(None, description="Gas price in wei", alias="gasPrice")
+    function_name: Optional[str] = Field(None, description="Smart contract function name", alias="functionName")
+    next_step: Optional[str] = Field(None, description="Next step in the process", alias="nextStep")
 
     class Config:
         populate_by_name = True
+        allow_population_by_field_name = True
+        by_alias = True
 
 class UploadResultItem(BaseModel):
     asset_id: Optional[str] = Field(None, description="Asset ID if available", alias="assetId")

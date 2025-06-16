@@ -1,9 +1,10 @@
 import logging
 from web3 import Web3
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from fastapi import HTTPException
 
 from app.config import settings
+from app.services.transaction_builder_service import TransactionBuilderService
 
 logger = logging.getLogger(__name__)
 
@@ -267,13 +268,44 @@ class BlockchainService:
                 address=Web3.to_checksum_address(self.contract_address),
                 abi=self.contract_abi
             )
+            # Initialize transaction builder service
+            self.transaction_builder = TransactionBuilderService(self.web3, self.contract)
         except Exception as e:
             logger.error(f"Error setting up contract: {str(e)}")
             raise
 
-    async def store_hash(self, cid: str, asset_id: str) -> Dict[str, Any]:
+    async def store_hash(self, cid: str, asset_id: str, auth_context: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Store a CID hash on the blockchain for a specific asset.
+        
+        If auth_context indicates wallet auth, return unsigned transaction.
+        If auth_context indicates API key auth or is None, sign and send transaction.
+        
+        Args:
+            cid: The IPFS CID to store
+            asset_id: The asset ID this CID is associated with
+            auth_context: Optional authentication context
+            
+        Returns:
+            Dict containing transaction hash or unsigned transaction
+            
+        Raises:
+            HTTPException: If blockchain transaction fails
+        """
+        if auth_context and auth_context.get("auth_method") == "wallet":
+            # Return unsigned transaction for frontend signing
+            return await self.transaction_builder.build_update_ipfs_transaction(
+                asset_id=asset_id,
+                cid=cid,
+                from_address=auth_context.get("wallet_address")
+            )
+        else:
+            # Existing server-signed logic for API keys
+            return await self._store_hash_signed(cid, asset_id)
+    
+    async def _store_hash_signed(self, cid: str, asset_id: str) -> Dict[str, Any]:
+        """
+        Store a CID hash on the blockchain using server wallet signature.
         
         Args:
             cid: The IPFS CID to store
@@ -323,9 +355,40 @@ class BlockchainService:
             logger.error(f"Blockchain error storing hash: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Blockchain transaction failed: {str(e)}")
 
-    async def store_hash_for(self, cid: str, asset_id: str, owner_address: str) -> Dict[str, Any]:
+    async def store_hash_for(self, cid: str, asset_id: str, owner_address: str, auth_context: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Store a CID hash on the blockchain for a specific asset on behalf of another owner.
+        
+        If auth_context indicates wallet auth, return unsigned transaction.
+        If auth_context indicates API key auth or is None, sign and send transaction.
+        
+        Args:
+            cid: The IPFS CID to store
+            asset_id: The asset ID this CID is associated with
+            owner_address: The address of the owner
+            auth_context: Optional authentication context
+            
+        Returns:
+            Dict containing transaction hash or unsigned transaction
+            
+        Raises:
+            HTTPException: If blockchain transaction fails
+        """
+        if auth_context and auth_context.get("auth_method") == "wallet":
+            # Return unsigned transaction for frontend signing (delegation case)
+            return await self.transaction_builder.build_update_ipfs_for_transaction(
+                owner_address=owner_address,
+                asset_id=asset_id,
+                cid=cid,
+                from_address=auth_context.get("wallet_address")
+            )
+        else:
+            # Existing server-signed logic for API keys
+            return await self._store_hash_for_signed(cid, asset_id, owner_address)
+    
+    async def _store_hash_for_signed(self, cid: str, asset_id: str, owner_address: str) -> Dict[str, Any]:
+        """
+        Store a CID hash on the blockchain for another owner using server wallet signature.
         
         Args:
             cid: The IPFS CID to store
@@ -373,9 +436,36 @@ class BlockchainService:
             logger.error(f"Blockchain error storing hash for another owner: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Blockchain transaction failed: {str(e)}")
 
-    async def delete_asset(self, asset_id: str) -> Dict[str, Any]:
+    async def delete_asset(self, asset_id: str, auth_context: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Mark an asset as deleted on the blockchain.
+        
+        If auth_context indicates wallet auth, return unsigned transaction.
+        If auth_context indicates API key auth or is None, sign and send transaction.
+        
+        Args:
+            asset_id: The asset ID to delete
+            auth_context: Optional authentication context
+            
+        Returns:
+            Dict containing transaction hash or unsigned transaction
+            
+        Raises:
+            HTTPException: If blockchain transaction fails
+        """
+        if auth_context and auth_context.get("auth_method") == "wallet":
+            # Return unsigned transaction for frontend signing
+            return await self.transaction_builder.build_delete_asset_transaction(
+                asset_id=asset_id,
+                from_address=auth_context.get("wallet_address")
+            )
+        else:
+            # Existing server-signed logic for API keys
+            return await self._delete_asset_signed(asset_id)
+    
+    async def _delete_asset_signed(self, asset_id: str) -> Dict[str, Any]:
+        """
+        Mark an asset as deleted on the blockchain using server wallet signature.
         
         Args:
             asset_id: The asset ID to delete
@@ -417,9 +507,38 @@ class BlockchainService:
             logger.error(f"Blockchain error deleting asset: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Blockchain transaction failed: {str(e)}")
 
-    async def delete_asset_for(self, asset_id: str, owner_address: str) -> Dict[str, Any]:
+    async def delete_asset_for(self, asset_id: str, owner_address: str, auth_context: Optional[Dict] = None) -> Dict[str, Any]:
         """
         Mark an asset as deleted on the blockchain on behalf of another owner.
+        
+        If auth_context indicates wallet auth, return unsigned transaction.
+        If auth_context indicates API key auth or is None, sign and send transaction.
+        
+        Args:
+            asset_id: The asset ID to delete
+            owner_address: The address of the owner
+            auth_context: Optional authentication context
+            
+        Returns:
+            Dict containing transaction hash or unsigned transaction
+            
+        Raises:
+            HTTPException: If blockchain transaction fails
+        """
+        if auth_context and auth_context.get("auth_method") == "wallet":
+            # Return unsigned transaction for frontend signing (delegation case)
+            return await self.transaction_builder.build_delete_asset_for_transaction(
+                owner_address=owner_address,
+                asset_id=asset_id,
+                from_address=auth_context.get("wallet_address")
+            )
+        else:
+            # Existing server-signed logic for API keys
+            return await self._delete_asset_for_signed(asset_id, owner_address)
+    
+    async def _delete_asset_for_signed(self, asset_id: str, owner_address: str) -> Dict[str, Any]:
+        """
+        Mark an asset as deleted on the blockchain for another owner using server wallet signature.
         
         Args:
             asset_id: The asset ID to delete
@@ -877,6 +996,106 @@ class BlockchainService:
             logger.error(f"Error getting pending transfer: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to get pending transfer: {str(e)}")
             
+    async def broadcast_signed_transaction(self, signed_transaction: str) -> Dict[str, Any]:
+        """
+        Broadcast a signed transaction to the blockchain.
+        
+        Args:
+            signed_transaction: The signed transaction as hex string
+            
+        Returns:
+            Dict containing transaction details
+            
+        Raises:
+            HTTPException: If broadcasting fails
+        """
+        try:
+            # Convert hex string to bytes if needed
+            if isinstance(signed_transaction, str):
+                if signed_transaction.startswith('0x'):
+                    signed_tx_bytes = bytes.fromhex(signed_transaction[2:])
+                else:
+                    signed_tx_bytes = bytes.fromhex(signed_transaction)
+            else:
+                signed_tx_bytes = signed_transaction
+            
+            # Send transaction
+            tx_hash = self.web3.eth.send_raw_transaction(signed_tx_bytes)
+            
+            # Wait for transaction receipt
+            receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash)
+            
+            logger.info(f"Signed transaction broadcasted successfully. Transaction hash: {receipt.transactionHash.hex()}")
+            
+            return {
+                "success": True,
+                "tx_hash": receipt.transactionHash.hex(),
+                "block_number": receipt.blockNumber,
+                "gas_used": receipt.gasUsed,
+                "status": receipt.status,
+                "effective_gas_price": receipt.effectiveGasPrice if hasattr(receipt, 'effectiveGasPrice') else None
+            }
+            
+        except Exception as e:
+            logger.error(f"Error broadcasting signed transaction: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to broadcast transaction: {str(e)}")
+    
+    async def verify_transaction_success(self, tx_hash: str) -> Dict[str, Any]:
+        """
+        Verify that a transaction was successful.
+        
+        Args:
+            tx_hash: The transaction hash to verify
+            
+        Returns:
+            Dict containing verification results
+            
+        Raises:
+            HTTPException: If verification fails
+        """
+        try:
+            # Convert hex string to bytes if necessary
+            if isinstance(tx_hash, str) and tx_hash.startswith('0x'):
+                tx_hash_bytes = Web3.to_bytes(hexstr=tx_hash)
+            else:
+                tx_hash_bytes = Web3.to_bytes(hexstr=f"0x{tx_hash}")
+                
+            # Get transaction receipt
+            receipt = self.web3.eth.get_transaction_receipt(tx_hash_bytes)
+            
+            if not receipt:
+                # More detailed error message for missing transactions
+                chain_id = self.web3.eth.chain_id
+                network_name = "Sepolia" if chain_id == 11155111 else f"Chain {chain_id}"
+                raise ValueError(
+                    f"Transaction with hash '{tx_hash}' not found on {network_name}. "
+                    f"This typically means: (1) The transaction was sent to a different network, "
+                    f"(2) The transaction is still pending, or (3) The transaction failed to send. "
+                    f"Please verify your wallet was connected to Sepolia when the transaction was sent."
+                )
+                
+            # Check if transaction was successful
+            success = receipt.status == 1
+            
+            logger.info(f"Transaction {tx_hash} verification: {'success' if success else 'failed'}")
+            
+            return {
+                "success": success,
+                "tx_hash": tx_hash,
+                "block_number": receipt.blockNumber,
+                "gas_used": receipt.gasUsed,
+                "status": receipt.status,
+                "contract_address": receipt.contractAddress if hasattr(receipt, 'contractAddress') else None
+            }
+            
+        except Exception as e:
+            logger.error(f"Error verifying transaction {tx_hash}: {str(e)}")
+            if "not found" in str(e).lower():
+                # Re-raise transaction not found errors with original message
+                raise HTTPException(status_code=404, detail=str(e))
+            else:
+                raise HTTPException(status_code=500, detail=f"Failed to verify transaction: {str(e)}")
+    
     def get_server_wallet_address(self) -> str:
         """
         Get the server's wallet address used for signing transactions.

@@ -22,7 +22,7 @@ import {
 } from '@mui/material';
 import { CloudUpload, Description, Info } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import AssetForm from '../components/AssetForm';
+import UploadFormWithSigning from '../components/UploadFormWithSigning';
 import { useAuth } from '../contexts/AuthContext';
 import { useAssets } from '../hooks/useAssets';
 import { toast } from 'react-hot-toast';
@@ -180,37 +180,6 @@ function UploadPage() {
         {isEditMode ? 'Edit Asset' : 'Upload Assets'}
       </Typography>
 
-      {/* Upload Progress Backdrop */}
-      <Backdrop open={isUploading} sx={{ zIndex: 9999, flexDirection: 'column', color: '#fff' }}>
-        <Card sx={{ maxWidth: 400, mb: 3, p: 3, bgcolor: 'background.paper' }}>
-          <CardContent>
-            <Typography variant="h6" color="primary" gutterBottom textAlign="center">
-              {isEditMode ? 'Updating Asset' : `Uploading Asset${files.length > 1 ? 's' : ''}`}
-            </Typography>
-
-            <Stepper activeStep={uploadStep} alternativeLabel sx={{ mb: 3 }}>
-              {uploadSteps.map((label) => (
-                <Step key={label}>
-                  <StepLabel>{label}</StepLabel>
-                </Step>
-              ))}
-            </Stepper>
-
-            <LinearProgress
-              variant="determinate"
-              value={uploadProgress}
-              sx={{ height: 10, borderRadius: 5, mb: 2 }}
-            />
-
-            <Typography variant="body2" color="text.secondary" textAlign="center">
-              {uploadSteps[uploadStep]}... ({uploadProgress}%)
-            </Typography>
-            <Typography variant="caption" color="text.secondary" textAlign="center" display="block" mt={1}>
-              Please don't close this window. This process may take a few minutes.
-            </Typography>
-          </CardContent>
-        </Card>
-      </Backdrop>
 
       <Paper sx={{ mb: 4 }}>
         {/* Only show tabs when not in edit mode */}
@@ -252,7 +221,27 @@ function UploadPage() {
               </Alert>
             )}
             <Box data-navigate onClick={() => navigate('/dashboard')} style={{ display: 'none' }} />
-            <AssetForm existingAsset={existingAsset} />
+            <UploadFormWithSigning 
+              existingAsset={isEditMode ? existingAsset : null}
+              onUploadSuccess={(result) => {
+                if (!isEditMode) {
+                  // Asset creation
+                  toast.success('Asset created successfully!');
+                } else {
+                  // Asset editing - use the explicit flag we added
+                  if (result && result.criticalMetadataUpdated === false) {
+                    // Only non-critical metadata changed
+                    toast.success('Asset updated successfully! (Only non-critical metadata changed)');
+                  } else {
+                    // Critical metadata changed or regular asset creation
+                    toast.success('Asset updated successfully!');
+                  }
+                }
+                setTimeout(() => {
+                  navigate('/dashboard');
+                }, 1000);
+              }}
+            />
           </Box>
         )}
 

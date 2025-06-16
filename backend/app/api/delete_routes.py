@@ -10,10 +10,12 @@ from app.schemas.delete_schema import (
 from app.services.asset_service import AssetService
 from app.services.transaction_service import TransactionService
 from app.services.blockchain_service import BlockchainService
+from app.services.transaction_state_service import TransactionStateService
 from app.repositories.asset_repo import AssetRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.database import get_db_client
 from app.utilities.auth_middleware import get_current_user, get_wallet_address
+from pydantic import BaseModel
 
 # Setup router
 router = APIRouter(
@@ -24,7 +26,12 @@ router = APIRouter(
 
 logger = logging.getLogger(__name__)
 
-def get_delete_handler(db_client=Depends(get_db_client)) -> DeleteHandler:
+# Pydantic model for delete completion
+class DeleteCompletionRequest(BaseModel):
+    pending_tx_id: str
+    blockchain_tx_hash: str
+
+def get_delete_handler(db_client=Depends(get_db_client), request: Request = None) -> DeleteHandler:
     """Dependency to get the delete handler with all required dependencies."""
     asset_repo = AssetRepository(db_client)
     transaction_repo = TransactionRepository(db_client)
@@ -32,11 +39,19 @@ def get_delete_handler(db_client=Depends(get_db_client)) -> DeleteHandler:
     asset_service = AssetService(asset_repo)
     transaction_service = TransactionService(transaction_repo)
     blockchain_service = BlockchainService()
+    transaction_state_service = TransactionStateService()
+    
+    # Get auth context from request state if available
+    auth_context = None
+    if request and hasattr(request.state, "auth_context"):
+        auth_context = request.state.auth_context
     
     return DeleteHandler(
         asset_service=asset_service,
         transaction_service=transaction_service,
-        blockchain_service=blockchain_service
+        blockchain_service=blockchain_service,
+        transaction_state_service=transaction_state_service,
+        auth_context=auth_context
     )
 
 @router.post("", response_model=DeleteResponse)
@@ -153,3 +168,35 @@ async def delete_asset_by_path(
         reason=reason
     )
     return result
+
+@router.post("/complete", response_model=DeleteResponse)
+async def complete_delete(
+    completion_request: DeleteCompletionRequest,
+    delete_handler: DeleteHandler = Depends(get_delete_handler),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> DeleteResponse:
+    """
+    Complete delete operation after blockchain transaction is confirmed.
+    Only available for wallet-authenticated users.
+    """
+    try:
+        # Get the authenticated user's wallet address
+        authenticated_wallet = current_user.get("walletAddress")
+        
+        if not authenticated_wallet:
+            raise HTTPException(status_code=401, detail="Unable to determine wallet address")
+        
+        # Complete the blockchain deletion
+        result = await delete_handler.complete_blockchain_deletion(
+            pending_tx_id=completion_request.pending_tx_id,
+            blockchain_tx_hash=completion_request.blockchain_tx_hash,
+            initiator_address=authenticated_wallet
+        )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error completing delete: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

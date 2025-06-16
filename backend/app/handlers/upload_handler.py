@@ -9,6 +9,7 @@ from app.services.asset_service import AssetService
 from app.services.ipfs_service import IPFSService
 from app.services.blockchain_service import BlockchainService
 from app.services.transaction_service import TransactionService
+from app.services.transaction_state_service import TransactionStateService
 from app.utilities.format import get_ipfs_metadata
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,9 @@ class UploadHandler:
         asset_service: AssetService = None,
         ipfs_service: IPFSService = None,
         blockchain_service: BlockchainService = None,
-        transaction_service: TransactionService = None
+        transaction_service: TransactionService = None,
+        transaction_state_service: TransactionStateService = None,
+        auth_context: Optional[Dict[str, Any]] = None
     ):
         """
         Initialize with services.
@@ -35,11 +38,15 @@ class UploadHandler:
             ipfs_service: Service for IPFS operations
             blockchain_service: Service for blockchain operations
             transaction_service: Service for transaction operations
+            transaction_state_service: Service for managing pending transactions
+            auth_context: Authentication context for the current request
         """
         self.asset_service = asset_service
         self.ipfs_service = ipfs_service or IPFSService()
         self.blockchain_service = blockchain_service or BlockchainService()
         self.transaction_service = transaction_service
+        self.transaction_state_service = transaction_state_service or TransactionStateService()
+        self.auth_context = auth_context
         load_dotenv()
 
     async def process_metadata(
@@ -117,16 +124,70 @@ class UploadHandler:
                     # 1) Upload to IPFS
                     cid = await self.ipfs_service.store_metadata(ipfs_metadata)
                     
-                    # 2) Store on blockchain - use appropriate method based on initiator vs owner
-                    blockchain_result = None
-                    if initiator_address.lower() == owner_address.lower():
-                        # Regular update (owner updating their own asset)
-                        blockchain_result = await self.blockchain_service.store_hash(cid, asset_id)
-                    else:
-                        # Admin/delegate updating on behalf of owner
-                        blockchain_result = await self.blockchain_service.store_hash_for(cid, asset_id, owner_address)
+                    # 2) Handle blockchain interaction based on authentication method
+                    if self.auth_context and self.auth_context.get("auth_method") == "wallet":
+                        # For wallet users, prepare unsigned transaction and return for signing
+                        if initiator_address.lower() == owner_address.lower():
+                            # Regular update (owner updating their own asset)
+                            blockchain_result = await self.blockchain_service.store_hash(cid, asset_id, self.auth_context)
+                        else:
+                            # Delegate updating on behalf of owner
+                            blockchain_result = await self.blockchain_service.store_hash_for(cid, asset_id, owner_address, self.auth_context)
+                        
+                        if not blockchain_result.get("success"):
+                            raise Exception(f"Failed to prepare transaction: {blockchain_result.get('error')}")
+                        
+                        # Store pending transaction state
+                        pending_data = {
+                            "asset_id": asset_id,
+                            "owner_address": owner_address,
+                            "initiator_address": initiator_address,
+                            "ipfs_cid": cid,
+                            "critical_metadata": critical_metadata,
+                            "non_critical_metadata": non_critical_metadata,
+                            "action": "updateIPFS" if initiator_address.lower() == owner_address.lower() else "updateIPFSFor",
+                            "was_deleted": was_deleted,
+                            "transaction": blockchain_result["transaction"],
+                            "current_ipfs_version": current_ipfs_version,
+                            "file_info": file_info
+                        }
+                        
+                        pending_tx_id = await self.transaction_state_service.store_pending_transaction(
+                            user_address=initiator_address,
+                            transaction_data=pending_data
+                        )
+                        
+                        # Return transaction for frontend to sign
+                        result = {
+                            "asset_id": asset_id,
+                            "status": "pending_signature",
+                            "message": "Transaction prepared for signing",
+                            "pending_tx_id": pending_tx_id,
+                            "ipfs_cid": cid,
+                            "transaction": blockchain_result["transaction"],
+                            "estimated_gas": blockchain_result.get("estimated_gas"),
+                            "gas_price": blockchain_result.get("gas_price"),
+                            "function_name": blockchain_result.get("function_name"),
+                            "owner_address": owner_address,
+                            "initiator_address": initiator_address,
+                            "next_step": "sign_and_broadcast"
+                        }
+                        
+                        if file_info:
+                            result.update(file_info)
+                        return result
                     
-                    blockchain_tx_hash = blockchain_result.get("tx_hash")
+                    else:
+                        # For API key users, use existing server-signed logic
+                        blockchain_result = None
+                        if initiator_address.lower() == owner_address.lower():
+                            # Regular update (owner updating their own asset)
+                            blockchain_result = await self.blockchain_service.store_hash(cid, asset_id)
+                        else:
+                            # Admin/delegate updating on behalf of owner
+                            blockchain_result = await self.blockchain_service.store_hash_for(cid, asset_id, owner_address)
+                        
+                        blockchain_tx_hash = blockchain_result.get("tx_hash")
                     
                     # 3) Handle based on whether the asset was deleted
                     if was_deleted:
@@ -281,16 +342,69 @@ class UploadHandler:
                 # 1) Upload to IPFS
                 cid = await self.ipfs_service.store_metadata(ipfs_metadata)
                 
-                # 2) Store on blockchain - use appropriate method based on initiator vs owner
-                blockchain_result = None
-                if initiator_address.lower() == owner_address.lower():
-                    # Regular creation (owner creating their own asset)
-                    blockchain_result = await self.blockchain_service.store_hash(cid, asset_id)
-                else:
-                    # Admin/delegate creating on behalf of owner
-                    blockchain_result = await self.blockchain_service.store_hash_for(cid, asset_id, owner_address)
+                # 2) Handle blockchain interaction based on authentication method
+                if self.auth_context and self.auth_context.get("auth_method") == "wallet":
+                    # For wallet users, prepare unsigned transaction and return for signing
+                    if initiator_address.lower() == owner_address.lower():
+                        # Regular creation (owner creating their own asset)
+                        blockchain_result = await self.blockchain_service.store_hash(cid, asset_id, self.auth_context)
+                    else:
+                        # Admin/delegate creating on behalf of owner
+                        blockchain_result = await self.blockchain_service.store_hash_for(cid, asset_id, owner_address, self.auth_context)
+                    
+                    if not blockchain_result.get("success"):
+                        raise Exception(f"Failed to prepare transaction: {blockchain_result.get('error')}")
+                    
+                    # Store pending transaction state
+                    pending_data = {
+                        "asset_id": asset_id,
+                        "owner_address": owner_address,
+                        "initiator_address": initiator_address,
+                        "ipfs_cid": cid,
+                        "critical_metadata": critical_metadata,
+                        "non_critical_metadata": non_critical_metadata,
+                        "action": "updateIPFS" if initiator_address.lower() == owner_address.lower() else "updateIPFSFor",
+                        "was_deleted": False,
+                        "is_new_document": True,
+                        "transaction": blockchain_result["transaction"],
+                        "file_info": file_info
+                    }
+                    
+                    pending_tx_id = await self.transaction_state_service.store_pending_transaction(
+                        user_address=initiator_address,
+                        transaction_data=pending_data
+                    )
+                    
+                    # Return transaction for frontend to sign
+                    result = {
+                        "asset_id": asset_id,
+                        "status": "pending_signature",
+                        "message": "Transaction prepared for signing",
+                        "pending_tx_id": pending_tx_id,
+                        "ipfs_cid": cid,
+                        "transaction": blockchain_result["transaction"],
+                        "estimated_gas": blockchain_result.get("estimated_gas"),
+                        "gas_price": blockchain_result.get("gas_price"),
+                        "function_name": blockchain_result.get("function_name"),
+                        "owner_address": owner_address,
+                        "initiator_address": initiator_address,
+                        "next_step": "sign_and_broadcast"
+                    }
+                    
+                    if file_info:
+                        result.update(file_info)
+                    return result
                 
-                blockchain_tx_hash = blockchain_result.get("tx_hash")
+                else:
+                    # For API key users, use existing server-signed logic
+                    if initiator_address.lower() == owner_address.lower():
+                        # Regular creation (owner creating their own asset)
+                        blockchain_result = await self.blockchain_service.store_hash(cid, asset_id)
+                    else:
+                        # Admin/delegate creating on behalf of owner
+                        blockchain_result = await self.blockchain_service.store_hash_for(cid, asset_id, owner_address)
+                    
+                    blockchain_tx_hash = blockchain_result.get("tx_hash")
                 
                 # 3) Insert into MongoDB
                 doc_id = await self.asset_service.create_asset(
@@ -339,6 +453,196 @@ class UploadHandler:
             if file_info:
                 result.update(file_info)
             return result
+    
+    async def complete_blockchain_upload(
+        self,
+        pending_tx_id: str,
+        blockchain_tx_hash: str,
+        initiator_address: str
+    ) -> Dict[str, Any]:
+        """
+        Complete the upload process after blockchain transaction is confirmed.
+        
+        Args:
+            pending_tx_id: ID of the pending transaction
+            blockchain_tx_hash: Hash of the confirmed blockchain transaction
+            initiator_address: Address of the user who initiated the transaction
+            
+        Returns:
+            Dict with completion results
+        """
+        try:
+            # Get pending transaction data
+            pending_data = await self.transaction_state_service.get_pending_transaction(pending_tx_id)
+            
+            if not pending_data:
+                raise Exception(f"Pending transaction {pending_tx_id} not found or expired")
+            
+            # Verify the initiator
+            if pending_data.get("initiator_address", "").lower() != initiator_address.lower():
+                raise Exception("Unauthorized: initiator address mismatch")
+            
+            # Extract data from pending transaction
+            asset_id = pending_data["asset_id"]
+            owner_address = pending_data["owner_address"]
+            ipfs_cid = pending_data["ipfs_cid"]
+            critical_metadata = pending_data["critical_metadata"]
+            non_critical_metadata = pending_data["non_critical_metadata"]
+            was_deleted = pending_data.get("was_deleted", False)
+            is_new_document = pending_data.get("is_new_document", False)
+            current_ipfs_version = pending_data.get("current_ipfs_version", 1)
+            file_info = pending_data.get("file_info")
+            
+            # Verify transaction was successful
+            tx_verification = await self.blockchain_service.verify_transaction_success(blockchain_tx_hash)
+            if not tx_verification.get("success"):
+                raise Exception(f"Blockchain transaction failed or not found: {blockchain_tx_hash}")
+            
+            # Process based on the operation type
+            if is_new_document:
+                # Create new asset document
+                doc_id = await self.asset_service.create_asset(
+                    asset_id=asset_id,
+                    wallet_address=owner_address,
+                    smart_contract_tx_id=blockchain_tx_hash,
+                    ipfs_hash=ipfs_cid,
+                    critical_metadata=critical_metadata,
+                    non_critical_metadata=non_critical_metadata,
+                    ipfs_version=1
+                )
+                
+                # Record transaction
+                if self.transaction_service:
+                    await self.transaction_service.record_transaction(
+                        asset_id=asset_id,
+                        action="CREATE",
+                        wallet_address=initiator_address,
+                        metadata={
+                            "ipfsHash": ipfs_cid,
+                            "smartContractTxId": blockchain_tx_hash,
+                            "ipfsVersion": 1,
+                            "ownerAddress": owner_address
+                        }
+                    )
+                
+                result = {
+                    "assetId": asset_id,
+                    "status": "success",
+                    "message": "Document created successfully",
+                    "documentId": doc_id,
+                    "version": 1,
+                    "ipfsVersion": 1,
+                    "ipfsCid": ipfs_cid,
+                    "blockchainTxHash": blockchain_tx_hash,
+                    "ownerAddress": owner_address,
+                    "initiatorAddress": initiator_address
+                }
+                
+            elif was_deleted:
+                # Recreate deleted asset (version 1)
+                doc_id = await self.asset_service.create_asset(
+                    asset_id=asset_id,
+                    wallet_address=owner_address,
+                    smart_contract_tx_id=blockchain_tx_hash,
+                    ipfs_hash=ipfs_cid,
+                    critical_metadata=critical_metadata,
+                    non_critical_metadata=non_critical_metadata,
+                    ipfs_version=1
+                )
+                
+                # Record transaction
+                if self.transaction_service:
+                    await self.transaction_service.record_transaction(
+                        asset_id=asset_id,
+                        action="RECREATE_DELETED",
+                        wallet_address=initiator_address,
+                        metadata={
+                            "ipfsHash": ipfs_cid,
+                            "smartContractTxId": blockchain_tx_hash,
+                            "versionNumber": 1,
+                            "ipfsVersion": 1,
+                            "wasDeleted": True,
+                            "ownerAddress": owner_address
+                        }
+                    )
+                
+                result = {
+                    "assetId": asset_id,
+                    "status": "success",
+                    "message": "Asset recreated from deleted state with version reset to 1",
+                    "documentId": doc_id,
+                    "version": 1,
+                    "ipfsVersion": 1,
+                    "ipfsCid": ipfs_cid,
+                    "blockchainTxHash": blockchain_tx_hash,
+                    "ownerAddress": owner_address,
+                    "initiatorAddress": initiator_address
+                }
+                
+            else:
+                # Create new version of existing asset
+                next_ipfs_version = current_ipfs_version + 1
+                
+                version_result = await self.asset_service.create_new_version(
+                    asset_id=asset_id,
+                    wallet_address=owner_address,
+                    smart_contract_tx_id=blockchain_tx_hash,
+                    ipfs_hash=ipfs_cid,
+                    critical_metadata=critical_metadata,
+                    non_critical_metadata=non_critical_metadata,
+                    ipfs_version=next_ipfs_version
+                )
+                
+                # Extract results
+                doc_id = version_result["document_id"]
+                version_number = version_result["version_number"]
+                ipfs_version = version_result.get("ipfs_version", next_ipfs_version)
+                
+                # Record transaction
+                if self.transaction_service:
+                    await self.transaction_service.record_transaction(
+                        asset_id=asset_id,
+                        action="VERSION_CREATE",
+                        wallet_address=initiator_address,
+                        metadata={
+                            "ipfsHash": ipfs_cid,
+                            "smartContractTxId": blockchain_tx_hash,
+                            "versionNumber": version_number,
+                            "ipfsVersion": ipfs_version,
+                            "ownerAddress": owner_address
+                        }
+                    )
+                
+                result = {
+                    "assetId": asset_id,
+                    "status": "success",
+                    "message": "New version created with updated critical metadata",
+                    "documentId": doc_id,
+                    "version": version_number,
+                    "ipfsVersion": ipfs_version,
+                    "ipfsCid": ipfs_cid,
+                    "blockchainTxHash": blockchain_tx_hash,
+                    "ownerAddress": owner_address,
+                    "initiatorAddress": initiator_address
+                }
+            
+            # Clean up pending transaction
+            await self.transaction_state_service.remove_pending_transaction(pending_tx_id)
+            
+            # Add file info if present
+            if file_info:
+                result.update(file_info)
+            
+            logger.info(f"Successfully completed blockchain upload for asset {asset_id}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error completing blockchain upload: {str(e)}")
+            return {
+                "assetId": "",
+                "status": "error",
+                "detail": f"Error completing upload: {str(e)}"
+            }
 
     async def handle_metadata_upload(
         self,

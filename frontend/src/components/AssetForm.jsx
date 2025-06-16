@@ -40,11 +40,11 @@ function AssetForm({ existingAsset = null }) {
 
   // Steps for the upload process
   const uploadSteps = [
-    'Parsing metadata',
-    'Uploading asset data to IPFS',
-    'Logging asset to blockchain',
-    'Storing asset data in MongoDB',
-    'Recording transaction'
+    'Preparing upload',
+    'Uploading to IPFS',
+    'Waiting for signature',
+    'Confirming transaction',
+    'Storing to database'
   ];
 
   // Example templates
@@ -254,119 +254,6 @@ function AssetForm({ existingAsset = null }) {
 
   return (
     <Paper sx={{ p: 3, position: 'relative' }}>
-      {/* Upload progress overlay */}
-      {isUploading && (
-        <Box sx={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          bgcolor: 'rgba(255,255,255,0.9)',
-          zIndex: 10,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: 1
-        }}>
-          <Card sx={{ maxWidth: 400, mb: 3, p: 3, boxShadow: 3 }}>
-            <CardContent>
-              <Typography variant="h6" color="primary" gutterBottom textAlign="center">
-                {uploadProgress === 100 ? 'Upload Complete!' : (existingAsset ? 'Updating Asset' : 'Creating Asset')}
-              </Typography>
-
-              <Box sx={{ mb: 3, mt: 2 }}>
-                {uploadProgress < 100 ? (
-                  <Box sx={{ width: '100%' }}>
-                    <Box sx={{ mb: 3 }}>
-                      <Typography variant="subtitle1" gutterBottom fontWeight="medium">
-                        Current step: {uploadSteps[uploadStep]}
-                      </Typography>
-
-                      {/* Step progress indicators */}
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        {uploadSteps.map((step, index) => (
-                          <Box
-                            key={index}
-                            sx={{
-                              flex: 1,
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              position: 'relative',
-                              '&:not(:last-child)::after': {
-                                content: '""',
-                                position: 'absolute',
-                                top: '14px',
-                                left: '50%',
-                                width: '100%',
-                                height: '2px',
-                                backgroundColor: index < uploadStep ? 'primary.main' : 'grey.300',
-                                zIndex: 0
-                              }
-                            }}
-                          >
-                            <Box sx={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: '50%',
-                              backgroundColor: index <= uploadStep ? 'primary.main' : 'grey.300',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'white',
-                              fontWeight: 'bold',
-                              position: 'relative',
-                              zIndex: 1,
-                              mb: 1
-                            }}>
-                              {index < uploadStep ? <CheckCircleIcon fontSize="small" /> : index + 1}
-                            </Box>
-                            <Typography variant="caption" align="center" sx={{ fontSize: '0.7rem' }}>
-                              {step}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    </Box>
-
-                    {/* Overall progress */}
-                    <Box sx={{ width: '100%', mr: 1, mb: 1 }}>
-                      <LinearProgress
-                        variant="determinate"
-                        value={uploadProgress}
-                        sx={{ height: 10, borderRadius: 5 }}
-                      />
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        This process can take several minutes
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {uploadProgress}%
-                      </Typography>
-                    </Box>
-                  </Box>
-                ) : (
-                  <Box sx={{ textAlign: 'center' }}>
-                    <CheckCircleIcon color="success" sx={{ fontSize: 60, mb: 2 }} />
-                    <Typography variant="h6" color="success.main" gutterBottom>
-                      {existingAsset ? 'Update' : 'Upload'} Successful!
-                    </Typography>
-                    <Typography>Redirecting to dashboard...</Typography>
-                  </Box>
-                )}
-              </Box>
-
-              <Typography variant="caption" color="text.secondary" textAlign="center" display="block">
-                This process can take a few minutes. Please don't close this window.
-              </Typography>
-            </CardContent>
-          </Card>
-        </Box>
-      )}
-
       <Typography variant="h5" gutterBottom>
         {existingAsset ? 'Edit Asset' : 'Create New Asset'}
       </Typography>
@@ -396,22 +283,17 @@ function AssetForm({ existingAsset = null }) {
                   <HelpOutline fontSize="small" color="primary" sx={{ mr: 1 }} />
                   <Typography variant="caption" color="text.secondary">
                     High Security
-                  </Typography>
                 </Box>
               </Tooltip>
             </Box>
 
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Metadata can be considered critical if they define your asset. Note that modifying these in the future take longer to process.
-            </Alert>
-
-            {/* Template selection */}
-            <FormControl fullWidth sx={{ mb: 3 }}>
-              <InputLabel>Metadata Template</InputLabel>
+            {/* Template Selector */}
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel>Template</InputLabel>
               <Select
                 value={selectedTemplate}
-                label="Metadata Template"
-                onChange={(e) => applyTemplate(e.target.value)}
+                label="Template"
+                onChange={handleTemplateChange}
               >
                 {templates.map((template) => (
                   <MenuItem key={template.name} value={template.name}>
@@ -421,138 +303,56 @@ function AssetForm({ existingAsset = null }) {
               </Select>
             </FormControl>
 
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
+            {/* Critical Metadata Fields */}
+            {Object.entries(formData.criticalMetadata).map(([key, value]) => (
+              <Box key={key} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <TextField
-                  label="Name"
-                  value={formData.criticalMetadata.name}
-                  onChange={handleCriticalMetadataChange('name')}
-                  fullWidth
-                  required
+                  label="Field Name"
+                  value={key}
+                  onChange={(e) => handleMetadataKeyChange('critical', key, e.target.value)}
+                  sx={{ mr: 2, minWidth: 200 }}
                 />
-              </Grid>
-
-              <Grid item xs={12}>
                 <TextField
-                  label="Description"
-                  value={formData.criticalMetadata.description}
-                  onChange={handleCriticalMetadataChange('description')}
-                  fullWidth
-                  multiline
-                  rows={3}
+                  label="Value"
+                  value={value}
+                  onChange={(e) => handleMetadataValueChange('critical', key, e.target.value)}
+                  sx={{ flexGrow: 1, mr: 1 }}
                 />
-              </Grid>
+                <IconButton 
+                  onClick={() => removeMetadataField('critical', key)}
+                  color="error"
+                  size="small"
+                >
+                  <CloseIcon />
+                </IconButton>
+              </Box>
+            ))}
 
-              {/* Display all custom critical metadata fields */}
-              {Object.entries(formData.criticalMetadata).filter(([key]) =>
-                !['name', 'description', 'tags'].includes(key)
-              ).map(([key, value]) => (
-                <Grid item xs={12} sm={6} key={key}>
-                  <TextField
-                    label={key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                    value={value}
-                    onChange={handleCriticalMetadataChange(key)}
-                    fullWidth
-                  />
-                </Grid>
-              ))}
+            <Button
+              startIcon={<AddIcon />}
+              onClick={() => addMetadataField('critical')}
+              variant="outlined"
+              size="small"
+              sx={{ mt: 1 }}
+            >
+              Add Critical Field
+            </Button>
+          </Grid>
 
-              {/* Custom critical field addition */}
-              <Grid item xs={12}>
-                <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, mt: 1 }}>
-                  <TextField
-                    label="New Field Name"
-                    value={criticalFieldName}
-                    onChange={(e) => setCriticalFieldName(e.target.value)}
-                    size="small"
-                    sx={{ flexGrow: 1 }}
-                  />
-
-                  <TextField
-                    label="Value"
-                    value={criticalFieldValue}
-                    onChange={(e) => setCriticalFieldValue(e.target.value)}
-                    size="small"
-                    sx={{ flexGrow: 1 }}
-                  />
-
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => {
-                      if (!criticalFieldName.trim()) return;
-                      setFormData({
-                        ...formData,
-                        criticalMetadata: {
-                          ...formData.criticalMetadata,
-                          [criticalFieldName.trim()]: criticalFieldValue
-                        }
-                      });
-                      setCriticalFieldName('');
-                      setCriticalFieldValue('');
-                    }}
-                    size="small"
-                  >
-                    Add
-                  </Button>
-                </Box>
-              </Grid>
-
-              {/* Tags input */}
-              <Grid item xs={12}>
-                <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
-                  Tags
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <TextField
-                    label="Add Tag"
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    fullWidth
-                    size="small"
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddTag();
-                      }
-                    }}
-                  />
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={handleAddTag}
-                    sx={{ ml: 1 }}
-                    size="small"
-                  >
-                    Add
-                  </Button>
-                </Box>
-
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
-                  {formData.criticalMetadata.tags?.map((tag, index) => (
-                    <Chip
-                      key={index}
-                      label={tag}
-                      onDelete={() => handleRemoveTag(tag)}
-                      size="small"
-                    />
-                  ))}
-                </Box>
-              </Grid>
-            </Grid>
+          <Grid item xs={12}>
+            <Divider sx={{ my: 2 }} />
           </Grid>
 
           {/* Non-Critical Metadata Section */}
           <Grid item xs={12}>
-            <Divider sx={{ my: 2 }} />
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">
                 Non-Critical Metadata
               </Typography>
 
-              <Tooltip title="Non-critical metadata go through standard security procedures, allowing for faster updates and modifications.">
+              <Tooltip title="Non-critical metadata are stored only in our database and are not verified during retrieval.">
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <HelpOutline fontSize="small" color="secondary" sx={{ mr: 1 }} />
+                  <InfoIcon fontSize="small" color="info" sx={{ mr: 1 }} />
                   <Typography variant="caption" color="text.secondary">
                     Standard Security
                   </Typography>
@@ -560,84 +360,53 @@ function AssetForm({ existingAsset = null }) {
               </Tooltip>
             </Box>
 
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Non-critical metadata include supplementary information that can be quickly updated. These can be modified with fewer computational resources.
-            </Alert>
+            {/* Non-Critical Metadata Fields */}
+            {Object.entries(formData.nonCriticalMetadata).map(([key, value]) => (
+              <Box key={key} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <TextField
+                  label="Field Name"
+                  value={key}
+                  onChange={(e) => handleMetadataKeyChange('nonCritical', key, e.target.value)}
+                  sx={{ mr: 2, minWidth: 200 }}
+                />
+                <TextField
+                  label="Value"
+                  value={value}
+                  onChange={(e) => handleMetadataValueChange('nonCritical', key, e.target.value)}
+                  sx={{ flexGrow: 1, mr: 1 }}
+                />
+                <IconButton 
+                  onClick={() => removeMetadataField('nonCritical', key)}
+                  color="error"
+                  size="small"
+                >
+                  <CloseIcon />
+                </IconButton>
+              </Box>
+            ))}
 
-            {/* Custom fields */}
-            <Box sx={{ mb: 2 }}>
-              {Object.entries(formData.nonCriticalMetadata).map(([key, value]) => (
-                <Box key={key} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <TextField
-                    label={key}
-                    value={value}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      nonCriticalMetadata: {
-                        ...formData.nonCriticalMetadata,
-                        [key]: e.target.value
-                      }
-                    })}
-                    fullWidth
-                    size="small"
-                  />
-                  <IconButton
-                    onClick={() => handleRemoveCustomField(key)}
-                    color="error"
-                    size="small"
-                  >
-                    <CloseIcon />
-                  </IconButton>
-                </Box>
-              ))}
-            </Box>
-
-            {/* Add custom field */}
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-              <TextField
-                label="Field Name"
-                value={nonCriticalFieldName}
-                onChange={(e) => setNonCriticalFieldName(e.target.value)}
-                size="small"
-                sx={{ flexGrow: 1 }}
-              />
-              <TextField
-                label="Value"
-                value={nonCriticalFieldValue}
-                onChange={(e) => setNonCriticalFieldValue(e.target.value)}
-                size="small"
-                sx={{ flexGrow: 1 }}
-              />
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleAddCustomField}
-                sx={{ mt: 1 }}
-                size="small"
-              >
-                Add
-              </Button>
-            </Box>
+            <Button
+              startIcon={<AddIcon />}
+              onClick={() => addMetadataField('nonCritical')}
+              variant="outlined"
+              size="small"
+              sx={{ mt: 1 }}
+            >
+              Add Non-Critical Field
+            </Button>
           </Grid>
 
           {/* Submit Button */}
           <Grid item xs={12}>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3 }}>
               <Button
                 type="submit"
                 variant="contained"
-                color="primary"
-                disabled={isUploading}
-                sx={{ minWidth: 120 }}
                 size="large"
+                disabled={isUploading || Object.keys(formData.criticalMetadata).length === 0}
+                startIcon={isUploading ? <CircularProgress size={20} /> : null}
               >
-                {isUploading ? (
-                  <CircularProgress size={24} />
-                ) : existingAsset ? (
-                  'Update Asset'
-                ) : (
-                  'Create Asset'
-                )}
+                {isUploading ? 'Processing...' : (existingAsset ? 'Update Asset' : 'Create Asset')}
               </Button>
             </Box>
           </Grid>

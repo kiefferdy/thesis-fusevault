@@ -16,6 +16,15 @@ class DeleteResponse(BaseModel):
     document_id: Optional[str] = Field(None, description="MongoDB document ID", alias="documentId")
     transaction_id: Optional[str] = Field(None, description="Transaction record ID", alias="transactionId")
     
+    # New fields for wallet user transaction signing workflow
+    pending_tx_id: Optional[str] = Field(None, description="Pending transaction ID for wallet users", alias="pendingTxId")
+    transaction: Optional[Dict[str, Any]] = Field(None, description="Unsigned transaction data for wallet users")
+    estimated_gas: Optional[int] = Field(None, description="Estimated gas for the transaction", alias="estimatedGas")
+    gas_price: Optional[int] = Field(None, description="Gas price for the transaction", alias="gasPrice")
+    function_name: Optional[str] = Field(None, description="Smart contract function name", alias="functionName")
+    next_step: Optional[str] = Field(None, description="Next step for wallet users", alias="nextStep")
+    blockchain_tx_hash: Optional[str] = Field(None, description="Blockchain transaction hash", alias="blockchainTxHash")
+    
     class Config:
         populate_by_name = True
 
