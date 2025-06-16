@@ -280,20 +280,14 @@ export const transactionFlow = {
       
       // Check network before starting transaction
       if (metamaskUtils.isMetaMaskAvailable()) {
-        try {
-          const networkCheck = await metamaskUtils.checkNetwork();
-          if (!networkCheck.isCorrectNetwork) {
-            throw new Error(
-              `Wrong network detected. Please switch to Sepolia Testnet in MetaMask. ` +
-              `Currently on: ${networkCheck.networkName}`
-            );
-          }
-        } catch (networkError) {
-          if (networkError.message.includes('Wrong network')) {
-            throw networkError;
-          }
-          console.warn('Network check failed, proceeding anyway:', networkError);
+        const networkCheck = await metamaskUtils.checkNetwork();
+        if (!networkCheck.isCorrectNetwork) {
+          throw new Error(
+            `Wrong network detected. Please switch to Sepolia Testnet in MetaMask. ` +
+            `Currently on: ${networkCheck.networkName}`
+          );
         }
+        console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
       }
       
       // Step 1: Initial upload request (will return pending_signature status for wallet users)
@@ -302,6 +296,10 @@ export const transactionFlow = {
       
       // Check if we need to sign a transaction
       if (uploadResult.status === 'pending_signature') {
+        console.log('🔍 Upload result for debugging:', JSON.stringify(uploadResult, null, 2));
+        console.log('🔍 uploadResult.pending_tx_id:', uploadResult.pending_tx_id);
+        console.log('🔍 uploadResult.pendingTxId:', uploadResult.pendingTxId);
+        
         if (!uploadResult.transaction) {
           throw new Error('No transaction data received from server');
         }
@@ -316,6 +314,16 @@ export const transactionFlow = {
           throw new Error('Transaction was not signed');
         }
         
+        // Verify we're still on correct network after signing
+        const postSignNetworkCheck = await metamaskUtils.checkNetwork();
+        if (!postSignNetworkCheck.isCorrectNetwork) {
+          throw new Error(
+            `Network changed during signing! Transaction sent to ${postSignNetworkCheck.networkName} ` +
+            `but expected Sepolia. Transaction hash: ${txHash}`
+          );
+        }
+        
+        console.log(`✅ Transaction sent to Sepolia: ${txHash}`);
         onProgress('Transaction sent, waiting for confirmation...', 60);
         
         // Step 3: Wait for transaction confirmation
@@ -324,10 +332,13 @@ export const transactionFlow = {
         onProgress('Completing upload...', 90);
         
         // Step 4: Complete the upload
-        const completionResult = await apiClient.post('/upload/complete', {
-          pending_tx_id: uploadResult.pending_tx_id,
+        const completionPayload = {
+          pending_tx_id: uploadResult.pendingTxId,
           blockchain_tx_hash: txHash
-        });
+        };
+        console.log('🔍 Completion payload:', JSON.stringify(completionPayload, null, 2));
+        
+        const completionResult = await apiClient.post('/upload/complete', completionPayload);
         
         if (!completionResult?.data?.success) {
           throw new Error('Upload completion failed on server');
@@ -359,20 +370,14 @@ export const transactionFlow = {
       
       // Check network before starting transaction
       if (metamaskUtils.isMetaMaskAvailable()) {
-        try {
-          const networkCheck = await metamaskUtils.checkNetwork();
-          if (!networkCheck.isCorrectNetwork) {
-            throw new Error(
-              `Wrong network detected. Please switch to Sepolia Testnet in MetaMask. ` +
-              `Currently on: ${networkCheck.networkName}`
-            );
-          }
-        } catch (networkError) {
-          if (networkError.message.includes('Wrong network')) {
-            throw networkError;
-          }
-          console.warn('Network check failed, proceeding anyway:', networkError);
+        const networkCheck = await metamaskUtils.checkNetwork();
+        if (!networkCheck.isCorrectNetwork) {
+          throw new Error(
+            `Wrong network detected. Please switch to Sepolia Testnet in MetaMask. ` +
+            `Currently on: ${networkCheck.networkName}`
+          );
         }
+        console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
       }
       
       // Step 1: Initial delete request
@@ -395,6 +400,16 @@ export const transactionFlow = {
           throw new Error('Transaction was not signed');
         }
         
+        // Verify we're still on correct network after signing
+        const postSignNetworkCheck = await metamaskUtils.checkNetwork();
+        if (!postSignNetworkCheck.isCorrectNetwork) {
+          throw new Error(
+            `Network changed during signing! Transaction sent to ${postSignNetworkCheck.networkName} ` +
+            `but expected Sepolia. Transaction hash: ${txHash}`
+          );
+        }
+        
+        console.log(`✅ Transaction sent to Sepolia: ${txHash}`);
         onProgress('Transaction sent, waiting for confirmation...', 60);
         
         // Step 3: Wait for transaction confirmation
@@ -404,7 +419,7 @@ export const transactionFlow = {
         
         // Step 4: Complete the deletion
         const completionResult = await apiClient.post('/delete/complete', {
-          pending_tx_id: deleteResult.pending_tx_id,
+          pending_tx_id: deleteResult.pendingTxId,
           blockchain_tx_hash: txHash
         });
         

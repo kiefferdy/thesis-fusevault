@@ -1064,7 +1064,15 @@ class BlockchainService:
             receipt = self.web3.eth.get_transaction_receipt(tx_hash_bytes)
             
             if not receipt:
-                raise ValueError(f"Transaction with hash {tx_hash} not found")
+                # More detailed error message for missing transactions
+                chain_id = self.web3.eth.chain_id
+                network_name = "Sepolia" if chain_id == 11155111 else f"Chain {chain_id}"
+                raise ValueError(
+                    f"Transaction with hash '{tx_hash}' not found on {network_name}. "
+                    f"This typically means: (1) The transaction was sent to a different network, "
+                    f"(2) The transaction is still pending, or (3) The transaction failed to send. "
+                    f"Please verify your wallet was connected to Sepolia when the transaction was sent."
+                )
                 
             # Check if transaction was successful
             success = receipt.status == 1
@@ -1081,8 +1089,12 @@ class BlockchainService:
             }
             
         except Exception as e:
-            logger.error(f"Error verifying transaction: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Failed to verify transaction: {str(e)}")
+            logger.error(f"Error verifying transaction {tx_hash}: {str(e)}")
+            if "not found" in str(e).lower():
+                # Re-raise transaction not found errors with original message
+                raise HTTPException(status_code=404, detail=str(e))
+            else:
+                raise HTTPException(status_code=500, detail=f"Failed to verify transaction: {str(e)}")
     
     def get_server_wallet_address(self) -> str:
         """

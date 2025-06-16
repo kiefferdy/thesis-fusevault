@@ -13,7 +13,7 @@ from app.repositories.asset_repo import AssetRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.database import get_db_client
 from app.utilities.auth_middleware import get_current_user, get_wallet_address
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Setup router
 router = APIRouter(
@@ -26,8 +26,11 @@ logger = logging.getLogger(__name__)
 
 # Pydantic models for completion endpoints
 class UploadCompletionRequest(BaseModel):
-    pending_tx_id: str
-    blockchain_tx_hash: str
+    pending_tx_id: str = Field(..., alias="pending_tx_id")
+    blockchain_tx_hash: str = Field(..., alias="blockchain_tx_hash")
+    
+    class Config:
+        populate_by_name = True
 
 class PendingTransactionResponse(BaseModel):
     pending_tx_id: str
@@ -209,7 +212,7 @@ async def process_metadata(
 
 @router.post("/complete", response_model=MetadataUploadResponse)
 async def complete_upload(
-    completion_request: UploadCompletionRequest,
+    request: Request,
     upload_handler: UploadHandler = Depends(get_upload_handler),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> MetadataUploadResponse:
@@ -217,12 +220,46 @@ async def complete_upload(
     Complete upload after blockchain transaction is confirmed.
     Only available for wallet-authenticated users.
     """
+    logger.info("=== COMPLETION REQUEST STARTED ===")
+    logger.info(f"Request URL: {request.url}")
+    logger.info(f"Request method: {request.method}")
+    
+    try:
+        # Get raw request body for debugging
+        body = await request.body()
+        logger.info(f"Raw request body: {body}")
+        
+        # Parse JSON manually to see what we received
+        import json
+        raw_data = json.loads(body)
+        logger.info(f"Parsed JSON data: {raw_data}")
+        
+        # Try to create the completion request object
+        try:
+            completion_request = UploadCompletionRequest(**raw_data)
+            logger.info(f"Successfully created UploadCompletionRequest: pending_tx_id={completion_request.pending_tx_id}, blockchain_tx_hash={completion_request.blockchain_tx_hash}")
+        except Exception as validation_error:
+            logger.error(f"Pydantic validation failed: {validation_error}")
+            logger.error(f"Validation error type: {type(validation_error).__name__}")
+            raise HTTPException(status_code=422, detail=f"Validation error: {str(validation_error)}")
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error parsing request: {e}")
+        raise HTTPException(status_code=400, detail=f"Error parsing request: {str(e)}")
+    
     try:
         # Get the authenticated user's wallet address
         authenticated_wallet = current_user.get("walletAddress")
         
         if not authenticated_wallet:
             raise HTTPException(status_code=401, detail="Unable to determine wallet address")
+        
+        logger.info(f"Completing upload for pending_tx_id: {completion_request.pending_tx_id}, tx_hash: {completion_request.blockchain_tx_hash}")
         
         # Complete the blockchain upload
         result = await upload_handler.complete_blockchain_upload(
@@ -231,8 +268,16 @@ async def complete_upload(
             initiator_address=authenticated_wallet
         )
         
+        logger.info(f"Upload completion result: {result}")
+        
         if result.get("status") == "error":
+            logger.error(f"Upload completion error: {result.get('detail', 'Unknown error')}")
             raise HTTPException(status_code=400, detail=result.get("detail", "Upload completion failed"))
+        
+        # Validate the result has required fields before creating response
+        if not result.get("assetId") and not result.get("asset_id"):
+            logger.error(f"Missing asset_id in result: {result}")
+            raise HTTPException(status_code=500, detail="Invalid response: missing asset_id")
         
         return MetadataUploadResponse(**result)
         
@@ -240,6 +285,7 @@ async def complete_upload(
         raise
     except Exception as e:
         logger.error(f"Error completing upload: {str(e)}")
+        logger.error(f"Exception type: {type(e).__name__}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/pending/{pending_tx_id}", response_model=PendingTransactionResponse)

@@ -1,26 +1,89 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
+import {
+  Box,
+  Button,
+  TextField,
+  Typography,
+  Paper,
+  CircularProgress,
+  LinearProgress,
+  Grid,
+  Chip,
+  IconButton,
+  Divider,
+  Alert,
+  MenuItem,
+  Card,
+  CardContent,
+  FormControl,
+  InputLabel,
+  Select,
+  Tooltip
+} from '@mui/material';
+import {
+  Add as AddIcon,
+  Close as CloseIcon,
+  Info as InfoIcon,
+  HelpOutline,
+  CheckCircle as CheckCircleIcon
+} from '@mui/icons-material';
+import { v4 as uuidv4 } from 'uuid';
 import { useTransactionSigner } from '../hooks/useTransactionSigner';
 import TransactionSigner from './TransactionSigner';
 import { useAuth } from '../contexts/AuthContext';
+import { toast } from 'react-hot-toast';
 
-const UploadFormWithSigning = ({ onUploadSuccess }) => {
-  const [formData, setFormData] = useState({
-    assetId: '',
+const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
+  const { currentAccount, isAuthenticated } = useAuth();
+
+  // Steps for the upload process
+  const uploadSteps = [
+    'Parsing metadata',
+    'Uploading to IPFS',
+    'Preparing transaction',
+    'Signing with MetaMask',
+    'Recording on blockchain'
+  ];
+
+  // Example templates
+  const templates = [
+    { name: 'Document', fields: { 'document_type': '', 'author': '', 'version': '', 'creation_date': '' } },
+    { name: 'Artwork', fields: { 'artist': '', 'medium': '', 'dimensions': '', 'year_created': '' } },
+    { name: 'Certificate', fields: { 'issuer': '', 'recipient': '', 'issue_date': '', 'expiration_date': '' } },
+    { name: 'Custom', fields: {} }
+  ];
+
+  // State initialization function
+  const getInitialFormData = () => ({
+    assetId: existingAsset?.assetId || uuidv4(),
+    walletAddress: currentAccount,
     criticalMetadata: {
-      name: '',
-      description: '',
-      type: ''
+      name: existingAsset?.criticalMetadata?.name || '',
+      description: existingAsset?.criticalMetadata?.description || '',
+      tags: existingAsset?.criticalMetadata?.tags || [],
+      ...(existingAsset?.criticalMetadata ?
+        Object.fromEntries(
+          Object.entries(existingAsset.criticalMetadata).filter(
+            ([key]) => !['name', 'description', 'tags'].includes(key)
+          )
+        ) : {}
+      )
     },
-    nonCriticalMetadata: {
-      tags: '',
-      notes: ''
-    }
+    nonCriticalMetadata: existingAsset?.nonCriticalMetadata || {}
   });
-  
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const { user } = useAuth();
-  
+
+  // Initialize form state
+  const [formData, setFormData] = useState(getInitialFormData);
+  const [selectedTemplate, setSelectedTemplate] = useState('Custom');
+  const [newTag, setNewTag] = useState('');
+  const [uploadStep, setUploadStep] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [criticalFieldName, setCriticalFieldName] = useState('');
+  const [criticalFieldValue, setCriticalFieldValue] = useState('');
+  const [nonCriticalFieldName, setNonCriticalFieldName] = useState('');
+  const [nonCriticalFieldValue, setNonCriticalFieldValue] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+
   const {
     isVisible,
     operation,
@@ -28,42 +91,144 @@ const UploadFormWithSigning = ({ onUploadSuccess }) => {
     showUploadSigner,
     hideSigner,
     onSuccess,
-    onError,
-    uploadWithSigning
+    onError
   } = useTransactionSigner();
 
-  const handleInputChange = (field, value) => {
-    if (field.includes('.')) {
-      const [parent, child] = field.split('.');
-      setFormData(prev => ({
-        ...prev,
-        [parent]: {
-          ...prev[parent],
-          [child]: value
+  // Update form data when currentAccount changes
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      walletAddress: currentAccount
+    }));
+  }, [currentAccount]);
+
+  // Update form data when existingAsset changes
+  useEffect(() => {
+    if (existingAsset) {
+      const newFormData = getInitialFormData();
+      setFormData(newFormData);
+
+      // Set template based on existing asset structure
+      if (existingAsset.criticalMetadata) {
+        const assetFields = Object.keys(existingAsset.criticalMetadata);
+        const matchingTemplate = templates.find(template => {
+          const templateFields = Object.keys(template.fields);
+          return templateFields.some(field => assetFields.includes(field));
+        });
+
+        if (matchingTemplate) {
+          setSelectedTemplate(matchingTemplate.name);
         }
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [field]: value
-      }));
+      }
     }
+  }, [existingAsset, currentAccount]);
+
+  // Handle form field changes for critical metadata
+  const handleCriticalMetadataChange = (field) => (event) => {
+    setFormData({
+      ...formData,
+      criticalMetadata: {
+        ...formData.criticalMetadata,
+        [field]: event.target.value
+      }
+    });
   };
 
+  // Handle adding a new tag
+  const handleAddTag = () => {
+    if (newTag.trim() === '') return;
+
+    setFormData({
+      ...formData,
+      criticalMetadata: {
+        ...formData.criticalMetadata,
+        tags: [...(formData.criticalMetadata.tags || []), newTag.trim()]
+      }
+    });
+
+    setNewTag('');
+  };
+
+  // Handle removing a tag
+  const handleRemoveTag = (tagToRemove) => {
+    setFormData({
+      ...formData,
+      criticalMetadata: {
+        ...formData.criticalMetadata,
+        tags: formData.criticalMetadata.tags.filter(tag => tag !== tagToRemove)
+      }
+    });
+  };
+
+  // Handle adding a custom field to non-critical metadata
+  const handleAddCustomField = () => {
+    if (nonCriticalFieldName.trim() === '') return;
+
+    setFormData({
+      ...formData,
+      nonCriticalMetadata: {
+        ...formData.nonCriticalMetadata,
+        [nonCriticalFieldName.trim()]: nonCriticalFieldValue
+      }
+    });
+
+    setNonCriticalFieldName('');
+    setNonCriticalFieldValue('');
+  };
+
+  // Handle removing a custom field
+  const handleRemoveCustomField = (fieldName) => {
+    const updatedMetadata = { ...formData.nonCriticalMetadata };
+    delete updatedMetadata[fieldName];
+
+    setFormData({
+      ...formData,
+      nonCriticalMetadata: updatedMetadata
+    });
+  };
+
+  // Apply a template
+  const applyTemplate = (templateName) => {
+    const template = templates.find(t => t.name === templateName);
+    if (!template) return;
+
+    setSelectedTemplate(templateName);
+
+    if (templateName === 'Custom') {
+      setFormData(prev => ({
+        ...prev,
+        criticalMetadata: {
+          name: prev.criticalMetadata.name || '',
+          description: prev.criticalMetadata.description || '',
+          tags: prev.criticalMetadata.tags || []
+        }
+      }));
+      return;
+    }
+
+    // Add template fields to critical metadata
+    setFormData(prev => ({
+      ...prev,
+      criticalMetadata: {
+        name: prev.criticalMetadata.name || '',
+        description: prev.criticalMetadata.description || '',
+        tags: prev.criticalMetadata.tags || [],
+        ...template.fields
+      }
+    }));
+  };
+
+  // Form validation
   const validateForm = () => {
     const errors = [];
     
-    if (!user?.walletAddress) {
+    if (!currentAccount) {
       errors.push('Please connect your wallet first');
     }
     
     if (!formData.assetId?.trim()) {
       errors.push('Asset ID is required');
-    } else if (formData.assetId.length < 3) {
-      errors.push('Asset ID must be at least 3 characters long');
-    } else if (!/^[a-zA-Z0-9_-]+$/.test(formData.assetId)) {
-      errors.push('Asset ID can only contain letters, numbers, hyphens, and underscores');
-    }
+    } 
     
     if (!formData.criticalMetadata.name?.trim()) {
       errors.push('Asset name is required');
@@ -75,254 +240,468 @@ const UploadFormWithSigning = ({ onUploadSuccess }) => {
       errors.push('Description must be 500 characters or less');
     }
     
-    if (formData.nonCriticalMetadata.tags) {
-      const tags = formData.nonCriticalMetadata.tags.split(',').map(tag => tag.trim()).filter(Boolean);
-      if (tags.length > 10) {
-        errors.push('Maximum 10 tags allowed');
-      }
-      for (const tag of tags) {
-        if (tag.length > 30) {
-          errors.push('Each tag must be 30 characters or less');
-        }
-      }
-    }
-    
-    if (formData.nonCriticalMetadata.notes && formData.nonCriticalMetadata.notes.length > 1000) {
-      errors.push('Notes must be 1000 characters or less');
-    }
-    
     return errors;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    
+  // Handle form submission
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
     const validationErrors = validateForm();
     if (validationErrors.length > 0) {
-      setError(validationErrors.join('. '));
+      toast.error(validationErrors.join('. '));
       return;
     }
 
+    setIsUploading(true);
+    setUploadProgress(0);
+    setUploadStep(0);
+
+    // Prepare upload data
     const uploadData = {
       assetId: formData.assetId,
-      walletAddress: user.walletAddress,
+      walletAddress: currentAccount,
       criticalMetadata: {
         ...formData.criticalMetadata,
         timestamp: new Date().toISOString()
       },
-      nonCriticalMetadata: {
-        ...formData.nonCriticalMetadata,
-        tags: formData.nonCriticalMetadata.tags.split(',').map(tag => tag.trim()).filter(Boolean)
-      }
+      nonCriticalMetadata: formData.nonCriticalMetadata
     };
 
-    try {
-      setIsLoading(true);
-      
-      // Option 1: Use the UI-based transaction signer
-      showUploadSigner(
-        uploadData,
-        (result) => {
-          console.log('Upload successful:', result);
-          setIsLoading(false);
-          hideSigner();
-          
-          // Reset form
-          setFormData({
-            assetId: '',
-            criticalMetadata: { name: '', description: '', type: '' },
-            nonCriticalMetadata: { tags: '', notes: '' }
-          });
-          
-          if (onUploadSuccess) {
-            onUploadSuccess(result);
-          }
-        },
-        (error) => {
-          console.error('Upload failed:', error);
-          let errorMessage = 'Upload failed';
-          
-          if (error?.message) {
-            errorMessage = error.message;
-          } else if (error?.response?.data?.detail) {
-            errorMessage = error.response.data.detail;
-          } else if (error?.response?.status === 401) {
-            errorMessage = 'Authentication failed - please reconnect your wallet';
-          } else if (error?.response?.status === 400) {
-            errorMessage = 'Invalid request - please check your input data';
-          } else if (error?.response?.status >= 500) {
-            errorMessage = 'Server error - please try again later';
-          }
-          
-          setError(errorMessage);
-          setIsLoading(false);
-          hideSigner();
+    // Use the UI-based transaction signer
+    showUploadSigner(
+      uploadData,
+      (result) => {
+        console.log('Upload successful:', result);
+        setIsUploading(false);
+        setUploadProgress(100);
+        hideSigner();
+        
+        // Reset form
+        setFormData(getInitialFormData());
+        setSelectedTemplate('Custom');
+        
+        if (onUploadSuccess) {
+          onUploadSuccess(result);
         }
-      );
-
-      // Option 2: Use direct method without UI (commented out)
-      /*
-      const result = await uploadWithSigning(uploadData, (step, progress) => {
-        console.log(`${step} - ${progress}%`);
-      });
-      
-      console.log('Upload successful:', result);
-      setIsLoading(false);
-      
-      // Reset form
-      setFormData({
-        assetId: '',
-        criticalMetadata: { name: '', description: '', type: '' },
-        nonCriticalMetadata: { tags: '', notes: '' }
-      });
-      
-      if (onUploadSuccess) {
-        onUploadSuccess(result);
+      },
+      (error) => {
+        console.error('Upload failed:', error);
+        setIsUploading(false);
+        setUploadProgress(0);
+        hideSigner();
+        
+        let errorMessage = 'Upload failed';
+        if (error?.message) {
+          errorMessage = error.message;
+        }
+        
+        toast.error(errorMessage);
       }
-      */
-      
-    } catch (error) {
-      console.error('Upload error:', error);
-      let errorMessage = 'Upload failed';
-      
-      if (error?.message) {
-        errorMessage = error.message;
-      } else if (error?.response?.data?.detail) {
-        errorMessage = error.response.data.detail;
-      } else if (error?.response?.status === 401) {
-        errorMessage = 'Authentication failed - please reconnect your wallet';
-      } else if (error?.response?.status === 400) {
-        errorMessage = 'Invalid request - please check your input data';
-      } else if (error?.response?.status >= 500) {
-        errorMessage = 'Server error - please try again later';
-      }
-      
-      setError(errorMessage);
-      setIsLoading(false);
-    }
+    );
   };
 
+  // Show wallet connection warning if not connected
+  if (!isAuthenticated || !currentAccount) {
+    return (
+      <Paper sx={{ p: 3 }}>
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Please connect and authenticate your wallet to create assets.
+        </Alert>
+      </Paper>
+    );
+  }
+
   return (
-    <div className="upload-form-container">
-      <form onSubmit={handleSubmit} className="upload-form">
-        <h2>Upload Asset Metadata</h2>
-        
-        {error && (
-          <div className="error-alert">
-            <p>{error}</p>
-          </div>
-        )}
+    <Paper sx={{ p: 3, position: 'relative' }}>
+      {/* Upload progress overlay */}
+      {isUploading && (
+        <Box sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          bgcolor: 'rgba(255,255,255,0.9)',
+          zIndex: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 1
+        }}>
+          <Card sx={{ maxWidth: 400, mb: 3, p: 3, boxShadow: 3 }}>
+            <CardContent>
+              <Typography variant="h6" color="primary" gutterBottom textAlign="center">
+                {uploadProgress === 100 ? 'Upload Complete!' : (existingAsset ? 'Updating Asset' : 'Creating Asset')}
+              </Typography>
 
-        <div className="form-group">
-          <label htmlFor="assetId">Asset ID *</label>
-          <input
-            id="assetId"
-            type="text"
-            value={formData.assetId}
-            onChange={(e) => handleInputChange('assetId', e.target.value)}
-            placeholder="Enter unique asset identifier"
-            required
-            disabled={isLoading}
-          />
-        </div>
+              <Box sx={{ mb: 3, mt: 2 }}>
+                {uploadProgress < 100 ? (
+                  <Box sx={{ width: '100%' }}>
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle1" gutterBottom fontWeight="medium">
+                        Current step: {uploadSteps[uploadStep]}
+                      </Typography>
 
-        <div className="form-section">
-          <h3>Critical Metadata</h3>
-          <p className="section-description">
-            This data will be stored on IPFS and tracked on the blockchain
-          </p>
+                      {/* Step progress indicators */}
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        {uploadSteps.map((step, index) => (
+                          <Box
+                            key={index}
+                            sx={{
+                              flex: 1,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              position: 'relative',
+                              '&:not(:last-child)::after': {
+                                content: '""',
+                                position: 'absolute',
+                                top: '14px',
+                                left: '50%',
+                                width: '100%',
+                                height: '2px',
+                                backgroundColor: index < uploadStep ? 'primary.main' : 'grey.300',
+                                zIndex: 0
+                              }
+                            }}
+                          >
+                            <Box sx={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: '50%',
+                              backgroundColor: index <= uploadStep ? 'primary.main' : 'grey.300',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'white',
+                              fontWeight: 'bold',
+                              position: 'relative',
+                              zIndex: 1,
+                              mb: 1
+                            }}>
+                              {index < uploadStep ? <CheckCircleIcon fontSize="small" /> : index + 1}
+                            </Box>
+                            <Typography variant="caption" align="center" sx={{ fontSize: '0.7rem' }}>
+                              {step}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
 
-          <div className="form-group">
-            <label htmlFor="name">Name *</label>
-            <input
-              id="name"
-              type="text"
-              value={formData.criticalMetadata.name}
-              onChange={(e) => handleInputChange('criticalMetadata.name', e.target.value)}
-              placeholder="Asset name"
-              required
-              disabled={isLoading}
+                    {/* Overall progress */}
+                    <Box sx={{ width: '100%', mr: 1, mb: 1 }}>
+                      <LinearProgress
+                        variant="determinate"
+                        value={uploadProgress}
+                        sx={{ height: 10, borderRadius: 5 }}
+                      />
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Typography variant="body2" color="text.secondary">
+                        This process can take several minutes
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {uploadProgress}%
+                      </Typography>
+                    </Box>
+                  </Box>
+                ) : (
+                  <Box sx={{ textAlign: 'center' }}>
+                    <CheckCircleIcon color="success" sx={{ fontSize: 60, mb: 2 }} />
+                    <Typography variant="h6" color="success.main" gutterBottom>
+                      {existingAsset ? 'Update' : 'Upload'} Successful!
+                    </Typography>
+                    <Typography>Redirecting to dashboard...</Typography>
+                  </Box>
+                )}
+              </Box>
+
+              <Typography variant="caption" color="text.secondary" textAlign="center" display="block">
+                This process can take a few minutes. Please don't close this window.
+              </Typography>
+            </CardContent>
+          </Card>
+        </Box>
+      )}
+
+      <Typography variant="h5" gutterBottom>
+        {existingAsset ? 'Edit Asset' : 'Create New Asset'}
+      </Typography>
+
+      <form onSubmit={handleSubmit}>
+        <Grid container spacing={3}>
+          {/* Asset ID (readonly) */}
+          <Grid item xs={12}>
+            <TextField
+              label="Asset ID"
+              value={formData.assetId}
+              fullWidth
+              disabled
+              helperText="Asset ID is automatically generated and cannot be changed"
             />
-          </div>
+          </Grid>
 
-          <div className="form-group">
-            <label htmlFor="description">Description</label>
-            <textarea
-              id="description"
-              value={formData.criticalMetadata.description}
-              onChange={(e) => handleInputChange('criticalMetadata.description', e.target.value)}
-              placeholder="Asset description"
-              rows={3}
-              disabled={isLoading}
-            />
-          </div>
+          {/* Critical Metadata Section */}
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">
+                Critical Metadata
+              </Typography>
 
-          <div className="form-group">
-            <label htmlFor="type">Type</label>
-            <select
-              id="type"
-              value={formData.criticalMetadata.type}
-              onChange={(e) => handleInputChange('criticalMetadata.type', e.target.value)}
-              disabled={isLoading}
-            >
-              <option value="">Select type</option>
-              <option value="document">Document</option>
-              <option value="image">Image</option>
-              <option value="video">Video</option>
-              <option value="audio">Audio</option>
-              <option value="data">Data</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-        </div>
+              <Tooltip title="During retrieval, critical metadata undergo a strict verification process to ensure their authenticity.">
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <HelpOutline fontSize="small" color="primary" sx={{ mr: 1 }} />
+                  <Typography variant="caption" color="text.secondary">
+                    High Security
+                  </Typography>
+                </Box>
+              </Tooltip>
+            </Box>
 
-        <div className="form-section">
-          <h3>Non-Critical Metadata</h3>
-          <p className="section-description">
-            This data will be stored in the database only
-          </p>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Metadata can be considered critical if they define your asset. Note that modifying these in the future take longer to process.
+            </Alert>
 
-          <div className="form-group">
-            <label htmlFor="tags">Tags</label>
-            <input
-              id="tags"
-              type="text"
-              value={formData.nonCriticalMetadata.tags}
-              onChange={(e) => handleInputChange('nonCriticalMetadata.tags', e.target.value)}
-              placeholder="tag1, tag2, tag3"
-              disabled={isLoading}
-            />
-          </div>
+            {/* Template selection */}
+            <FormControl fullWidth sx={{ mb: 3 }}>
+              <InputLabel>Metadata Template</InputLabel>
+              <Select
+                value={selectedTemplate}
+                label="Metadata Template"
+                onChange={(e) => applyTemplate(e.target.value)}
+              >
+                {templates.map((template) => (
+                  <MenuItem key={template.name} value={template.name}>
+                    {template.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
-          <div className="form-group">
-            <label htmlFor="notes">Notes</label>
-            <textarea
-              id="notes"
-              value={formData.nonCriticalMetadata.notes}
-              onChange={(e) => handleInputChange('nonCriticalMetadata.notes', e.target.value)}
-              placeholder="Additional notes"
-              rows={2}
-              disabled={isLoading}
-            />
-          </div>
-        </div>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <TextField
+                  label="Name"
+                  value={formData.criticalMetadata.name}
+                  onChange={handleCriticalMetadataChange('name')}
+                  fullWidth
+                  required
+                />
+              </Grid>
 
-        <div className="form-actions">
-          <button 
-            type="submit" 
-            className="btn btn-primary"
-            disabled={isLoading || !user?.walletAddress}
-          >
-            {isLoading ? 'Processing...' : 'Upload Metadata'}
-          </button>
-          
-          {!user?.walletAddress && (
-            <p className="wallet-warning">
-              Please connect your wallet to upload metadata
-            </p>
-          )}
-        </div>
+              <Grid item xs={12}>
+                <TextField
+                  label="Description"
+                  value={formData.criticalMetadata.description}
+                  onChange={handleCriticalMetadataChange('description')}
+                  fullWidth
+                  multiline
+                  rows={3}
+                />
+              </Grid>
+
+              {/* Display all custom critical metadata fields */}
+              {Object.entries(formData.criticalMetadata).filter(([key]) =>
+                !['name', 'description', 'tags'].includes(key)
+              ).map(([key, value]) => (
+                <Grid item xs={12} sm={6} key={key}>
+                  <TextField
+                    label={key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                    value={value}
+                    onChange={handleCriticalMetadataChange(key)}
+                    fullWidth
+                  />
+                </Grid>
+              ))}
+
+              {/* Custom critical field addition */}
+              <Grid item xs={12}>
+                <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1, mt: 1 }}>
+                  <TextField
+                    label="New Field Name"
+                    value={criticalFieldName}
+                    onChange={(e) => setCriticalFieldName(e.target.value)}
+                    size="small"
+                    sx={{ flexGrow: 1 }}
+                  />
+
+                  <TextField
+                    label="Value"
+                    value={criticalFieldValue}
+                    onChange={(e) => setCriticalFieldValue(e.target.value)}
+                    size="small"
+                    sx={{ flexGrow: 1 }}
+                  />
+
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => {
+                      if (!criticalFieldName.trim()) return;
+                      setFormData({
+                        ...formData,
+                        criticalMetadata: {
+                          ...formData.criticalMetadata,
+                          [criticalFieldName.trim()]: criticalFieldValue
+                        }
+                      });
+                      setCriticalFieldName('');
+                      setCriticalFieldValue('');
+                    }}
+                    size="small"
+                  >
+                    Add
+                  </Button>
+                </Box>
+              </Grid>
+
+              {/* Tags input */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+                  Tags
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <TextField
+                    label="Add Tag"
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    fullWidth
+                    size="small"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTag();
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={handleAddTag}
+                    sx={{ ml: 1 }}
+                    size="small"
+                  >
+                    Add
+                  </Button>
+                </Box>
+
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                  {formData.criticalMetadata.tags?.map((tag, index) => (
+                    <Chip
+                      key={index}
+                      label={tag}
+                      onDelete={() => handleRemoveTag(tag)}
+                      size="small"
+                    />
+                  ))}
+                </Box>
+              </Grid>
+            </Grid>
+          </Grid>
+
+          {/* Non-Critical Metadata Section */}
+          <Grid item xs={12}>
+            <Divider sx={{ my: 2 }} />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">
+                Non-Critical Metadata
+              </Typography>
+
+              <Tooltip title="Non-critical metadata go through standard security procedures, allowing for faster updates and modifications.">
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <HelpOutline fontSize="small" color="secondary" sx={{ mr: 1 }} />
+                  <Typography variant="caption" color="text.secondary">
+                    Standard Security
+                  </Typography>
+                </Box>
+              </Tooltip>
+            </Box>
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Non-critical metadata include supplementary information that can be quickly updated. These can be modified with fewer computational resources.
+            </Alert>
+
+            {/* Custom fields */}
+            <Box sx={{ mb: 2 }}>
+              {Object.entries(formData.nonCriticalMetadata).map(([key, value]) => (
+                <Box key={key} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <TextField
+                    label={key}
+                    value={value}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      nonCriticalMetadata: {
+                        ...formData.nonCriticalMetadata,
+                        [key]: e.target.value
+                      }
+                    })}
+                    fullWidth
+                    size="small"
+                  />
+                  <IconButton
+                    onClick={() => handleRemoveCustomField(key)}
+                    color="error"
+                    size="small"
+                  >
+                    <CloseIcon />
+                  </IconButton>
+                </Box>
+              ))}
+            </Box>
+
+            {/* Add custom field */}
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+              <TextField
+                label="Field Name"
+                value={nonCriticalFieldName}
+                onChange={(e) => setNonCriticalFieldName(e.target.value)}
+                size="small"
+                sx={{ flexGrow: 1 }}
+              />
+              <TextField
+                label="Value"
+                value={nonCriticalFieldValue}
+                onChange={(e) => setNonCriticalFieldValue(e.target.value)}
+                size="small"
+                sx={{ flexGrow: 1 }}
+              />
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleAddCustomField}
+                sx={{ mt: 1 }}
+                size="small"
+              >
+                Add
+              </Button>
+            </Box>
+          </Grid>
+
+          {/* Submit Button */}
+          <Grid item xs={12}>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                disabled={isUploading || !isAuthenticated || !currentAccount}
+                sx={{ minWidth: 120 }}
+                size="large"
+              >
+                {isUploading ? (
+                  <CircularProgress size={24} />
+                ) : existingAsset ? (
+                  'Update Asset'
+                ) : (
+                  'Create Asset'
+                )}
+              </Button>
+            </Box>
+          </Grid>
+        </Grid>
       </form>
 
       {/* Transaction Signer Modal */}
@@ -334,138 +713,7 @@ const UploadFormWithSigning = ({ onUploadSuccess }) => {
         onCancel={hideSigner}
         isVisible={isVisible}
       />
-
-      <style jsx>{`
-        .upload-form-container {
-          max-width: 600px;
-          margin: 0 auto;
-          padding: 20px;
-        }
-
-        .upload-form {
-          background: white;
-          padding: 30px;
-          border-radius: 8px;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .upload-form h2 {
-          margin-top: 0;
-          margin-bottom: 24px;
-          color: #333;
-        }
-
-        .error-alert {
-          background-color: #f8d7da;
-          border: 1px solid #f5c6cb;
-          color: #721c24;
-          padding: 12px 16px;
-          border-radius: 4px;
-          margin-bottom: 20px;
-        }
-
-        .error-alert p {
-          margin: 0;
-        }
-
-        .form-section {
-          margin-bottom: 30px;
-          padding-bottom: 20px;
-          border-bottom: 1px solid #e9ecef;
-        }
-
-        .form-section:last-of-type {
-          border-bottom: none;
-        }
-
-        .form-section h3 {
-          margin: 0 0 8px 0;
-          color: #495057;
-          font-size: 18px;
-        }
-
-        .section-description {
-          margin: 0 0 20px 0;
-          color: #6c757d;
-          font-size: 14px;
-          font-style: italic;
-        }
-
-        .form-group {
-          margin-bottom: 20px;
-        }
-
-        .form-group label {
-          display: block;
-          margin-bottom: 6px;
-          font-weight: 500;
-          color: #495057;
-        }
-
-        .form-group input,
-        .form-group textarea,
-        .form-group select {
-          width: 100%;
-          padding: 10px 12px;
-          border: 1px solid #ced4da;
-          border-radius: 4px;
-          font-size: 14px;
-          transition: border-color 0.2s;
-        }
-
-        .form-group input:focus,
-        .form-group textarea:focus,
-        .form-group select:focus {
-          outline: none;
-          border-color: #007bff;
-          box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-        }
-
-        .form-group input:disabled,
-        .form-group textarea:disabled,
-        .form-group select:disabled {
-          background-color: #e9ecef;
-          opacity: 0.6;
-        }
-
-        .form-actions {
-          margin-top: 30px;
-          text-align: center;
-        }
-
-        .btn {
-          padding: 12px 24px;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-weight: 500;
-          font-size: 16px;
-          transition: background-color 0.2s;
-        }
-
-        .btn-primary {
-          background-color: #007bff;
-          color: white;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-          background-color: #0056b3;
-        }
-
-        .btn:disabled {
-          background-color: #6c757d;
-          cursor: not-allowed;
-          opacity: 0.6;
-        }
-
-        .wallet-warning {
-          margin-top: 12px;
-          color: #dc3545;
-          font-size: 14px;
-          font-style: italic;
-        }
-      `}</style>
-    </div>
+    </Paper>
   );
 };
 

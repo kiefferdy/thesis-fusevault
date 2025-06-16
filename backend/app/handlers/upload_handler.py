@@ -526,16 +526,16 @@ class UploadHandler:
                     )
                 
                 result = {
-                    "asset_id": asset_id,
+                    "assetId": asset_id,
                     "status": "success",
                     "message": "Document created successfully",
-                    "document_id": doc_id,
+                    "documentId": doc_id,
                     "version": 1,
-                    "ipfs_version": 1,
-                    "ipfs_cid": ipfs_cid,
-                    "blockchain_tx_hash": blockchain_tx_hash,
-                    "owner_address": owner_address,
-                    "initiator_address": initiator_address
+                    "ipfsVersion": 1,
+                    "ipfsCid": ipfs_cid,
+                    "blockchainTxHash": blockchain_tx_hash,
+                    "ownerAddress": owner_address,
+                    "initiatorAddress": initiator_address
                 }
                 
             elif was_deleted:
@@ -567,16 +567,16 @@ class UploadHandler:
                     )
                 
                 result = {
-                    "asset_id": asset_id,
+                    "assetId": asset_id,
                     "status": "success",
                     "message": "Asset recreated from deleted state with version reset to 1",
-                    "document_id": doc_id,
+                    "documentId": doc_id,
                     "version": 1,
-                    "ipfs_version": 1,
-                    "ipfs_cid": ipfs_cid,
-                    "blockchain_tx_hash": blockchain_tx_hash,
-                    "owner_address": owner_address,
-                    "initiator_address": initiator_address
+                    "ipfsVersion": 1,
+                    "ipfsCid": ipfs_cid,
+                    "blockchainTxHash": blockchain_tx_hash,
+                    "ownerAddress": owner_address,
+                    "initiatorAddress": initiator_address
                 }
                 
             else:
@@ -614,16 +614,16 @@ class UploadHandler:
                     )
                 
                 result = {
-                    "asset_id": asset_id,
+                    "assetId": asset_id,
                     "status": "success",
                     "message": "New version created with updated critical metadata",
-                    "document_id": doc_id,
+                    "documentId": doc_id,
                     "version": version_number,
-                    "ipfs_version": ipfs_version,
-                    "ipfs_cid": ipfs_cid,
-                    "blockchain_tx_hash": blockchain_tx_hash,
-                    "owner_address": owner_address,
-                    "initiator_address": initiator_address
+                    "ipfsVersion": ipfs_version,
+                    "ipfsCid": ipfs_cid,
+                    "blockchainTxHash": blockchain_tx_hash,
+                    "ownerAddress": owner_address,
+                    "initiatorAddress": initiator_address
                 }
             
             # Clean up pending transaction
@@ -639,9 +639,9 @@ class UploadHandler:
         except Exception as e:
             logger.error(f"Error completing blockchain upload: {str(e)}")
             return {
+                "assetId": "",
                 "status": "error",
-                "detail": f"Error completing upload: {str(e)}",
-                "pending_tx_id": pending_tx_id
+                "detail": f"Error completing upload: {str(e)}"
             }
 
     async def handle_metadata_upload(

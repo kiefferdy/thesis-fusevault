@@ -22,7 +22,7 @@ import {
 } from '@mui/material';
 import { CloudUpload, Description, Info } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import AssetForm from '../components/AssetForm';
+import UploadFormWithSigning from '../components/UploadFormWithSigning';
 import { useAuth } from '../contexts/AuthContext';
 import { useAssets } from '../hooks/useAssets';
 import { toast } from 'react-hot-toast';
@@ -252,7 +252,20 @@ function UploadPage() {
               </Alert>
             )}
             <Box data-navigate onClick={() => navigate('/dashboard')} style={{ display: 'none' }} />
-            <AssetForm existingAsset={existingAsset} />
+            {isEditMode ? (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Edit mode with MetaMask signing is not yet implemented. Please use the API for editing existing assets.
+              </Alert>
+            ) : (
+              <UploadFormWithSigning 
+                onUploadSuccess={(result) => {
+                  toast.success('Asset created successfully!');
+                  setTimeout(() => {
+                    navigate('/dashboard');
+                  }, 1000);
+                }}
+              />
+            )}
           </Box>
         )}
 
