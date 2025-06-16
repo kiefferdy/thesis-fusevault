@@ -36,14 +36,6 @@ import { toast } from 'react-hot-toast';
 const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
   const { currentAccount, isAuthenticated } = useAuth();
 
-  // Steps for the upload process
-  const uploadSteps = [
-    'Preparing upload',
-    'Uploading to IPFS',
-    'Waiting for signature',
-    'Confirming transaction',
-    'Storing to database'
-  ];
 
   // Example templates
   const templates = [
@@ -76,8 +68,6 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
   const [formData, setFormData] = useState(getInitialFormData);
   const [selectedTemplate, setSelectedTemplate] = useState('Custom');
   const [newTag, setNewTag] = useState('');
-  const [uploadStep, setUploadStep] = useState(0);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [criticalFieldName, setCriticalFieldName] = useState('');
   const [criticalFieldValue, setCriticalFieldValue] = useState('');
   const [nonCriticalFieldName, setNonCriticalFieldName] = useState('');
@@ -90,7 +80,6 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
     operationData,
     showUploadSigner,
     showEditSigner,
-    checkEditRequiresSignature,
     hideSigner,
     onSuccess,
     onError
@@ -256,8 +245,6 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
     }
 
     setIsUploading(true);
-    setUploadProgress(0);
-    setUploadStep(0);
 
     // Prepare upload data
     const uploadData = {
@@ -270,53 +257,26 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
     const isEditMode = !!existingAsset;
     
     if (isEditMode) {
-      // For edits, first check if MetaMask signing is required
-      checkEditRequiresSignature(uploadData)
-        .then(({ requiresSignature, result }) => {
-          if (requiresSignature) {
-            // Critical metadata changed - show TransactionSigner modal
-            console.log('Critical metadata changed, showing MetaMask signer');
-            showEditSigner(
-              { ...uploadData, editResult: result }, // Pass the editResult to avoid duplicate backend calls
-              (result) => {
-                console.log('Edit with signing successful:', result);
-                setIsUploading(false);
-                setUploadProgress(100);
-                
-                if (onUploadSuccess) {
-                  onUploadSuccess(result);
-                }
-              },
-              (error) => {
-                console.error('Edit with signing failed:', error);
-                setIsUploading(false);
-                setUploadProgress(0);
-                
-                let errorMessage = 'Edit failed';
-                if (error?.message) {
-                  errorMessage = error.message;
-                }
-                
-                toast.error(errorMessage);
-              }
-            );
-          } else {
-            // Only non-critical metadata changed - complete directly
-            console.log('Only non-critical metadata changed, completing edit directly');
-            setIsUploading(false);
-            setUploadProgress(100);
-            
+      // For edits, show TransactionSigner modal first, then check if signing is needed
+      showEditSigner(
+        uploadData, // Don't pass editResult - let the modal do the check
+        (result) => {
+          console.log('Edit successful:', result);
+          setIsUploading(false);
+          
+          // Check if this was a non-critical metadata update
+          if (result && result.status !== 'pending_signature' && !result.blockchain_tx_hash) {
+            // Only non-critical metadata changed
             toast.success('Asset updated successfully! (Only non-critical metadata changed)');
-            
-            if (onUploadSuccess) {
-              onUploadSuccess(result);
-            }
           }
-        })
-        .catch((error) => {
+          
+          if (onUploadSuccess) {
+            onUploadSuccess(result);
+          }
+        },
+        (error) => {
           console.error('Edit failed:', error);
           setIsUploading(false);
-          setUploadProgress(0);
           
           let errorMessage = 'Edit failed';
           if (error?.message) {
@@ -324,7 +284,8 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
           }
           
           toast.error(errorMessage);
-        });
+        }
+      );
     } else {
       // For uploads, use the UI-based transaction signer
       showUploadSigner(
@@ -332,7 +293,6 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
         (result) => {
           console.log('Upload successful:', result);
           setIsUploading(false);
-          setUploadProgress(100);
           hideSigner();
           
           // Reset form for create mode
@@ -346,7 +306,6 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
         (error) => {
           console.error('Upload failed:', error);
           setIsUploading(false);
-          setUploadProgress(0);
           hideSigner();
           
           let errorMessage = 'Upload failed';
@@ -657,7 +616,11 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
         operationData={operationData}
         onSuccess={onSuccess}
         onError={onError}
-        onCancel={hideSigner}
+        onCancel={() => {
+          // Reset uploading state when modal is cancelled
+          setIsUploading(false);
+          hideSigner();
+        }}
         isVisible={isVisible}
       />
     </Paper>

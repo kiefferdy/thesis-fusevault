@@ -449,7 +449,7 @@ export const transactionFlow = {
   // Complete edit flow with user signing
   editWithSigning: async (assetData, onProgress = () => {}) => {
     try {
-      onProgress('Checking for changes...', 10);
+      onProgress('Uploading to IPFS...', 10);
       
       // Validate input data
       if (!assetData?.assetId || !assetData?.walletAddress) {
@@ -463,7 +463,7 @@ export const transactionFlow = {
       // Check if critical metadata changed and blockchain interaction is needed
       if (editResult.status === 'pending_signature') {
         // Critical metadata changed - need MetaMask signing
-        onProgress('Critical metadata changed, uploading to IPFS...', 20);
+        onProgress('Critical metadata detected, preparing transaction...', 20);
         
         // Check network before starting transaction
         if (metamaskUtils.isMetaMaskAvailable()) {

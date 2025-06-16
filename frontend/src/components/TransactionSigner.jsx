@@ -270,7 +270,7 @@ const TransactionSigner = ({
     <div className="transaction-signer-overlay">
       <div className="transaction-signer-modal">
         <div className="transaction-signer-header">
-          <h3>Sign Transaction</h3>
+          <h3>Initiate Transaction</h3>
           {!isProcessing && (
             <button 
               className="close-button" 
@@ -367,15 +367,9 @@ const TransactionSigner = ({
                   if (operation === 'delete') {
                     steps = ['Waiting for signature', 'Confirming transaction', 'Updating database'];
                   } else if (operation === 'edit') {
-                    if (operationData?.editResult) {
-                      // Optimized flow: we already checked and know signing is needed
-                      steps = ['Waiting for signature', 'Confirming transaction', 'Updating database'];
-                    } else {
-                      // Full flow: need to check first
-                      steps = ['Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Updating database'];
-                    }
+                    steps = ['Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Updating database'];
                   } else {
-                    steps = ['Preparing upload', 'Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Storing to database'];
+                    steps = ['Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Storing to database'];
                   }
                   
                   const stepCount = steps.length;
@@ -432,7 +426,7 @@ const TransactionSigner = ({
                   onClick={handleTransaction}
                   disabled={networkStatus && !networkStatus.isCorrectNetwork}
                 >
-                  Sign with MetaMask
+                  Initiate Transaction
                 </button>
                 <button 
                   className="btn btn-secondary" 
