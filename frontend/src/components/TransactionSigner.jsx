@@ -310,21 +310,29 @@ const TransactionSigner = ({
               
               {/* Step progress indicators */}
               <div className="step-indicators">
-                {['Preparing upload', 'Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Storing to database'].map((step, index) => {
-                  const stepProgress = (progress / 100) * 5; // Convert 0-100% to 0-5 steps
-                  const isCompleted = index < Math.floor(stepProgress);
-                  const isCurrent = index === Math.floor(stepProgress);
+                {(() => {
+                  const steps = operation === 'delete' 
+                    ? ['Waiting for signature', 'Confirming transaction', 'Updating database']
+                    : ['Preparing upload', 'Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Storing to database'];
                   
-                  return (
-                    <div key={index} className={`step-indicator ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''}`}>
-                      <div className="step-circle">
-                        {isCompleted ? '✓' : index + 1}
+                  const stepCount = steps.length;
+                  const stepProgress = (progress / 100) * stepCount;
+                  
+                  return steps.map((step, index) => {
+                    const isCompleted = index < Math.floor(stepProgress);
+                    const isCurrent = index === Math.floor(stepProgress);
+                    
+                    return (
+                      <div key={index} className={`step-indicator ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''}`}>
+                        <div className="step-circle">
+                          {isCompleted ? '✓' : index + 1}
+                        </div>
+                        <div className="step-text">{step}</div>
+                        {index < stepCount - 1 && <div className={`step-connector ${isCompleted ? 'completed' : ''}`}></div>}
                       </div>
-                      <div className="step-text">{step}</div>
-                      {index < 4 && <div className={`step-connector ${isCompleted ? 'completed' : ''}`}></div>}
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
               
               {/* Overall progress bar */}

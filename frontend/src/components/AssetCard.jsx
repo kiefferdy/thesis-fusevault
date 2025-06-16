@@ -19,11 +19,25 @@ import { Delete, Edit, History, Visibility } from '@mui/icons-material';
 import { formatDate, formatTransactionHash } from '../utils/formatters';
 import { useNavigate } from 'react-router-dom';
 import { useAssets } from '../hooks/useAssets';
+import { useTransactionSigner } from '../hooks/useTransactionSigner';
+import { useAuth } from '../contexts/AuthContext';
+import { toast } from 'react-hot-toast';
+import TransactionSigner from './TransactionSigner';
 
 function AssetCard({ asset }) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
   const { deleteAsset, isDeleting } = useAssets();
+  const { currentAccount } = useAuth();
+  const {
+    isVisible,
+    operation,
+    operationData,
+    showDeleteSigner,
+    hideSigner,
+    onSuccess,
+    onError
+  } = useTransactionSigner();
   const navigate = useNavigate();
 
   const handleView = () => {
@@ -43,15 +57,31 @@ function AssetCard({ asset }) {
   };
 
   const handleDeleteConfirm = () => {
-    deleteAsset({ 
-      assetId: asset.assetId, 
-      reason: deleteReason 
-    }, {
-      onSuccess: () => {
-        setDeleteDialogOpen(false);
+    // Close the dialog first
+    setDeleteDialogOpen(false);
+    
+    // Show the transaction signer with the reason
+    showDeleteSigner(
+      asset.assetId,
+      currentAccount,
+      deleteReason || 'User requested deletion',
+      (result) => {
+        console.log('Delete successful:', result);
+        toast.success('Asset deleted successfully!');
         setDeleteReason('');
+        // Note: AssetCard doesn't need to navigate, parent component should handle refresh
+      },
+      (error) => {
+        console.error('Delete failed:', error);
+        let errorMessage = 'Delete failed';
+        if (error?.message) {
+          errorMessage = error.message;
+        }
+        toast.error(errorMessage);
+        // Reopen dialog on error so user can try again
+        setDeleteDialogOpen(true);
       }
-    });
+    );
   };
 
   return (
@@ -131,12 +161,22 @@ function AssetCard({ asset }) {
           <Button 
             onClick={handleDeleteConfirm} 
             color="error" 
-            disabled={isDeleting}
+            disabled={isVisible}
           >
-            {isDeleting ? 'Deleting...' : 'Delete'}
+            {isVisible ? 'Processing...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Transaction Signer Modal */}
+      <TransactionSigner
+        operation={operation}
+        operationData={operationData}
+        onSuccess={onSuccess}
+        onError={onError}
+        onCancel={hideSigner}
+        isVisible={isVisible}
+      />
     </Card>
   );
 }

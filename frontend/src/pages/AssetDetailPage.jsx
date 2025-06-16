@@ -32,6 +32,9 @@ import { toast } from 'react-hot-toast';
 import { assetService } from '../services/assetService';
 import { transactionService } from '../services/transactionService';
 import { useAssets } from '../hooks/useAssets';
+import { useTransactionSigner } from '../hooks/useTransactionSigner';
+import { useAuth } from '../contexts/AuthContext';
+import TransactionSigner from '../components/TransactionSigner';
 import { formatDate, formatWalletAddress, formatTransactionHash } from '../utils/formatters';
 
 function AssetDetailPage() {
@@ -44,6 +47,16 @@ function AssetDetailPage() {
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const { deleteAsset, isDeleting } = useAssets();
+  const { currentAccount } = useAuth();
+  const {
+    isVisible,
+    operation,
+    operationData,
+    showDeleteSigner,
+    hideSigner,
+    onSuccess,
+    onError
+  } = useTransactionSigner();
   const navigate = useNavigate();
 
   // Fetch asset data
@@ -96,13 +109,24 @@ function AssetDetailPage() {
 
   const handleDelete = () => {
     if (window.confirm('Are you sure you want to delete this asset?')) {
-      deleteAsset({ 
-        assetId: assetId
-      }, {
-        onSuccess: () => {
+      showDeleteSigner(
+        assetId,
+        currentAccount,
+        'User requested deletion',
+        (result) => {
+          console.log('Delete successful:', result);
+          toast.success('Asset deleted successfully!');
           navigate('/dashboard');
+        },
+        (error) => {
+          console.error('Delete failed:', error);
+          let errorMessage = 'Delete failed';
+          if (error?.message) {
+            errorMessage = error.message;
+          }
+          toast.error(errorMessage);
         }
-      });
+      );
     }
   };
 
@@ -175,9 +199,9 @@ function AssetDetailPage() {
             color="error"
             startIcon={<Delete />}
             onClick={handleDelete}
-            disabled={isDeleting}
+            disabled={isVisible}
           >
-            {isDeleting ? 'Deleting...' : 'Delete'}
+            {isVisible ? 'Processing...' : 'Delete'}
           </Button>
         </Box>
       </Box>
@@ -400,6 +424,16 @@ function AssetDetailPage() {
           </Box>
         )}
       </Paper>
+
+      {/* Transaction Signer Modal */}
+      <TransactionSigner
+        operation={operation}
+        operationData={operationData}
+        onSuccess={onSuccess}
+        onError={onError}
+        onCancel={hideSigner}
+        isVisible={isVisible}
+      />
     </Container>
   );
 }
