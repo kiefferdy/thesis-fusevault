@@ -188,13 +188,25 @@ const TransactionSigner = ({
           }
         );
       } else if (operation === 'edit') {
-        result = await transactionFlow.editWithSigning(
-          operationData,
-          (step, progressValue) => {
-            setCurrentStep(step);
-            setProgress(progressValue);
-          }
-        );
+        if (operationData.editResult) {
+          // Use the existing editResult to avoid duplicate backend calls
+          result = await transactionFlow.completeEditWithSigning(
+            operationData.editResult,
+            (step, progressValue) => {
+              setCurrentStep(step);
+              setProgress(progressValue);
+            }
+          );
+        } else {
+          // Fallback to full edit flow
+          result = await transactionFlow.editWithSigning(
+            operationData,
+            (step, progressValue) => {
+              setCurrentStep(step);
+              setProgress(progressValue);
+            }
+          );
+        }
       } else {
         throw new Error(`Unsupported operation: ${operation}`);
       }
@@ -355,7 +367,13 @@ const TransactionSigner = ({
                   if (operation === 'delete') {
                     steps = ['Waiting for signature', 'Confirming transaction', 'Updating database'];
                   } else if (operation === 'edit') {
-                    steps = ['Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Updating database'];
+                    if (operationData?.editResult) {
+                      // Optimized flow: we already checked and know signing is needed
+                      steps = ['Waiting for signature', 'Confirming transaction', 'Updating database'];
+                    } else {
+                      // Full flow: need to check first
+                      steps = ['Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Updating database'];
+                    }
                   } else {
                     steps = ['Preparing upload', 'Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Storing to database'];
                   }

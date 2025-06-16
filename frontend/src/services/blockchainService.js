@@ -449,31 +449,33 @@ export const transactionFlow = {
   // Complete edit flow with user signing
   editWithSigning: async (assetData, onProgress = () => {}) => {
     try {
-      onProgress('Uploading to IPFS...', 10);
+      onProgress('Checking for changes...', 10);
       
       // Validate input data
       if (!assetData?.assetId || !assetData?.walletAddress) {
         throw new Error('Asset ID and wallet address are required');
       }
       
-      // Check network before starting transaction
-      if (metamaskUtils.isMetaMaskAvailable()) {
-        const networkCheck = await metamaskUtils.checkNetwork();
-        if (!networkCheck.isCorrectNetwork) {
-          throw new Error(
-            `Wrong network detected. Please switch to Sepolia Testnet in MetaMask. ` +
-            `Currently on: ${networkCheck.networkName}`
-          );
-        }
-        console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
-      }
-      
-      // Step 1: Initial edit request (will return pending_signature status for wallet users)
+      // Step 1: Initial edit request - backend will determine if blockchain update is needed
       const { assetService } = await import('./assetService');
       const editResult = await assetService.uploadMetadata(assetData); // Uses same endpoint as creation
       
-      // Check if we need to sign a transaction
+      // Check if critical metadata changed and blockchain interaction is needed
       if (editResult.status === 'pending_signature') {
+        // Critical metadata changed - need MetaMask signing
+        onProgress('Critical metadata changed, uploading to IPFS...', 20);
+        
+        // Check network before starting transaction
+        if (metamaskUtils.isMetaMaskAvailable()) {
+          const networkCheck = await metamaskUtils.checkNetwork();
+          if (!networkCheck.isCorrectNetwork) {
+            throw new Error(
+              `Wrong network detected. Please switch to Sepolia Testnet in MetaMask. ` +
+              `Currently on: ${networkCheck.networkName}`
+            );
+          }
+          console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
+        }
         if (!editResult.transaction) {
           throw new Error('No transaction data received from server');
         }
@@ -523,13 +525,108 @@ export const transactionFlow = {
         onProgress('Edit completed!', 100);
         return completionResult.data;
       } else {
-        // For API key users, the edit is already complete
+        // Only non-critical metadata changed - no blockchain interaction needed
+        onProgress('Only non-critical metadata changed, updating database...', 50);
         onProgress('Edit completed!', 100);
+        console.log('✅ Edit completed without blockchain interaction (only non-critical metadata changed)');
         return editResult;
       }
     } catch (error) {
       const friendlyError = transactionFlow.handleTransactionError(error);
       console.error('Error in edit flow:', friendlyError);
+      throw friendlyError;
+    }
+  },
+
+  // Check if edit requires MetaMask signing (for UI decisions)
+  checkEditRequiresSignature: async (assetData) => {
+    try {
+      // Validate input data
+      if (!assetData?.assetId || !assetData?.walletAddress) {
+        throw new Error('Asset ID and wallet address are required');
+      }
+      
+      // Call backend to check if critical metadata changed
+      const { assetService } = await import('./assetService');
+      const editResult = await assetService.uploadMetadata(assetData);
+      
+      return {
+        requiresSignature: editResult.status === 'pending_signature',
+        result: editResult
+      };
+    } catch (error) {
+      const friendlyError = transactionFlow.handleTransactionError(error);
+      console.error('Error checking edit requirements:', friendlyError);
+      throw friendlyError;
+    }
+  },
+
+  // Complete edit with MetaMask signing (when we already know signing is required)
+  completeEditWithSigning: async (editResult, onProgress = () => {}) => {
+    try {
+      if (!editResult.transaction) {
+        throw new Error('No transaction data received from server');
+      }
+      
+      // Check network before starting transaction
+      if (metamaskUtils.isMetaMaskAvailable()) {
+        const networkCheck = await metamaskUtils.checkNetwork();
+        if (!networkCheck.isCorrectNetwork) {
+          throw new Error(
+            `Wrong network detected. Please switch to Sepolia Testnet in MetaMask. ` +
+            `Currently on: ${networkCheck.networkName}`
+          );
+        }
+        console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
+      }
+      
+      onProgress('Waiting for transaction signature...', 30);
+      
+      // Step 1: Sign transaction with MetaMask
+      const formattedTx = metamaskUtils.formatTransactionForMetaMask(editResult.transaction);
+      const txHash = await metamaskUtils.signTransaction(formattedTx);
+      
+      if (!txHash) {
+        throw new Error('Transaction was not signed');
+      }
+      
+      // Verify we're still on correct network after signing
+      const postSignNetworkCheck = await metamaskUtils.checkNetwork();
+      if (!postSignNetworkCheck.isCorrectNetwork) {
+        throw new Error(
+          `Network changed during signing! Transaction sent to ${postSignNetworkCheck.networkName} ` +
+          `but expected Sepolia. Transaction hash: ${txHash}`
+        );
+      }
+      
+      console.log(`✅ Transaction sent to Sepolia: ${txHash}`);
+      onProgress('Transaction sent, waiting for confirmation...', 60);
+      
+      // Step 2: Wait for transaction confirmation
+      await transactionFlow.waitForConfirmation(txHash, onProgress);
+      
+      onProgress('Updating database...', 90);
+      
+      // Step 3: Complete the edit
+      if (!editResult.pendingTxId) {
+        console.error('Edit result missing pendingTxId:', editResult);
+        throw new Error('Server response missing pending transaction ID');
+      }
+      
+      const completionResult = await apiClient.post('/upload/complete', {
+        pending_tx_id: editResult.pendingTxId,
+        blockchain_tx_hash: txHash
+      });
+      
+      if (completionResult?.data?.status !== 'success') {
+        throw new Error('Edit completion failed on server');
+      }
+      
+      onProgress('Edit completed!', 100);
+      return completionResult.data;
+    } catch (error) {
+      const friendlyError = transactionFlow.handleTransactionError(error);
+      console.error('Error completing edit with signing:', friendlyError);
       throw friendlyError;
     }
   },

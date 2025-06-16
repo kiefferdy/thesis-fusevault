@@ -51,6 +51,10 @@ export const useTransactionSigner = () => {
     return await transactionFlow.editWithSigning(assetData, onProgress);
   }, []);
 
+  const checkEditRequiresSignature = useCallback(async (assetData) => {
+    return await transactionFlow.checkEditRequiresSignature(assetData);
+  }, []);
+
   return {
     // UI-based signing
     isVisible,
@@ -66,6 +70,7 @@ export const useTransactionSigner = () => {
     // Direct methods
     uploadWithSigning,
     deleteWithSigning,
-    editWithSigning
+    editWithSigning,
+    checkEditRequiresSignature
   };
 };

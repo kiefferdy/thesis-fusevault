@@ -90,6 +90,7 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
     operationData,
     showUploadSigner,
     showEditSigner,
+    checkEditRequiresSignature,
     hideSigner,
     onSuccess,
     onError
@@ -262,50 +263,101 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
     const uploadData = {
       assetId: formData.assetId,
       walletAddress: currentAccount,
-      criticalMetadata: {
-        ...formData.criticalMetadata,
-        timestamp: new Date().toISOString()
-      },
+      criticalMetadata: formData.criticalMetadata,
       nonCriticalMetadata: formData.nonCriticalMetadata
     };
 
-    // Use the appropriate transaction signer based on mode
     const isEditMode = !!existingAsset;
-    const signerFunction = isEditMode ? showEditSigner : showUploadSigner;
-    const operationName = isEditMode ? 'Edit' : 'Upload';
     
-    signerFunction(
-      uploadData,
-      (result) => {
-        console.log(`${operationName} successful:`, result);
-        setIsUploading(false);
-        setUploadProgress(100);
-        hideSigner();
-        
-        // Reset form only for create mode, not edit mode
-        if (!isEditMode) {
+    if (isEditMode) {
+      // For edits, first check if MetaMask signing is required
+      checkEditRequiresSignature(uploadData)
+        .then(({ requiresSignature, result }) => {
+          if (requiresSignature) {
+            // Critical metadata changed - show TransactionSigner modal
+            console.log('Critical metadata changed, showing MetaMask signer');
+            showEditSigner(
+              { ...uploadData, editResult: result }, // Pass the editResult to avoid duplicate backend calls
+              (result) => {
+                console.log('Edit with signing successful:', result);
+                setIsUploading(false);
+                setUploadProgress(100);
+                
+                if (onUploadSuccess) {
+                  onUploadSuccess(result);
+                }
+              },
+              (error) => {
+                console.error('Edit with signing failed:', error);
+                setIsUploading(false);
+                setUploadProgress(0);
+                
+                let errorMessage = 'Edit failed';
+                if (error?.message) {
+                  errorMessage = error.message;
+                }
+                
+                toast.error(errorMessage);
+              }
+            );
+          } else {
+            // Only non-critical metadata changed - complete directly
+            console.log('Only non-critical metadata changed, completing edit directly');
+            setIsUploading(false);
+            setUploadProgress(100);
+            
+            toast.success('Asset updated successfully! (Only non-critical metadata changed)');
+            
+            if (onUploadSuccess) {
+              onUploadSuccess(result);
+            }
+          }
+        })
+        .catch((error) => {
+          console.error('Edit failed:', error);
+          setIsUploading(false);
+          setUploadProgress(0);
+          
+          let errorMessage = 'Edit failed';
+          if (error?.message) {
+            errorMessage = error.message;
+          }
+          
+          toast.error(errorMessage);
+        });
+    } else {
+      // For uploads, use the UI-based transaction signer
+      showUploadSigner(
+        uploadData,
+        (result) => {
+          console.log('Upload successful:', result);
+          setIsUploading(false);
+          setUploadProgress(100);
+          hideSigner();
+          
+          // Reset form for create mode
           setFormData(getInitialFormData());
           setSelectedTemplate('Custom');
+          
+          if (onUploadSuccess) {
+            onUploadSuccess(result);
+          }
+        },
+        (error) => {
+          console.error('Upload failed:', error);
+          setIsUploading(false);
+          setUploadProgress(0);
+          hideSigner();
+          
+          let errorMessage = 'Upload failed';
+          if (error?.message) {
+            errorMessage = error.message;
+          }
+          
+          toast.error(errorMessage);
         }
-        
-        if (onUploadSuccess) {
-          onUploadSuccess(result);
-        }
-      },
-      (error) => {
-        console.error(`${operationName} failed:`, error);
-        setIsUploading(false);
-        setUploadProgress(0);
-        hideSigner();
-        
-        let errorMessage = `${operationName} failed`;
-        if (error?.message) {
-          errorMessage = error.message;
-        }
-        
-        toast.error(errorMessage);
-      }
-    );
+      );
+    }
   };
 
   // Show wallet connection warning if not connected
