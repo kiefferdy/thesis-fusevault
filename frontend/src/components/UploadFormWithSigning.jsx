@@ -38,11 +38,11 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
 
   // Steps for the upload process
   const uploadSteps = [
-    'Parsing metadata',
+    'Preparing upload',
     'Uploading to IPFS',
-    'Preparing transaction',
-    'Signing with MetaMask',
-    'Recording on blockchain'
+    'Waiting for signature',
+    'Confirming transaction',
+    'Storing to database'
   ];
 
   // Example templates
@@ -314,118 +314,6 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
 
   return (
     <Paper sx={{ p: 3, position: 'relative' }}>
-      {/* Upload progress overlay */}
-      {isUploading && (
-        <Box sx={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          bgcolor: 'rgba(255,255,255,0.9)',
-          zIndex: 10,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderRadius: 1
-        }}>
-          <Card sx={{ maxWidth: 400, mb: 3, p: 3, boxShadow: 3 }}>
-            <CardContent>
-              <Typography variant="h6" color="primary" gutterBottom textAlign="center">
-                {uploadProgress === 100 ? 'Upload Complete!' : (existingAsset ? 'Updating Asset' : 'Creating Asset')}
-              </Typography>
-
-              <Box sx={{ mb: 3, mt: 2 }}>
-                {uploadProgress < 100 ? (
-                  <Box sx={{ width: '100%' }}>
-                    <Box sx={{ mb: 3 }}>
-                      <Typography variant="subtitle1" gutterBottom fontWeight="medium">
-                        Current step: {uploadSteps[uploadStep]}
-                      </Typography>
-
-                      {/* Step progress indicators */}
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        {uploadSteps.map((step, index) => (
-                          <Box
-                            key={index}
-                            sx={{
-                              flex: 1,
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              position: 'relative',
-                              '&:not(:last-child)::after': {
-                                content: '""',
-                                position: 'absolute',
-                                top: '14px',
-                                left: '50%',
-                                width: '100%',
-                                height: '2px',
-                                backgroundColor: index < uploadStep ? 'primary.main' : 'grey.300',
-                                zIndex: 0
-                              }
-                            }}
-                          >
-                            <Box sx={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: '50%',
-                              backgroundColor: index <= uploadStep ? 'primary.main' : 'grey.300',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'white',
-                              fontWeight: 'bold',
-                              position: 'relative',
-                              zIndex: 1,
-                              mb: 1
-                            }}>
-                              {index < uploadStep ? <CheckCircleIcon fontSize="small" /> : index + 1}
-                            </Box>
-                            <Typography variant="caption" align="center" sx={{ fontSize: '0.7rem' }}>
-                              {step}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    </Box>
-
-                    {/* Overall progress */}
-                    <Box sx={{ width: '100%', mr: 1, mb: 1 }}>
-                      <LinearProgress
-                        variant="determinate"
-                        value={uploadProgress}
-                        sx={{ height: 10, borderRadius: 5 }}
-                      />
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        This process can take several minutes
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {uploadProgress}%
-                      </Typography>
-                    </Box>
-                  </Box>
-                ) : (
-                  <Box sx={{ textAlign: 'center' }}>
-                    <CheckCircleIcon color="success" sx={{ fontSize: 60, mb: 2 }} />
-                    <Typography variant="h6" color="success.main" gutterBottom>
-                      {existingAsset ? 'Update' : 'Upload'} Successful!
-                    </Typography>
-                    <Typography>Redirecting to dashboard...</Typography>
-                  </Box>
-                )}
-              </Box>
-
-              <Typography variant="caption" color="text.secondary" textAlign="center" display="block">
-                This process can take a few minutes. Please don't close this window.
-              </Typography>
-            </CardContent>
-          </Card>
-        </Box>
-      )}
 
       <Typography variant="h5" gutterBottom>
         {existingAsset ? 'Edit Asset' : 'Create New Asset'}

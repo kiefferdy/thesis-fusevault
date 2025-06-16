@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { metamaskUtils, transactionFlow } from '../services/blockchainService';
 
 const TransactionSigner = ({ 
@@ -17,6 +17,7 @@ const TransactionSigner = ({
   const [gasEstimate, setGasEstimate] = useState(null);
   const [networkStatus, setNetworkStatus] = useState(null);
   const [switchingNetwork, setSwitchingNetwork] = useState(false);
+  const modalContentRef = useRef(null);
 
   useEffect(() => {
     if (isVisible && !isProcessing) {
@@ -24,6 +25,22 @@ const TransactionSigner = ({
       checkNetwork();
     }
   }, [isVisible, operationData]);
+
+  // Auto-scroll to progress section when processing starts
+  useEffect(() => {
+    if (isProcessing && modalContentRef.current) {
+      // Small delay to ensure the progress section is rendered
+      setTimeout(() => {
+        const progressSection = modalContentRef.current.querySelector('.progress-section');
+        if (progressSection) {
+          progressSection.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center'
+          });
+        }
+      }, 100);
+    }
+  }, [isProcessing]);
 
   const checkNetwork = async () => {
     try {
@@ -221,7 +238,7 @@ const TransactionSigner = ({
           )}
         </div>
 
-        <div className="transaction-signer-content">
+        <div className="transaction-signer-content" ref={modalContentRef}>
           <div className="operation-info">
             <h4>Operation: {operation.charAt(0).toUpperCase() + operation.slice(1)}</h4>
             
@@ -268,9 +285,15 @@ const TransactionSigner = ({
             <div className="gas-estimate">
               <h4>Transaction Cost Estimate</h4>
               <div className="gas-details">
-                <p><strong>Gas Limit:</strong> {gasEstimate.estimatedGas.toLocaleString()}</p>
-                <p><strong>Gas Price:</strong> {(gasEstimate.gasPrice / 1e9).toFixed(1)} Gwei</p>
                 <p><strong>Estimated Cost:</strong> {gasEstimate.estimatedCostEth} ETH</p>
+                {showDetails && (
+                  <>
+                    <p><strong>Gas Limit:</strong> {gasEstimate.estimatedGas.toLocaleString()}</p>
+                    <p><strong>Gas Price:</strong> {(gasEstimate.gasPrice / 1e9).toFixed(1)} Gwei</p>
+                    <p><strong>Total Gas Cost:</strong> {((gasEstimate.estimatedGas * gasEstimate.gasPrice) / 1e18).toFixed(6)} ETH</p>
+                    <p className="gas-note">Note: Actual cost may vary based on network conditions.</p>
+                  </>
+                )}
               </div>
               <button 
                 className="toggle-details" 
@@ -283,14 +306,41 @@ const TransactionSigner = ({
 
           {isProcessing && (
             <div className="progress-section">
+              <h4>Transaction Progress</h4>
+              
+              {/* Step progress indicators */}
+              <div className="step-indicators">
+                {['Preparing upload', 'Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Storing to database'].map((step, index) => {
+                  const stepProgress = (progress / 100) * 5; // Convert 0-100% to 0-5 steps
+                  const isCompleted = index < Math.floor(stepProgress);
+                  const isCurrent = index === Math.floor(stepProgress);
+                  
+                  return (
+                    <div key={index} className={`step-indicator ${isCompleted ? 'completed' : ''} ${isCurrent ? 'current' : ''}`}>
+                      <div className="step-circle">
+                        {isCompleted ? '✓' : index + 1}
+                      </div>
+                      <div className="step-text">{step}</div>
+                      {index < 4 && <div className={`step-connector ${isCompleted ? 'completed' : ''}`}></div>}
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Overall progress bar */}
               <div className="progress-bar">
                 <div 
                   className="progress-fill" 
                   style={{ width: `${progress}%` }}
                 ></div>
               </div>
-              <p className="progress-text">{currentStep}</p>
-              <p className="progress-percentage">{progress}%</p>
+              
+              <div className="progress-info">
+                <p className="progress-text">{currentStep}</p>
+                <p className="progress-percentage">{progress}%</p>
+              </div>
+              
+              <p className="progress-note">This process can take several minutes. Please don't close this window.</p>
             </div>
           )}
 
@@ -364,13 +414,13 @@ const TransactionSigner = ({
 
         .transaction-signer-modal {
           background: white;
-          border-radius: 8px;
-          padding: 24px;
-          max-width: 500px;
-          width: 90%;
-          max-height: 80vh;
+          border-radius: 12px;
+          padding: 28px;
+          max-width: 650px;
+          width: 95%;
+          max-height: 85vh;
           overflow-y: auto;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
         }
 
         .transaction-signer-header {
@@ -496,6 +546,13 @@ const TransactionSigner = ({
           color: #0c5460;
         }
 
+        .gas-note {
+          font-style: italic;
+          font-size: 12px !important;
+          color: #6c757d !important;
+          margin-top: 8px !important;
+        }
+
         .toggle-details {
           background: none;
           border: none;
@@ -508,33 +565,139 @@ const TransactionSigner = ({
 
         .progress-section {
           margin-bottom: 20px;
+          padding: 20px;
+          background-color: #f8f9fa;
+          border-radius: 8px;
+          border: 1px solid #e9ecef;
+        }
+
+        .progress-section h4 {
+          margin: 0 0 20px 0;
+          color: #495057;
+          text-align: center;
+        }
+
+        .step-indicators {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 24px;
+          position: relative;
+        }
+
+        .step-indicator {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          position: relative;
+          flex: 1;
+          z-index: 3;
+        }
+
+        .step-circle {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background-color: #e9ecef;
+          color: #6c757d;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          font-size: 14px;
+          margin-bottom: 8px;
+          border: 2px solid #e9ecef;
+          transition: all 0.3s ease;
+          position: relative;
+          z-index: 4;
+        }
+
+        .step-indicator.completed .step-circle {
+          background-color: #28a745;
+          color: white;
+          border-color: #28a745;
+        }
+
+        .step-indicator.current .step-circle {
+          background-color: #007bff;
+          color: white;
+          border-color: #007bff;
+          box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.25);
+        }
+
+        .step-text {
+          font-size: 12px;
+          text-align: center;
+          color: #6c757d;
+          line-height: 1.2;
+          max-width: 80px;
+        }
+
+        .step-indicator.completed .step-text {
+          color: #28a745;
+          font-weight: 500;
+        }
+
+        .step-indicator.current .step-text {
+          color: #007bff;
+          font-weight: 600;
+        }
+
+        .step-connector {
+          position: absolute;
+          top: 16px;
+          left: 50%;
+          width: 100%;
+          height: 2px;
+          background-color: #e9ecef;
+          z-index: 1;
+          transition: background-color 0.3s ease;
+        }
+
+        .step-connector.completed {
+          background-color: #28a745;
         }
 
         .progress-bar {
           width: 100%;
-          height: 8px;
+          height: 10px;
           background-color: #e9ecef;
-          border-radius: 4px;
+          border-radius: 5px;
           overflow: hidden;
           margin-bottom: 12px;
         }
 
         .progress-fill {
           height: 100%;
-          background-color: #28a745;
+          background-color: #007bff;
           transition: width 0.3s ease;
+        }
+
+        .progress-info {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
         }
 
         .progress-text {
           font-weight: 500;
-          margin: 8px 0 4px 0;
+          margin: 0;
           color: #495057;
         }
 
         .progress-percentage {
           font-size: 14px;
-          color: #6c757d;
+          color: #007bff;
           margin: 0;
+          font-weight: 600;
+        }
+
+        .progress-note {
+          font-size: 12px;
+          color: #6c757d;
+          text-align: center;
+          margin: 0;
+          font-style: italic;
         }
 
         .error-section {
