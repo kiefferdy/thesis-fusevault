@@ -296,10 +296,6 @@ export const transactionFlow = {
       
       // Check if we need to sign a transaction
       if (uploadResult.status === 'pending_signature') {
-        console.log('🔍 Upload result for debugging:', JSON.stringify(uploadResult, null, 2));
-        console.log('🔍 uploadResult.pending_tx_id:', uploadResult.pending_tx_id);
-        console.log('🔍 uploadResult.pendingTxId:', uploadResult.pendingTxId);
-        
         if (!uploadResult.transaction) {
           throw new Error('No transaction data received from server');
         }
@@ -332,8 +328,13 @@ export const transactionFlow = {
         onProgress('Completing upload...', 90);
         
         // Step 4: Complete the upload
+        if (!uploadResult.pending_tx_id) {
+          console.error('Upload result missing pending_tx_id:', uploadResult);
+          throw new Error('Server response missing pending transaction ID');
+        }
+        
         const completionPayload = {
-          pending_tx_id: uploadResult.pendingTxId,
+          pending_tx_id: uploadResult.pending_tx_id,
           blockchain_tx_hash: txHash
         };
         console.log('🔍 Completion payload:', JSON.stringify(completionPayload, null, 2));
@@ -418,8 +419,13 @@ export const transactionFlow = {
         onProgress('Completing deletion...', 90);
         
         // Step 4: Complete the deletion
+        if (!deleteResult.pending_tx_id) {
+          console.error('Delete result missing pending_tx_id:', deleteResult);
+          throw new Error('Server response missing pending transaction ID');
+        }
+        
         const completionResult = await apiClient.post('/delete/complete', {
-          pending_tx_id: deleteResult.pendingTxId,
+          pending_tx_id: deleteResult.pending_tx_id,
           blockchain_tx_hash: txHash
         });
         
