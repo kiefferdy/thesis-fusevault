@@ -18,7 +18,6 @@ import {
 import { Delete, Edit, History, Visibility } from '@mui/icons-material';
 import { formatDate, formatTransactionHash } from '../utils/formatters';
 import { useNavigate } from 'react-router-dom';
-import { useAssets } from '../hooks/useAssets';
 import { useTransactionSigner } from '../hooks/useTransactionSigner';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -27,7 +26,6 @@ import TransactionSigner from './TransactionSigner';
 function AssetCard({ asset }) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
-  const { deleteAsset, isDeleting } = useAssets();
   const { currentAccount } = useAuth();
   const {
     isVisible,
@@ -69,15 +67,21 @@ function AssetCard({ asset }) {
         console.log('Delete successful:', result);
         toast.success('Asset deleted successfully!');
         setDeleteReason('');
-        // Note: AssetCard doesn't need to navigate, parent component should handle refresh
+        // Refresh the page to show updated asset list
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000); // Small delay to let user see the success message
       },
       (error) => {
         console.error('Delete failed:', error);
-        let errorMessage = 'Delete failed';
+        
+        // This callback should now only be called for actual errors,
+        // not for user cancellations (handled in TransactionSigner)
+        let friendlyMessage = 'Delete failed';
         if (error?.message) {
-          errorMessage = error.message;
+          friendlyMessage = error.message;
         }
-        toast.error(errorMessage);
+        toast.error(friendlyMessage);
         // Reopen dialog on error so user can try again
         setDeleteDialogOpen(true);
       }
@@ -142,7 +146,7 @@ function AssetCard({ asset }) {
         <DialogTitle>Confirm Delete</DialogTitle>
         <DialogContent>
           <Typography gutterBottom>
-            Are you sure you want to delete this asset? This operation can be reversed by creating a new version.
+            Are you sure you want to delete this asset?
           </Typography>
           <TextField
             autoFocus

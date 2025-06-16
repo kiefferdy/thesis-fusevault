@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { metamaskUtils, transactionFlow } from '../services/blockchainService';
+import { toast } from 'react-hot-toast';
 
 const TransactionSigner = ({ 
   operation, 
@@ -195,8 +196,20 @@ const TransactionSigner = ({
       let errorMessage = error?.message || 'Transaction failed';
       
       // Add helpful context for common errors
-      if (errorMessage.includes('User denied') || errorMessage.includes('user rejected')) {
-        errorMessage = 'Transaction was cancelled. Please try again if needed.';
+      const lowerErrorMessage = errorMessage.toLowerCase();
+      if (lowerErrorMessage.includes('user denied') || 
+          lowerErrorMessage.includes('user rejected') ||
+          lowerErrorMessage.includes('cancelled') ||
+          lowerErrorMessage.includes('canceled') ||
+          lowerErrorMessage.includes('transaction cancelled by user') ||
+          lowerErrorMessage.includes('user denied transaction signature')) {
+        // User cancelled - show friendly message and close modal WITHOUT calling onError
+        console.log('User cancelled MetaMask, closing modal without error callback');
+        toast.error('Transaction was cancelled. Please try again if needed.');
+        setTimeout(() => {
+          onCancel(); // Close the modal
+        }, 100);
+        return; // Don't call onError at all
       } else if (errorMessage.includes('insufficient funds')) {
         errorMessage = 'Insufficient ETH balance. Please add funds to your wallet and try again.';
       } else if (errorMessage.includes('network')) {
