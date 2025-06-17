@@ -49,6 +49,7 @@ function UsernameInput({
   fullWidth = true,
   margin = 'normal',
   variant = 'outlined',
+  currentUserUsername = null, // Add prop to skip checking current user's username
   ...textFieldProps 
 }) {
   const [inputValue, setInputValue] = useState(value);
@@ -66,6 +67,11 @@ function UsernameInput({
     usernameCheckResult, 
     usernameCheckError 
   } = useUser();
+
+  // Sync internal value with external value prop
+  useEffect(() => {
+    setInputValue(value || '');
+  }, [value]);
 
   // Debounce the input value for server-side checking
   const debouncedValue = useDebounce(inputValue.trim(), 800);
@@ -139,13 +145,30 @@ function UsernameInput({
     }
 
     // If client validation passes, check server availability
+    // Skip server check if this is the user's current username
+    if (currentUserUsername && normalizedValue.toLowerCase() === currentUserUsername.toLowerCase()) {
+      setValidationState({
+        isValid: true,
+        error: null,
+        isChecking: false
+      });
+      
+      if (onValidationChange) {
+        onValidationChange({
+          isValid: true,
+          error: null
+        });
+      }
+      return;
+    }
+
     setValidationState(prev => ({
       ...prev,
       isChecking: true
     }));
 
     checkUsernameAvailability(normalizedValue);
-  }, [debouncedValue, required, checkUsernameAvailability, showSuggestions, onValidationChange]);
+  }, [debouncedValue, required, checkUsernameAvailability, showSuggestions, onValidationChange, currentUserUsername]);
 
   // Handle server response
   useEffect(() => {

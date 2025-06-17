@@ -220,6 +220,7 @@ function ProfilePage() {
                             helperText="Your unique username that others can use to find you"
                             fullWidth
                             margin="normal"
+                            currentUserUsername={user?.username}
                           />
                           {usernameChanged && (
                             <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
@@ -245,7 +246,6 @@ function ProfilePage() {
                           value={formData.email}
                           onChange={handleChange('email')}
                           margin="normal"
-                          required
                         />
                       </Grid>
                       

@@ -79,7 +79,7 @@ export const userService = {
   // Update username specifically (may require additional validation)
   updateUsername: async (walletAddress, newUsername) => {
     try {
-      const { data } = await apiClient.put(`/users/${walletAddress}/username`, {
+      const { data } = await apiClient.put(`/users/${walletAddress}`, {
         username: newUsername
       });
       return data;

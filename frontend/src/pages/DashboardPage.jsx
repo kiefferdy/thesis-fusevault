@@ -501,6 +501,7 @@ function DashboardPage() {
             autoFocus
             helperText="Choose a unique username that others can use to find you"
             margin="dense"
+            currentUserUsername={null}
           />
           
           <TextField
