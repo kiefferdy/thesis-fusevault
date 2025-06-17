@@ -49,6 +49,7 @@ import {
 } from '@mui/icons-material';
 import AssetCard from '../components/AssetCard';
 import TransactionsList from '../components/TransactionsList';
+import UsernameInput from '../components/UsernameInput';
 import { useAssets } from '../hooks/useAssets';
 import { useTransactions } from '../hooks/useTransactions';
 import { useAuth } from '../contexts/AuthContext';
@@ -61,8 +62,10 @@ function DashboardPage() {
   const [openSetupDialog, setOpenSetupDialog] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [isUsernameValid, setIsUsernameValid] = useState(false);
   const { currentAccount } = useAuth();
-  const { user, isLoading: userLoading, register, isRegistering, error: userError } = useUser();
+  const { user, isLoading: userLoading, register, onboard, isRegistering, isOnboarding, error: userError } = useUser();
   const { assets, isLoading: assetsLoading } = useAssets();
   const {
     summary,
@@ -106,19 +109,25 @@ function DashboardPage() {
 
   // Check if we need to show the setup dialog
   useEffect(() => {
-    // If user data failed to load and we're not already registering
-    if (userError && !userLoading && !isRegistering && currentAccount) {
+    // If user data failed to load and we're not already onboarding
+    if (userError && !userLoading && !isOnboarding && currentAccount) {
       setOpenSetupDialog(true);
     }
-  }, [userError, userLoading, isRegistering, currentAccount]);
+  }, [userError, userLoading, isOnboarding, currentAccount]);
+
+  // Handle username validation change
+  const handleUsernameValidation = (validation) => {
+    setIsUsernameValid(validation.isValid);
+  };
 
   // Handle setup form submission
   const handleSetupSubmit = () => {
-    if (email) {
-      register({
+    if (email && isUsernameValid && username) {
+      onboard({
         wallet_address: currentAccount,
         email: email,
         name: name || 'FuseVault User',
+        username: username,
         role: 'user'
       });
       setOpenSetupDialog(false);
@@ -180,7 +189,18 @@ function DashboardPage() {
                 </Avatar>
               }
               title={user?.name || 'FuseVault User'}
-              subheader={formatWalletAddress(currentAccount)}
+              subheader={
+                <Box>
+                  {user?.username && (
+                    <Typography variant="body2" color="primary.main" component="div">
+                      @{user.username}
+                    </Typography>
+                  )}
+                  <Typography variant="body2" color="text.secondary" component="div">
+                    {formatWalletAddress(currentAccount)}
+                  </Typography>
+                </Box>
+              }
             />
             <CardContent>
               {userLoading ? (
@@ -461,14 +481,29 @@ function DashboardPage() {
       </Paper>
 
       {/* User Setup Dialog */}
-      <Dialog open={openSetupDialog} onClose={() => setOpenSetupDialog(false)}>
+      <Dialog 
+        open={openSetupDialog} 
+        onClose={() => setOpenSetupDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Complete Your Profile</DialogTitle>
         <DialogContent>
-          <DialogContentText>
+          <DialogContentText sx={{ mb: 2 }}>
             Welcome to FuseVault! Let's set up your profile to get started.
           </DialogContentText>
-          <TextField
+          
+          <UsernameInput
+            value={username}
+            onChange={setUsername}
+            onValidationChange={handleUsernameValidation}
+            required
             autoFocus
+            helperText="Choose a unique username that others can use to find you"
+            margin="dense"
+          />
+          
+          <TextField
             margin="dense"
             label="Email Address"
             type="email"
@@ -478,6 +513,7 @@ function DashboardPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
+          
           <TextField
             margin="dense"
             label="Name (Optional)"
@@ -486,6 +522,7 @@ function DashboardPage() {
             variant="outlined"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            helperText="Your display name (can be changed later)"
           />
         </DialogContent>
         <DialogActions>
@@ -493,9 +530,9 @@ function DashboardPage() {
           <Button
             onClick={handleSetupSubmit}
             variant="contained"
-            disabled={!email || isRegistering}
+            disabled={!email || !username || !isUsernameValid || isOnboarding}
           >
-            {isRegistering ? 'Creating...' : 'Complete Setup'}
+            {isOnboarding ? 'Creating...' : 'Complete Setup'}
           </Button>
         </DialogActions>
       </Dialog>

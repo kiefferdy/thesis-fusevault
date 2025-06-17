@@ -30,16 +30,18 @@ import {
   GitHub,
   Add,
   Image,
-  Badge
+  Badge,
+  Check
 } from '@mui/icons-material';
 import { useUser } from '../hooks/useUser';
 import { useAuth } from '../contexts/AuthContext';
 import { useTransactions } from '../hooks/useTransactions';
 import { useAssets } from '../hooks/useAssets';
 import { formatWalletAddress, formatDate } from '../utils/formatters';
+import UsernameInput from '../components/UsernameInput';
 
 function ProfilePage() {
-  const { user, isLoading, isError, update, isUpdating } = useUser();
+  const { user, isLoading, isError, update, isUpdating, updateUsername, isUpdatingUsername } = useUser();
   const { currentAccount, signOut } = useAuth();
   const { summary, isSummaryLoading, allTransactions, getAllTransactions } = useTransactions();
   const { assets } = useAssets();
@@ -54,6 +56,7 @@ function ProfilePage() {
   
   // Initialize form data from user data
   const [formData, setFormData] = useState({
+    username: '',
     email: '',
     name: '',
     organization: '',
@@ -66,6 +69,11 @@ function ProfilePage() {
     github: ''
   });
 
+  // Separate username state for validation
+  const [usernameValue, setUsernameValue] = useState('');
+  const [isUsernameValid, setIsUsernameValid] = useState(true);
+  const [usernameChanged, setUsernameChanged] = useState(false);
+
   // Update form data when user data changes
   useEffect(() => {
     if (user) {
@@ -73,6 +81,7 @@ function ProfilePage() {
       console.log('User data received:', user);
       
       setFormData({
+        username: user.username || '',
         email: user.email || '',
         name: user.name || '',
         organization: user.organization || '',
@@ -84,6 +93,10 @@ function ProfilePage() {
         linkedin: user.linkedin || '',
         github: user.github || ''
       });
+      
+      // Set username value separately
+      setUsernameValue(user.username || '');
+      setUsernameChanged(false);
     }
   }, [user]);
 
@@ -93,6 +106,24 @@ function ProfilePage() {
       ...formData,
       [field]: event.target.value
     });
+  };
+
+  // Handle username changes
+  const handleUsernameChange = (newUsername) => {
+    setUsernameValue(newUsername);
+    setUsernameChanged(newUsername !== (user?.username || ''));
+  };
+
+  // Handle username validation
+  const handleUsernameValidation = (validation) => {
+    setIsUsernameValid(validation.isValid);
+  };
+
+  // Handle username update separately
+  const handleUsernameUpdate = () => {
+    if (isUsernameValid && usernameChanged && usernameValue) {
+      updateUsername(usernameValue);
+    }
   };
 
   // Handle tab changes
@@ -180,6 +211,32 @@ function ProfilePage() {
                     </Typography>
                     
                     <Grid container spacing={2}>
+                      <Grid item xs={12}>
+                        <Box sx={{ mb: 2 }}>
+                          <UsernameInput
+                            value={usernameValue}
+                            onChange={handleUsernameChange}
+                            onValidationChange={handleUsernameValidation}
+                            helperText="Your unique username that others can use to find you"
+                            fullWidth
+                            margin="normal"
+                          />
+                          {usernameChanged && (
+                            <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={handleUsernameUpdate}
+                                disabled={!isUsernameValid || isUpdatingUsername}
+                                startIcon={isUpdatingUsername ? <CircularProgress size={16} /> : <Check />}
+                              >
+                                {isUpdatingUsername ? 'Updating...' : 'Update Username'}
+                              </Button>
+                            </Box>
+                          )}
+                        </Box>
+                      </Grid>
+                      
                       <Grid item xs={12}>
                         <TextField
                           label="Email Address"
@@ -396,6 +453,12 @@ function ProfilePage() {
               <Typography variant="h6" align="center" gutterBottom>
                 {user?.name || 'Ethereum User'}
               </Typography>
+              
+              {user?.username && (
+                <Typography variant="body2" align="center" color="primary.main" gutterBottom>
+                  @{user.username}
+                </Typography>
+              )}
               
               <Typography variant="body2" align="center" color="text.secondary" gutterBottom>
                 {currentAccount ? formatWalletAddress(currentAccount, 8, 8) : 'Not connected'}

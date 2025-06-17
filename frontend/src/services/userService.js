@@ -43,6 +43,28 @@ export const userService = {
     }
   },
 
+  // Get user by username
+  getUserByUsername: async (username) => {
+    try {
+      const { data } = await apiClient.get(`/users/username/${username}`);
+      return data;
+    } catch (error) {
+      console.error('Error fetching user by username:', error);
+      throw error;
+    }
+  },
+
+  // Check if username is available
+  checkUsernameAvailability: async (username) => {
+    try {
+      const { data } = await apiClient.get(`/users/username/${username}/availability`);
+      return data;
+    } catch (error) {
+      console.error('Error checking username availability:', error);
+      throw error;
+    }
+  },
+
   // Update user
   updateUser: async (walletAddress, updateData) => {
     try {
@@ -50,6 +72,30 @@ export const userService = {
       return data;
     } catch (error) {
       console.error('Error updating user:', error);
+      throw error;
+    }
+  },
+
+  // Update username specifically (may require additional validation)
+  updateUsername: async (walletAddress, newUsername) => {
+    try {
+      const { data } = await apiClient.put(`/users/${walletAddress}/username`, {
+        username: newUsername
+      });
+      return data;
+    } catch (error) {
+      console.error('Error updating username:', error);
+      throw error;
+    }
+  },
+
+  // Onboard user (for authenticated users completing their profile)
+  onboardUser: async (userData) => {
+    try {
+      const { data } = await apiClient.post('/users/onboard', userData);
+      return data;
+    } catch (error) {
+      console.error('Error onboarding user:', error);
       throw error;
     }
   }
