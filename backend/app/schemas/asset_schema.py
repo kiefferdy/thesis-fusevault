@@ -42,9 +42,7 @@ class AssetResponse(AssetBase):
     previous_version_id: Optional[str] = Field(None, description="ID of the previous version", alias="previousVersionId")
     document_history: Optional[List] = Field(None, description="History of document IDs", alias="documentHistory")
 
-    class Config:
-        from_attributes = True
-        populate_by_name = True  # Allows use of alias field names
+    model_config = {"from_attributes": True, "populate_by_name": True}
         
 class AssetVersionInfo(BaseModel):
     document_id: str = Field(..., description="MongoDB document identifier", alias="_id")
@@ -52,9 +50,7 @@ class AssetVersionInfo(BaseModel):
     last_updated: datetime = Field(..., description="When this version was created", alias="lastUpdated")
     is_current: bool = Field(..., description="Whether this is the current version", alias="isCurrent")
 
-    class Config:
-        from_attributes = True
-        populate_by_name = True
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 class AssetHistoryResponse(BaseModel):
     asset_id: str = Field(..., description="Asset ID", alias="assetId")
@@ -62,15 +58,11 @@ class AssetHistoryResponse(BaseModel):
     transactions: List[Dict[str, Any]] = Field(..., description="List of transactions for this asset")
     transaction_count: int = Field(..., description="Number of transactions")
 
-    class Config:
-        from_attributes = True
-        populate_by_name = True
+    model_config = {"from_attributes": True, "populate_by_name": True}
         
 class AssetListResponse(BaseModel):
     """Response schema for listing assets."""
     status: str = Field(..., description="Status of the request")
     assets: List[Dict[str, Any]] = Field(..., description="List of assets")
 
-    class Config:
-        from_attributes = True
-        populate_by_name = True
+    model_config = {"from_attributes": True, "populate_by_name": True}

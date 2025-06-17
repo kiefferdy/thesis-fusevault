@@ -6,8 +6,7 @@ class DeleteRequest(BaseModel):
     wallet_address: str = Field(..., description="The wallet address of the user performing the deletion", alias="walletAddress")
     reason: Optional[str] = Field(None, description="Optional reason for deletion")
     
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class DeleteResponse(BaseModel):
     asset_id: str = Field(..., description="The asset's unique identifier", alias="assetId")
@@ -25,16 +24,14 @@ class DeleteResponse(BaseModel):
     next_step: Optional[str] = Field(None, description="Next step for wallet users", alias="nextStep")
     blockchain_tx_hash: Optional[str] = Field(None, description="Blockchain transaction hash", alias="blockchainTxHash")
     
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class BatchDeleteRequest(BaseModel):
     asset_ids: List[str] = Field(..., description="List of asset IDs to delete", alias="assetIds")
     wallet_address: str = Field(..., description="The wallet address of the user performing the deletion", alias="walletAddress")
     reason: Optional[str] = Field(None, description="Optional reason for deletion")
     
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class BatchDeleteResponse(BaseModel):
     status: str = Field(..., description="Overall status of the batch delete operation")
@@ -43,5 +40,4 @@ class BatchDeleteResponse(BaseModel):
     success_count: int = Field(..., description="Number of successful deletions", alias="successCount")
     failure_count: int = Field(..., description="Number of failed deletions", alias="failureCount")
     
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}

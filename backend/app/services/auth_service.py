@@ -21,7 +21,8 @@ class AuthService:
     def __init__(
         self, 
         auth_repository: AuthRepository,
-        user_repository: UserRepository
+        user_repository: UserRepository,
+        user_service = None  # Optional user service for user creation
     ):
         """
         Initialize with repositories.
@@ -29,9 +30,11 @@ class AuthService:
         Args:
             auth_repository: Repository for auth data access
             user_repository: Repository for user data access
+            user_service: Optional user service for user creation with usernames
         """
         self.auth_repository = auth_repository
         self.user_repository = user_repository
+        self.user_service = user_service
         
         # Initialize Web3
         # The auth service works without a provider for signature verification
@@ -161,13 +164,20 @@ class AuthService:
                 )
             else:
                 # Create a new user if they don't exist
-                new_user = {
-                    "walletAddress": wallet_address,
-                    "createdAt": datetime.now(timezone.utc),
-                    "lastLogin": datetime.now(timezone.utc),
-                    "role": "user"  # Default role
-                }
-                await self.user_repository.insert_user(new_user)
+                if self.user_service:
+                    # Use user service to create user with auto-generated username
+                    await self.user_service.create_user_auto_username(wallet_address)
+                else:
+                    # Fallback to direct repository insertion (for backward compatibility)
+                    # This should not happen in production as user_service should always be provided
+                    logger.warning("Creating user without username - user_service not provided")
+                    new_user = {
+                        "walletAddress": wallet_address,
+                        "createdAt": datetime.now(timezone.utc),
+                        "lastLogin": datetime.now(timezone.utc),
+                        "role": "user"  # Default role
+                    }
+                    await self.user_repository.insert_user(new_user)
                 
             return True, "Authentication successful"
             

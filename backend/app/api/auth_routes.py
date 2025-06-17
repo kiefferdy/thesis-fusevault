@@ -4,6 +4,7 @@ import logging
 from app.handlers.auth_handler import AuthHandler
 from app.schemas.auth_schema import AuthenticationRequest, NonceResponse, AuthenticationResponse, SessionResponse, LogoutResponse
 from app.services.auth_service import AuthService
+from app.services.user_service import UserService
 from app.repositories.auth_repo import AuthRepository
 from app.repositories.user_repo import UserRepository
 from app.database import get_db_client
@@ -21,7 +22,8 @@ def get_auth_handler(db_client=Depends(get_db_client)) -> AuthHandler:
     """Dependency to get the auth handler with all required dependencies."""
     auth_repo = AuthRepository(db_client)
     user_repo = UserRepository(db_client)
-    auth_service = AuthService(auth_repo, user_repo)
+    user_service = UserService(user_repo)
+    auth_service = AuthService(auth_repo, user_repo, user_service)
     return AuthHandler(auth_service)
 
 @router.get("/nonce/{wallet_address}", response_model=NonceResponse)

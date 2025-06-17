@@ -8,8 +8,7 @@ class MetadataUploadRequest(BaseModel):
     non_critical_metadata: Optional[Dict[str, Any]] = Field({}, description="Additional metadata stored only in MongoDB", alias="nonCriticalMetadata")
     file_info: Optional[Dict[str, str]] = Field(None, description="Optional information about source file", alias="fileInfo")
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class MetadataUploadResponse(BaseModel):
     asset_id: str = Field(..., description="The asset's unique identifier", alias="assetId")
@@ -33,10 +32,7 @@ class MetadataUploadResponse(BaseModel):
     function_name: Optional[str] = Field(None, description="Smart contract function name", alias="functionName")
     next_step: Optional[str] = Field(None, description="Next step in the process", alias="nextStep")
 
-    class Config:
-        populate_by_name = True
-        allow_population_by_field_name = True
-        by_alias = True
+    model_config = {"populate_by_name": True}
 
 class UploadResultItem(BaseModel):
     asset_id: Optional[str] = Field(None, description="Asset ID if available", alias="assetId")
@@ -51,19 +47,16 @@ class UploadResultItem(BaseModel):
     owner_address: Optional[str] = Field(None, description="The wallet address of the asset owner", alias="ownerAddress")
     initiator_address: Optional[str] = Field(None, description="The wallet address that initiated the operation", alias="initiatorAddress")
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class CsvUploadResponse(BaseModel):
     upload_count: int = Field(..., description="Number of records processed", alias="uploadCount")
     results: List[Dict[str, Any]] = Field(..., description="Results for each uploaded record")
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class JsonUploadResponse(BaseModel):
     upload_count: int = Field(..., description="Number of records processed", alias="uploadCount")
     results: List[Dict[str, Any]] = Field(..., description="Results for each uploaded record")
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}

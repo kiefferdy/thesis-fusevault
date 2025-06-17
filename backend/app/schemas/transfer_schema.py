@@ -7,8 +7,7 @@ class TransferInitiateRequest(BaseModel):
     new_owner: str = Field(..., description="The new owner's wallet address", alias="newOwner")
     notes: Optional[str] = Field(None, description="Optional notes about the transfer")
     
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class TransferInitiateResponse(BaseModel):
     status: str = Field(..., description="Status of the transfer initiation")
@@ -19,8 +18,7 @@ class TransferInitiateResponse(BaseModel):
     transaction_id: Optional[str] = Field(None, description="Transaction record ID", alias="transactionId")
     blockchain_tx_hash: Optional[str] = Field(None, description="Blockchain transaction hash", alias="blockchainTxHash")
     
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class TransferAcceptRequest(BaseModel):
     asset_id: str = Field(..., description="The asset's unique identifier", alias="assetId")
@@ -28,8 +26,7 @@ class TransferAcceptRequest(BaseModel):
     new_owner: str = Field(..., description="The new owner's wallet address", alias="newOwner")
     notes: Optional[str] = Field(None, description="Optional notes about the transfer")
     
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class TransferAcceptResponse(BaseModel):
     status: str = Field(..., description="Status of the transfer acceptance")
@@ -42,16 +39,14 @@ class TransferAcceptResponse(BaseModel):
     document_id: Optional[str] = Field(None, description="New document ID", alias="documentId")
     version: Optional[int] = Field(None, description="New version number")
     
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class TransferCancelRequest(BaseModel):
     asset_id: str = Field(..., description="The asset's unique identifier", alias="assetId")
     current_owner: str = Field(..., description="The current owner's wallet address", alias="currentOwner")
     notes: Optional[str] = Field(None, description="Optional notes about the cancellation")
     
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class TransferCancelResponse(BaseModel):
     status: str = Field(..., description="Status of the transfer cancellation")
@@ -62,8 +57,7 @@ class TransferCancelResponse(BaseModel):
     transaction_id: Optional[str] = Field(None, description="Transaction record ID", alias="transactionId")
     blockchain_tx_hash: Optional[str] = Field(None, description="Blockchain transaction hash", alias="blockchainTxHash")
     
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class PendingTransferInfo(BaseModel):
     asset_id: str = Field(..., description="The asset's unique identifier", alias="assetId")
@@ -71,8 +65,7 @@ class PendingTransferInfo(BaseModel):
     to_address: str = Field(..., description="The transferee's wallet address", alias="to")
     asset_info: Optional[Dict[str, Any]] = Field(None, description="Additional asset information", alias="assetInfo")
     
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class PendingTransfersResponse(BaseModel):
     wallet_address: str = Field(..., description="The wallet address queried", alias="walletAddress")
@@ -80,5 +73,4 @@ class PendingTransfersResponse(BaseModel):
     incoming_transfers: List[PendingTransferInfo] = Field(..., description="List of incoming transfers", alias="incomingTransfers")
     total_pending: int = Field(..., description="Total number of pending transfers", alias="totalPending")
     
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}

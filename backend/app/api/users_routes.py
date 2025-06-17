@@ -261,3 +261,130 @@ async def get_users_by_role(
         
     result = await user_handler.get_users_by_role(role)
     return UsersResponse(**result)
+
+@router.get("/username/{username}/availability")
+async def check_username_availability(
+    username: str,
+    user_handler: UserHandler = Depends(get_user_handler)
+) -> Dict[str, Any]:
+    """
+    Check if a username is available.
+    
+    This is a public endpoint that allows checking username availability
+    without authentication (for the frontend registration flow).
+    
+    Args:
+        username: The username to check
+        user_handler: The user handler
+        
+    Returns:
+        Dict with availability status and suggestions if unavailable
+    """
+    return await user_handler.check_username_availability(username)
+
+@router.get("/username/{username}")
+async def get_user_by_username(
+    username: str,
+    user_handler: UserHandler = Depends(get_user_handler)
+) -> Optional[UserResponse]:
+    """
+    Get a user by username.
+    
+    This is a public endpoint for looking up users by their username.
+    
+    Args:
+        username: The username to look up
+        user_handler: The user handler
+        
+    Returns:
+        UserResponse if user found, 404 if not found
+    """
+    result = await user_handler.get_user_by_username(username)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"User with username '{username}' not found")
+    return UserResponse(**result)
+
+@router.post("/onboard", response_model=UserResponse)
+async def onboard_user(
+    user_data: UserCreate,
+    request: Request,
+    user_handler: UserHandler = Depends(get_user_handler)
+) -> UserResponse:
+    """
+    Complete user onboarding with username and profile information.
+    
+    This endpoint is used after MetaMask authentication to create a complete user profile
+    with username, email (optional), and other profile information.
+    
+    User must be authenticated to use this endpoint.
+    
+    Args:
+        user_data: Complete user data including username
+        request: The request object  
+        user_handler: The user handler
+        
+    Returns:
+        UserResponse containing the created/updated user
+    """
+    # Get authentication state from request
+    is_authenticated = hasattr(request.state, "user") and request.state.user is not None
+    
+    if not is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required for user onboarding"
+        )
+    
+    # Get current user from request state
+    current_user = request.state.user
+    authenticated_wallet = current_user.get("walletAddress")
+    
+    # Verify that the authenticated user is onboarding their own profile
+    if authenticated_wallet.lower() != user_data.wallet_address.lower():
+        logger.warning(f"Mismatched onboarding attempt: {authenticated_wallet} tried to onboard for {user_data.wallet_address}")
+        raise HTTPException(
+            status_code=403,
+            detail="You can only complete onboarding for your own wallet address"
+        )
+    
+    return await user_handler.create_user(user_data)
+
+@router.post("/migrate", response_model=Dict[str, Any])
+async def migrate_users(
+    request: Request,
+    user_handler: UserHandler = Depends(get_user_handler)
+) -> Dict[str, Any]:
+    """
+    Migrate existing users to add usernames.
+    
+    This is an admin-only endpoint for migrating existing users who don't have usernames.
+    
+    Args:
+        request: The request object
+        user_handler: The user handler
+        
+    Returns:
+        Migration summary with count of migrated users and any errors
+    """
+    # Get authentication state from request
+    is_authenticated = hasattr(request.state, "user") and request.state.user is not None
+    
+    if not is_authenticated:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required for user migration"
+        )
+    
+    # Get current user from request state
+    current_user = request.state.user
+    authenticated_role = current_user.get("role", "user")
+    
+    # This is an admin-only endpoint
+    if authenticated_role != "admin":
+        logger.warning(f"Unauthorized migration attempt: User {current_user.get('walletAddress')} tried to run user migration")
+        raise HTTPException(
+            status_code=403,
+            detail="Only administrators can run user migrations"
+        )
+    
+    return await user_handler.migrate_existing_users()
