@@ -174,8 +174,50 @@ function ProfilePage() {
       </Typography>
       
       <Grid container spacing={4}>
-        {/* Profile Information Section */}
+        {/* Username Management Section */}
         <Grid item xs={12} md={8}>
+          <Paper sx={{ mb: 3, p: 3 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+              <AccountCircle sx={{ mr: 1 }} />
+              Username Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Your username is how others can find and identify you on the platform.
+            </Typography>
+            
+            {isLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <Box>
+                <UsernameInput
+                  value={usernameValue}
+                  onChange={handleUsernameChange}
+                  onValidationChange={handleUsernameValidation}
+                  helperText="Your unique username that others can use to find you"
+                  fullWidth
+                  margin="normal"
+                  currentUserUsername={user?.username}
+                />
+                {usernameChanged && (
+                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={handleUsernameUpdate}
+                      disabled={!isUsernameValid || isUpdatingUsername}
+                      startIcon={isUpdatingUsername ? <CircularProgress size={16} /> : <Check />}
+                    >
+                      {isUpdatingUsername ? 'Updating...' : 'Update Username'}
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Paper>
+
+          {/* Profile Information Section */}
           <Paper sx={{ mb: 4 }}>
             <Tabs 
               value={tabValue} 
@@ -211,33 +253,6 @@ function ProfilePage() {
                     </Typography>
                     
                     <Grid container spacing={2}>
-                      <Grid item xs={12}>
-                        <Box sx={{ mb: 2 }}>
-                          <UsernameInput
-                            value={usernameValue}
-                            onChange={handleUsernameChange}
-                            onValidationChange={handleUsernameValidation}
-                            helperText="Your unique username that others can use to find you"
-                            fullWidth
-                            margin="normal"
-                            currentUserUsername={user?.username}
-                          />
-                          {usernameChanged && (
-                            <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={handleUsernameUpdate}
-                                disabled={!isUsernameValid || isUpdatingUsername}
-                                startIcon={isUpdatingUsername ? <CircularProgress size={16} /> : <Check />}
-                              >
-                                {isUpdatingUsername ? 'Updating...' : 'Update Username'}
-                              </Button>
-                            </Box>
-                          )}
-                        </Box>
-                      </Grid>
-                      
                       <Grid item xs={12}>
                         <TextField
                           label="Email Address"

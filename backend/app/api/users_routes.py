@@ -347,7 +347,19 @@ async def onboard_user(
             detail="You can only complete onboarding for your own wallet address"
         )
     
-    return await user_handler.create_user(user_data)
+    # For onboarding, we need to update the existing user record with the new data
+    # Convert UserCreate to dict for update
+    update_data = {
+        "username": user_data.username,
+        "email": user_data.email,
+        "name": user_data.name,
+        "role": user_data.role
+    }
+    
+    # Remove None values
+    update_data = {k: v for k, v in update_data.items() if v is not None}
+    
+    return await user_handler.update_user(user_data.wallet_address, update_data)
 
 @router.post("/migrate", response_model=Dict[str, Any])
 async def migrate_users(

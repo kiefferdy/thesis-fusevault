@@ -73,6 +73,25 @@ function UsernameInput({
     setInputValue(value || '');
   }, [value]);
 
+  // Reset validation when currentUserUsername changes and matches input
+  useEffect(() => {
+    if (currentUserUsername && inputValue && 
+        currentUserUsername.toLowerCase() === inputValue.toLowerCase()) {
+      setValidationState({
+        isValid: true,
+        error: null,
+        isChecking: false
+      });
+      
+      if (onValidationChange) {
+        onValidationChange({
+          isValid: true,
+          error: null
+        });
+      }
+    }
+  }, [currentUserUsername, inputValue, onValidationChange]);
+
   // Debounce the input value for server-side checking
   const debouncedValue = useDebounce(inputValue.trim(), 800);
 
