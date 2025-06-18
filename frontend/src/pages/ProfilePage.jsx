@@ -100,6 +100,13 @@ function ProfilePage() {
     }
   }, [user]);
 
+  // Reset username changed state when update succeeds
+  useEffect(() => {
+    if (!isUpdatingUsername && user?.username === usernameValue) {
+      setUsernameChanged(false);
+    }
+  }, [isUpdatingUsername, user?.username, usernameValue]);
+
   // Handle form changes
   const handleChange = (field) => (event) => {
     setFormData({
@@ -123,6 +130,8 @@ function ProfilePage() {
   const handleUsernameUpdate = () => {
     if (isUsernameValid && usernameChanged && usernameValue) {
       updateUsername(usernameValue);
+      // Reset the changed state after successful update
+      setUsernameChanged(false);
     }
   };
 

@@ -60,6 +60,7 @@ function UsernameInput({
   });
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestionBox, setShowSuggestionBox] = useState(false);
+  const [recentlyUpdatedUsername, setRecentlyUpdatedUsername] = useState(null);
 
   const { 
     checkUsernameAvailability, 
@@ -72,6 +73,20 @@ function UsernameInput({
   useEffect(() => {
     setInputValue(value || '');
   }, [value]);
+
+  // Track when currentUserUsername changes (successful update)
+  useEffect(() => {
+    if (currentUserUsername && currentUserUsername !== recentlyUpdatedUsername) {
+      setRecentlyUpdatedUsername(currentUserUsername);
+      
+      // Clear after 2 seconds to allow normal validation to resume
+      const timer = setTimeout(() => {
+        setRecentlyUpdatedUsername(null);
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [currentUserUsername, recentlyUpdatedUsername]);
 
   // Reset validation when currentUserUsername changes and matches input
   useEffect(() => {
@@ -164,8 +179,11 @@ function UsernameInput({
     }
 
     // If client validation passes, check server availability
-    // Skip server check if this is the user's current username
-    if (currentUserUsername && normalizedValue.toLowerCase() === currentUserUsername.toLowerCase()) {
+    // Skip server check if this is the user's current username OR recently updated username
+    const isCurrentUsername = currentUserUsername && normalizedValue.toLowerCase() === currentUserUsername.toLowerCase();
+    const isRecentlyUpdated = recentlyUpdatedUsername && normalizedValue.toLowerCase() === recentlyUpdatedUsername.toLowerCase();
+    
+    if (isCurrentUsername || isRecentlyUpdated) {
       setValidationState({
         isValid: true,
         error: null,
@@ -187,7 +205,7 @@ function UsernameInput({
     }));
 
     checkUsernameAvailability(normalizedValue);
-  }, [debouncedValue, required, checkUsernameAvailability, showSuggestions, onValidationChange, currentUserUsername]);
+  }, [debouncedValue, required, checkUsernameAvailability, showSuggestions, onValidationChange, currentUserUsername, recentlyUpdatedUsername]);
 
   // Handle server response
   useEffect(() => {

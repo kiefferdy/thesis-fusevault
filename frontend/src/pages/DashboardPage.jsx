@@ -126,6 +126,9 @@ function DashboardPage() {
         setUsername(user.username);
         setIsUsernameValid(true); // Auto-generated usernames are valid
       }
+    } else {
+      // Close dialog if setup is complete
+      setOpenSetupDialog(false);
     }
   }, [userError, user, userLoading, isOnboarding, currentAccount]);
 
