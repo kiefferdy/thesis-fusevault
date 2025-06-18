@@ -6,8 +6,7 @@ class MetadataRetrieveRequest(BaseModel):
     version: Optional[int] = Field(None, description="Specific version to retrieve, defaults to current")
     auto_recover: Optional[bool] = Field(True, description="Whether to automatically recover from tampering")
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class MetadataVerificationResult(BaseModel):
     # Primary verification result
@@ -34,8 +33,7 @@ class MetadataVerificationResult(BaseModel):
     # Deletion status tampering flag
     deletion_status_tampered: Optional[bool] = Field(None, description="Whether the deletion status was tampered with", alias="deletionStatusTampered")
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 class MetadataRetrieveResponse(BaseModel):
     asset_id: str = Field(..., description="The asset's unique identifier", alias="assetId")
@@ -47,5 +45,4 @@ class MetadataRetrieveResponse(BaseModel):
     ipfs_hash: str = Field(..., description="IPFS content identifier", alias="ipfsHash")
     blockchain_tx_id: str = Field(..., description="Blockchain transaction hash", alias="blockchainTxId")
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}

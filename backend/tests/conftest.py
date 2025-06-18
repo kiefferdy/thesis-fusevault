@@ -74,6 +74,11 @@ def mock_user_repo():
     repo.find_users = AsyncMock()
     repo.update_user = AsyncMock()
     repo.delete_user = AsyncMock()
+    repo.create_indexes = AsyncMock()
+    repo.find_user_by_username = AsyncMock()
+    repo.username_exists = AsyncMock()
+    repo.email_exists = AsyncMock()
+    repo.get_users_without_username = AsyncMock()
     return repo
 
 # Service Mocks

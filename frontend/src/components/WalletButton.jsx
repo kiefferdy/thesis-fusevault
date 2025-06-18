@@ -1,5 +1,6 @@
 import { Button } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
+import { useUser } from '../hooks/useUser';
 import { formatWalletAddress } from '../utils/formatters';
 
 function WalletButton() {
@@ -11,6 +12,8 @@ function WalletButton() {
     signOut, 
     isLoading
   } = useAuth();
+  
+  const { user } = useUser();
 
   const handleAction = async () => {
     if (isLoading) return;
@@ -33,7 +36,12 @@ function WalletButton() {
     if (!currentAccount) return 'Connect Wallet';
     if (!isAuthenticated) return 'Sign In';
     
-    return `${formatWalletAddress(currentAccount)} | Sign Out`;
+    // Show username if available, otherwise wallet address
+    const displayText = user?.username 
+      ? `@${user.username}` 
+      : formatWalletAddress(currentAccount);
+    
+    return `${displayText} | Sign Out`;
   };
 
   return (

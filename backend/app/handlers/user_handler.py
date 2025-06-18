@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from fastapi import HTTPException
 import logging
 from app.services.user_service import UserService
@@ -180,3 +180,61 @@ class UserHandler:
         except Exception as e:
             logger.error(f"Error retrieving users by role: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Error retrieving users by role: {str(e)}")
+    
+    async def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a user by username.
+        
+        Args:
+            username: The username to look up
+            
+        Returns:
+            User response if found, None otherwise
+            
+        Raises:
+            HTTPException: If retrieval fails
+        """
+        try:
+            return await self.user_service.get_user_by_username(username)
+            
+        except Exception as e:
+            logger.error(f"Error getting user by username: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error getting user by username: {str(e)}")
+    
+    async def check_username_availability(self, username: str, exclude_wallet: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Check if a username is available.
+        
+        Args:
+            username: The username to check
+            exclude_wallet: Optional wallet address to exclude from check
+            
+        Returns:
+            Dict with availability status and suggestions if unavailable
+            
+        Raises:
+            HTTPException: If check fails
+        """
+        try:
+            return await self.user_service.check_username_availability(username, exclude_wallet)
+            
+        except Exception as e:
+            logger.error(f"Error checking username availability: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error checking username availability: {str(e)}")
+    
+    async def migrate_existing_users(self) -> Dict[str, Any]:
+        """
+        Migrate existing users to add usernames.
+        
+        Returns:
+            Migration summary with count of migrated users and any errors
+            
+        Raises:
+            HTTPException: If migration fails
+        """
+        try:
+            return await self.user_service.migrate_existing_users()
+            
+        except Exception as e:
+            logger.error(f"Error during user migration: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error during user migration: {str(e)}")

@@ -27,12 +27,22 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize indexes and other resources
     from app.database import get_db_client
     from app.repositories.api_key_repo import APIKeyRepository
+    from app.repositories.user_repo import UserRepository
     from app.config import settings
+    
+    db_client = get_db_client()
+    
+    try:
+        # Initialize user indexes
+        user_repo = UserRepository(db_client)
+        await user_repo.create_indexes()
+        logging.info("User indexes created successfully")
+    except Exception as e:
+        logging.error(f"Error creating user indexes: {e}")
     
     try:
         # Initialize API key indexes if enabled
         if settings.api_key_auth_enabled:
-            db_client = get_db_client()
             api_key_repo = APIKeyRepository(db_client.get_collection("api_keys"))
             await api_key_repo.create_indexes()
             logging.info("API key indexes created successfully")

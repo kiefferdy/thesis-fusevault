@@ -22,9 +22,7 @@ class SessionResponse(BaseModel):
     expires_at: datetime = Field(..., description="When the session expires", alias="expiresAt")
     is_active: bool = Field(..., description="Whether the session is active", alias="isActive")
 
-    class Config:
-        from_attributes = True
-        populate_by_name = True
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 class LogoutResponse(BaseModel):
     status: str = Field(..., description="Status of the logout request")

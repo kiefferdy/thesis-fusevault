@@ -30,16 +30,18 @@ import {
   GitHub,
   Add,
   Image,
-  Badge
+  Badge,
+  Check
 } from '@mui/icons-material';
 import { useUser } from '../hooks/useUser';
 import { useAuth } from '../contexts/AuthContext';
 import { useTransactions } from '../hooks/useTransactions';
 import { useAssets } from '../hooks/useAssets';
 import { formatWalletAddress, formatDate } from '../utils/formatters';
+import UsernameInput from '../components/UsernameInput';
 
 function ProfilePage() {
-  const { user, isLoading, isError, update, isUpdating } = useUser();
+  const { user, isLoading, isError, update, isUpdating, updateUsername, isUpdatingUsername } = useUser();
   const { currentAccount, signOut } = useAuth();
   const { summary, isSummaryLoading, allTransactions, getAllTransactions } = useTransactions();
   const { assets } = useAssets();
@@ -54,6 +56,7 @@ function ProfilePage() {
   
   // Initialize form data from user data
   const [formData, setFormData] = useState({
+    username: '',
     email: '',
     name: '',
     organization: '',
@@ -66,6 +69,11 @@ function ProfilePage() {
     github: ''
   });
 
+  // Separate username state for validation
+  const [usernameValue, setUsernameValue] = useState('');
+  const [isUsernameValid, setIsUsernameValid] = useState(true);
+  const [usernameChanged, setUsernameChanged] = useState(false);
+
   // Update form data when user data changes
   useEffect(() => {
     if (user) {
@@ -73,6 +81,7 @@ function ProfilePage() {
       console.log('User data received:', user);
       
       setFormData({
+        username: user.username || '',
         email: user.email || '',
         name: user.name || '',
         organization: user.organization || '',
@@ -84,8 +93,19 @@ function ProfilePage() {
         linkedin: user.linkedin || '',
         github: user.github || ''
       });
+      
+      // Set username value separately
+      setUsernameValue(user.username || '');
+      setUsernameChanged(false);
     }
   }, [user]);
+
+  // Reset username changed state when update succeeds
+  useEffect(() => {
+    if (!isUpdatingUsername && user?.username === usernameValue) {
+      setUsernameChanged(false);
+    }
+  }, [isUpdatingUsername, user?.username, usernameValue]);
 
   // Handle form changes
   const handleChange = (field) => (event) => {
@@ -93,6 +113,26 @@ function ProfilePage() {
       ...formData,
       [field]: event.target.value
     });
+  };
+
+  // Handle username changes
+  const handleUsernameChange = (newUsername) => {
+    setUsernameValue(newUsername);
+    setUsernameChanged(newUsername !== (user?.username || ''));
+  };
+
+  // Handle username validation
+  const handleUsernameValidation = (validation) => {
+    setIsUsernameValid(validation.isValid);
+  };
+
+  // Handle username update separately
+  const handleUsernameUpdate = () => {
+    if (isUsernameValid && usernameChanged && usernameValue) {
+      updateUsername(usernameValue);
+      // Reset the changed state after successful update
+      setUsernameChanged(false);
+    }
   };
 
   // Handle tab changes
@@ -143,8 +183,51 @@ function ProfilePage() {
       </Typography>
       
       <Grid container spacing={4}>
-        {/* Profile Information Section */}
+        {/* Username Management Section */}
         <Grid item xs={12} md={8}>
+          <Paper sx={{ mb: 3, p: 3 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+              <AccountCircle sx={{ mr: 1 }} />
+              Username Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Your username is how others can find and identify you on the platform.
+            </Typography>
+            
+            {isLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <Box>
+                <UsernameInput
+                  value={usernameValue}
+                  onChange={handleUsernameChange}
+                  onValidationChange={handleUsernameValidation}
+                  helperText="Your unique username that others can use to find you"
+                  fullWidth
+                  margin="normal"
+                  currentUserUsername={user?.username}
+                  currentUserWallet={currentAccount}  // Add this line
+                />
+                {usernameChanged && (
+                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={handleUsernameUpdate}
+                      disabled={!isUsernameValid || isUpdatingUsername}
+                      startIcon={isUpdatingUsername ? <CircularProgress size={16} /> : <Check />}
+                    >
+                      {isUpdatingUsername ? 'Updating...' : 'Update Username'}
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            )}
+          </Paper>
+
+          {/* Profile Information Section */}
           <Paper sx={{ mb: 4 }}>
             <Tabs 
               value={tabValue} 
@@ -188,7 +271,6 @@ function ProfilePage() {
                           value={formData.email}
                           onChange={handleChange('email')}
                           margin="normal"
-                          required
                         />
                       </Grid>
                       
@@ -396,6 +478,12 @@ function ProfilePage() {
               <Typography variant="h6" align="center" gutterBottom>
                 {user?.name || 'Ethereum User'}
               </Typography>
+              
+              {user?.username && (
+                <Typography variant="body2" align="center" color="primary.main" gutterBottom>
+                  @{user.username}
+                </Typography>
+              )}
               
               <Typography variant="body2" align="center" color="text.secondary" gutterBottom>
                 {currentAccount ? formatWalletAddress(currentAccount, 8, 8) : 'Not connected'}

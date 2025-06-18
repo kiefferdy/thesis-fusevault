@@ -33,3 +33,34 @@ export const formatTransactionHash = (hash, startChars = 6, endChars = 6) => {
 export const isEmptyObject = (obj) => {
   return Object.keys(obj).length === 0;
 };
+
+// Format user display name (username or wallet address)
+export const formatUserDisplayName = (user, walletAddress, options = {}) => {
+  const {
+    preferUsername = true,
+    withAt = false,
+    fallbackToWallet = true
+  } = options;
+
+  if (preferUsername && user?.username) {
+    return withAt ? `@${user.username}` : user.username;
+  }
+
+  if (user?.name && !preferUsername) {
+    return user.name;
+  }
+
+  if (fallbackToWallet && walletAddress) {
+    return formatWalletAddress(walletAddress);
+  }
+
+  return 'Anonymous User';
+};
+
+// Get user display name with multiple fallbacks
+export const getUserDisplayName = (user, walletAddress) => {
+  if (user?.name) return user.name;
+  if (user?.username) return `@${user.username}`;
+  if (walletAddress) return formatWalletAddress(walletAddress);
+  return 'Anonymous User';
+};
