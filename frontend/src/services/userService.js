@@ -55,9 +55,10 @@ export const userService = {
   },
 
   // Check if username is available
-  checkUsernameAvailability: async (username) => {
+  checkUsernameAvailability: async (username, excludeWallet = null) => {
     try {
-      const { data } = await apiClient.get(`/users/username/${username}/availability`);
+      const params = excludeWallet ? `?exclude_wallet=${excludeWallet}` : '';
+      const { data } = await apiClient.get(`/users/username/${username}/availability${params}`);
       return data;
     } catch (error) {
       console.error('Error checking username availability:', error);

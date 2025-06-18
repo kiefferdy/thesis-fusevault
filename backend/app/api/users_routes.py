@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Body, HTTPException, Request
+from fastapi import APIRouter, Depends, Body, HTTPException, Request, Query
 from typing import Dict, Any, Optional
 import logging
 
@@ -265,6 +265,7 @@ async def get_users_by_role(
 @router.get("/username/{username}/availability")
 async def check_username_availability(
     username: str,
+    exclude_wallet: Optional[str] = Query(None, description="Wallet address to exclude from check"),
     user_handler: UserHandler = Depends(get_user_handler)
 ) -> Dict[str, Any]:
     """
@@ -275,12 +276,13 @@ async def check_username_availability(
     
     Args:
         username: The username to check
+        exclude_wallet: Optional wallet address to exclude from the check (for current user)
         user_handler: The user handler
         
     Returns:
         Dict with availability status and suggestions if unavailable
     """
-    return await user_handler.check_username_availability(username)
+    return await user_handler.check_username_availability(username, exclude_wallet)
 
 @router.get("/username/{username}")
 async def get_user_by_username(

@@ -64,17 +64,10 @@ export const useUser = () => {
     }
   });
 
-  // Username availability checking query
-  const usernameAvailabilityQuery = useQuery({
-    queryKey: ['username-availability'],
-    queryFn: () => null, // This will be manually triggered
-    enabled: false, // Don't auto-fetch
-    staleTime: 30000, // Cache for 30 seconds
-  });
 
   // Mutation for checking username availability
   const checkUsernameAvailability = useMutation({
-    mutationFn: async (username) => {
+    mutationFn: async ({ username, excludeWallet }) => {
       const normalizedUsername = normalizeUsername(username);
       
       // First validate client-side
@@ -83,8 +76,8 @@ export const useUser = () => {
         throw new Error(validation.error);
       }
 
-      // Then check server-side availability
-      const result = await userService.checkUsernameAvailability(normalizedUsername);
+      // Then check server-side availability, excluding specified wallet
+      const result = await userService.checkUsernameAvailability(normalizedUsername, excludeWallet);
       return { ...result, username: normalizedUsername };
     },
     onSuccess: (data) => {

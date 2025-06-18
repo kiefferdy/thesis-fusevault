@@ -425,12 +425,13 @@ class UserService:
             logger.error(f"Error getting user by username: {str(e)}")
             raise
     
-    async def check_username_availability(self, username: str) -> Dict[str, Any]:
+    async def check_username_availability(self, username: str, exclude_wallet: Optional[str] = None) -> Dict[str, Any]:
         """
         Check if a username is available.
         
         Args:
             username: The username to check
+            exclude_wallet: Optional wallet address to exclude from check
             
         Returns:
             Dict with availability status and suggestions if unavailable
@@ -447,8 +448,14 @@ class UserService:
                     "suggestions": suggest_similar_usernames(username)
                 }
             
-            # Check if username exists
-            exists = await self.user_repository.username_exists(normalized_username)
+            # Check if username exists (excluding specified wallet if provided)
+            if exclude_wallet:
+                # Check if username exists for a different user
+                existing_user = await self.user_repository.find_user_by_username(normalized_username)
+                exists = existing_user is not None and existing_user.get("walletAddress", "").lower() != exclude_wallet.lower()
+            else:
+                # Normal check without exclusion
+                exists = await self.user_repository.username_exists(normalized_username)
             
             if exists:
                 return {

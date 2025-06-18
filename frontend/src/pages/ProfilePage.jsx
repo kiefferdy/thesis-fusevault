@@ -208,6 +208,7 @@ function ProfilePage() {
                   fullWidth
                   margin="normal"
                   currentUserUsername={user?.username}
+                  currentUserWallet={currentAccount}  // Add this line
                 />
                 {usernameChanged && (
                   <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>

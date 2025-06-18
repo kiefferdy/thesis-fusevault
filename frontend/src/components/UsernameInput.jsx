@@ -50,6 +50,7 @@ function UsernameInput({
   margin = 'normal',
   variant = 'outlined',
   currentUserUsername = null, // Add prop to skip checking current user's username
+  currentUserWallet = null, // Add this prop
   ...textFieldProps 
 }) {
   const [inputValue, setInputValue] = useState(value);
@@ -204,8 +205,12 @@ function UsernameInput({
       isChecking: true
     }));
 
-    checkUsernameAvailability(normalizedValue);
-  }, [debouncedValue, required, checkUsernameAvailability, showSuggestions, onValidationChange, currentUserUsername, recentlyUpdatedUsername]);
+    // Pass both username and wallet to exclude current user
+    checkUsernameAvailability({
+      username: normalizedValue,
+      excludeWallet: currentUserWallet
+    });
+  }, [debouncedValue, required, checkUsernameAvailability, showSuggestions, onValidationChange, currentUserUsername, recentlyUpdatedUsername, currentUserWallet]); // Add currentUserWallet to deps
 
   // Handle server response
   useEffect(() => {

@@ -201,12 +201,13 @@ class UserHandler:
             logger.error(f"Error getting user by username: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Error getting user by username: {str(e)}")
     
-    async def check_username_availability(self, username: str) -> Dict[str, Any]:
+    async def check_username_availability(self, username: str, exclude_wallet: Optional[str] = None) -> Dict[str, Any]:
         """
         Check if a username is available.
         
         Args:
             username: The username to check
+            exclude_wallet: Optional wallet address to exclude from check
             
         Returns:
             Dict with availability status and suggestions if unavailable
@@ -215,7 +216,7 @@ class UserHandler:
             HTTPException: If check fails
         """
         try:
-            return await self.user_service.check_username_availability(username)
+            return await self.user_service.check_username_availability(username, exclude_wallet)
             
         except Exception as e:
             logger.error(f"Error checking username availability: {str(e)}")
