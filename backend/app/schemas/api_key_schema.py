@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -24,7 +24,7 @@ class APIKeyInDB(APIKeyBase):
     """Schema for API key stored in database"""
     key_hash: str = Field(..., description="Hash of the API key")
     wallet_address: str = Field(..., description="The Ethereum wallet address that owns this API key")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_used_at: Optional[datetime] = Field(None)
     is_active: bool = Field(True)
 
