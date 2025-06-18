@@ -176,13 +176,20 @@ class APIKeyRepository:
             return None
         
         # Check expiration
-        if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
-            # Deactivate expired key
-            await self.collection.update_one(
-                {"key_hash": key_hash},
-                {"$set": {"is_active": False}}
-            )
-            return None
+        if api_key.expires_at:
+            # Ensure expires_at is timezone-aware
+            expires_at = api_key.expires_at
+            if expires_at.tzinfo is None:
+                # If naive, assume it's UTC
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            
+            if expires_at < datetime.now(timezone.utc):
+                # Deactivate expired key
+                await self.collection.update_one(
+                    {"key_hash": key_hash},
+                    {"$set": {"is_active": False}}
+                )
+                return None
         
         # Update last used timestamp
         await self.update_last_used(key_hash)
