@@ -377,7 +377,7 @@ const ApiKeysPage = () => {
             <h3>Example Request</h3>
             <pre>
 {`curl -X GET \\
-  https://api.fusevault.com/assets/user/{wallet_address} \\
+  https://fusevault-backend.up.railway.app/assets/user/{wallet_address} \\
   -H 'X-API-Key: your_api_key_here'`}
             </pre>
           </div>
