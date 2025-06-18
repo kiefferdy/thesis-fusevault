@@ -55,6 +55,9 @@ class APIKeyService:
         expires_at = api_key_data.expires_at
         if not expires_at:
             expires_at = datetime.now(timezone.utc) + timedelta(days=settings.api_key_default_expiration_days)
+        elif expires_at.tzinfo is None:
+            # Convert naive datetime to UTC aware
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
             
         # Create API key record
         api_key_db = APIKeyInDB(
