@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Container, 
-  Typography, 
-  Box, 
-  Paper, 
-  Grid, 
-  Button, 
+import {
+  Container,
+  Typography,
+  Box,
+  Paper,
+  Grid,
+  Button,
   CircularProgress,
   Divider,
   Chip,
@@ -20,13 +20,13 @@ import {
   TableHead,
   TableRow
 } from '@mui/material';
-import { 
-  Edit, 
-  Delete, 
-  ArrowBack, 
+import {
+  Edit,
+  Delete,
+  ArrowBack,
   History,
   VerifiedUser,
-  Warning 
+  Warning
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { assetService } from '../services/assetService';
@@ -174,28 +174,28 @@ function AssetDetailPage() {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Box sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
-        <Button 
+        <Button
           startIcon={<ArrowBack />}
           onClick={handleBack}
           sx={{ mr: 2 }}
         >
           Back
         </Button>
-        
+
         <Typography variant="h4" component="h1" sx={{ flexGrow: 1 }}>
           {asset.criticalMetadata?.name || 'Asset Details'}
         </Typography>
-        
+
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button 
+          <Button
             variant="outlined"
             startIcon={<Edit />}
             onClick={handleEdit}
           >
             Edit
           </Button>
-          <Button 
-            variant="outlined" 
+          <Button
+            variant="outlined"
             color="error"
             startIcon={<Delete />}
             onClick={handleDelete}
@@ -205,7 +205,7 @@ function AssetDetailPage() {
           </Button>
         </Box>
       </Box>
-      
+
       {/* Integrity Status Alert */}
       {asset.verificationStatus && (
         <Alert
@@ -213,12 +213,12 @@ function AssetDetailPage() {
           icon={asset.verificationStatus === 'verified' ? <VerifiedUser /> : <Warning />}
           sx={{ mb: 3 }}
         >
-          {asset.verificationStatus === 'verified' 
-            ? 'Asset integrity verified on blockchain' 
+          {asset.verificationStatus === 'verified'
+            ? 'Asset integrity verified on blockchain'
             : 'Potential integrity issues detected'}
         </Alert>
       )}
-      
+
       <Paper sx={{ mb: 4 }}>
         <Tabs
           value={tabValue}
@@ -230,9 +230,9 @@ function AssetDetailPage() {
           <Tab label="Asset Information" />
           <Tab label="Transaction History" />
         </Tabs>
-        
+
         <Divider />
-        
+
         {/* Asset Information Tab */}
         {tabValue === 0 && (
           <Box sx={{ p: 3 }}>
@@ -242,7 +242,6 @@ function AssetDetailPage() {
                 <Typography variant="h6" gutterBottom>
                   Basic Information
                 </Typography>
-                
                 <TableContainer component={Paper} variant="outlined">
                   <Table>
                     <TableBody>
@@ -262,19 +261,19 @@ function AssetDetailPage() {
                         <TableCell component="th">
                           Owner
                         </TableCell>
-                        <TableCell>{formatWalletAddress(asset.ownerAddress, 6, 4)}</TableCell>
+                        <TableCell>{formatWalletAddress(asset.walletAddress, 6, 4)}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th">
                           Created
                         </TableCell>
-                        <TableCell>{formatDate(asset.createdAt)}</TableCell>
+                        <TableCell>{asset.createdAt ? formatDate(asset.createdAt) : 'N/A'}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th">
                           Last Modified
                         </TableCell>
-                        <TableCell>{formatDate(asset.updatedAt)}</TableCell>
+                        <TableCell>{asset.updatedAt ? formatDate(asset.updatedAt) : 'N/A'}</TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell component="th">
@@ -282,7 +281,7 @@ function AssetDetailPage() {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" component="div" sx={{ wordBreak: 'break-all' }}>
-                            {asset.ipfsCid}
+                            {asset.ipfsHash}
                           </Typography>
                         </TableCell>
                       </TableRow>
@@ -292,7 +291,7 @@ function AssetDetailPage() {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" component="div" sx={{ wordBreak: 'break-all' }}>
-                            {asset.blockchainTxHash}
+                            {asset.blockchainTxId}
                           </Typography>
                         </TableCell>
                       </TableRow>
@@ -300,13 +299,13 @@ function AssetDetailPage() {
                   </Table>
                 </TableContainer>
               </Grid>
-              
+
               {/* Critical Metadata */}
               <Grid item xs={12}>
                 <Typography variant="h6" gutterBottom>
                   Critical Metadata (Blockchain-Verified)
                 </Typography>
-                
+
                 <TableContainer component={Paper} variant="outlined">
                   <Table>
                     <TableBody>
@@ -334,14 +333,14 @@ function AssetDetailPage() {
                   </Table>
                 </TableContainer>
               </Grid>
-              
+
               {/* Non-Critical Metadata */}
               {asset.nonCriticalMetadata && Object.keys(asset.nonCriticalMetadata).length > 0 && (
                 <Grid item xs={12}>
                   <Typography variant="h6" gutterBottom>
                     Additional Metadata
                   </Typography>
-                  
+
                   <TableContainer component={Paper} variant="outlined">
                     <Table>
                       <TableBody>
@@ -365,14 +364,14 @@ function AssetDetailPage() {
             </Grid>
           </Box>
         )}
-        
+
         {/* Transaction History Tab */}
         {tabValue === 1 && (
           <Box sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
               Transaction History
             </Typography>
-            
+
             {historyLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
                 <CircularProgress />
@@ -396,11 +395,11 @@ function AssetDetailPage() {
                       <TableRow key={tx._id || tx.id}>
                         <TableCell>{formatDate(tx.timestamp)}</TableCell>
                         <TableCell>
-                          <Chip 
+                          <Chip
                             label={tx.action}
-                            color={tx.action === 'CREATE' ? 'success' : 
-                                  tx.action === 'UPDATE' ? 'info' : 
-                                  tx.action === 'DELETE' ? 'error' : 'default'}
+                            color={tx.action === 'CREATE' ? 'success' :
+                              tx.action === 'UPDATE' ? 'info' :
+                                tx.action === 'DELETE' ? 'error' : 'default'}
                             size="small"
                           />
                         </TableCell>
