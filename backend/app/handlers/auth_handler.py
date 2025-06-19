@@ -1,7 +1,7 @@
 from typing import Dict, Any, Optional
 from fastapi import HTTPException, Response, Request
 import logging
-from app.services.auth_service import AuthService
+from app.services.wallet_auth_provider import WalletAuthProvider
 from app.schemas.auth_schema import AuthenticationRequest, NonceResponse
 from app.config import settings
 
@@ -10,17 +10,17 @@ logger = logging.getLogger(__name__)
 class AuthHandler:
     """
     Handler for authentication-related operations.
-    Acts as a bridge between API routes and the auth service layer.
+    Acts as a bridge between API routes and the wallet auth provider layer.
     """
     
-    def __init__(self, auth_service: AuthService):
+    def __init__(self, wallet_auth_provider: WalletAuthProvider):
         """
-        Initialize with auth service.
+        Initialize with wallet auth provider.
         
         Args:
-            auth_service: Service for authentication operations
+            wallet_auth_provider: Wallet-based authentication provider
         """
-        self.auth_service = auth_service
+        self.auth_service = wallet_auth_provider
         
     async def get_nonce(self, wallet_address: str) -> NonceResponse:
         """

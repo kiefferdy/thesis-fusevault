@@ -8,7 +8,7 @@ import json
 from fastapi import HTTPException
 
 from app.services.asset_service import AssetService
-from app.services.auth_service import AuthService
+from app.services.wallet_auth_provider import WalletAuthProvider
 from app.services.transaction_service import TransactionService
 from app.services.user_service import UserService
 from app.services.blockchain_service import BlockchainService
@@ -165,7 +165,7 @@ class TestAssetServiceLogic:
         
 
 # Auth Service Tests - focusing on business logic not tested in repositories
-class TestAuthServiceLogic:
+class TestWalletAuthProviderLogic:
     @pytest.mark.asyncio
     async def test_generate_nonce_random_range(self, mock_auth_repo, mock_user_repo):
         """Test that generate_nonce creates a nonce within the specified range."""
@@ -173,7 +173,7 @@ class TestAuthServiceLogic:
         mock_auth_repo.upsert_auth_record.return_value = True
         
         # Initialize service with mock repositories
-        service = AuthService(mock_auth_repo, mock_user_repo)
+        service = WalletAuthProvider(mock_auth_repo, mock_user_repo)
         
         # Call method multiple times to verify randomness
         nonces = []
@@ -198,7 +198,7 @@ class TestAuthServiceLogic:
         mock_web3.eth.account = mock_account
         
         # Initialize service with mock repositories
-        service = AuthService(mock_auth_repo, mock_user_repo)
+        service = WalletAuthProvider(mock_auth_repo, mock_user_repo)
         
         # Set mock_web3 directly on the service instance
         service.web3 = mock_web3
@@ -231,7 +231,7 @@ class TestAuthServiceLogic:
         mock_auth_repo.insert_session = AsyncMock(return_value=session_id)
         
         # Initialize service with mock repositories
-        service = AuthService(mock_auth_repo, mock_user_repo)
+        service = WalletAuthProvider(mock_auth_repo, mock_user_repo)
         
         # Call method with custom duration
         custom_duration = 7200  # 2 hours
@@ -280,11 +280,11 @@ class TestAuthServiceLogic:
             return new_nonce
             
         # Apply mocks
-        monkeypatch.setattr(AuthService, "verify_signature", mock_verify_signature)
-        monkeypatch.setattr(AuthService, "generate_nonce", mock_generate_nonce)
+        monkeypatch.setattr(WalletAuthProvider, "verify_signature", mock_verify_signature)
+        monkeypatch.setattr(WalletAuthProvider, "generate_nonce", mock_generate_nonce)
         
         # Initialize service
-        service = AuthService(mock_auth_repo, mock_user_repo)
+        service = WalletAuthProvider(mock_auth_repo, mock_user_repo)
         
         # Call authenticate
         success, _ = await service.authenticate(

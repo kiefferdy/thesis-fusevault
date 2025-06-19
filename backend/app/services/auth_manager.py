@@ -2,7 +2,7 @@ from typing import Optional, Dict, List
 from fastapi import Request
 import logging
 
-from app.services.auth_service import AuthService
+from app.services.wallet_auth_provider import WalletAuthProvider
 from app.services.api_key_auth_provider import APIKeyAuthProvider
 from app.repositories.auth_repo import AuthRepository
 from app.repositories.user_repo import UserRepository
@@ -30,8 +30,8 @@ class AuthManager:
         user_repo = UserRepository(self.db_client)
         api_key_repo = APIKeyRepository(self.db_client.get_collection("api_keys"))
         
-        # Setup wallet auth service
-        self.auth_service = AuthService(auth_repo, user_repo)
+        # Setup wallet auth provider
+        self.wallet_auth_provider = WalletAuthProvider(auth_repo, user_repo)
         
         # Setup API key provider if enabled
         redis_client = None
@@ -57,7 +57,7 @@ class AuthManager:
         # Try wallet authentication first (session cookie)
         session_id = request.cookies.get("session_id")
         if session_id:
-            session_data = await self.auth_service.validate_session(session_id)
+            session_data = await self.wallet_auth_provider.validate_session(session_id)
             if session_data:
                 logger.debug(f"Authenticated via wallet session: {session_data.get('walletAddress')}")
                 return {

@@ -12,10 +12,11 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-class AuthService:
+class WalletAuthProvider:
     """
-    Service for authentication-related operations.
-    Handles nonce generation, verification, and session management.
+    Wallet-based authentication provider for MetaMask and other Web3 wallets.
+    Handles nonce generation, signature verification, and session management
+    using cryptographic wallet signatures for authentication.
     """
     
     def __init__(
@@ -37,7 +38,7 @@ class AuthService:
         self.user_service = user_service
         
         # Initialize Web3
-        # The auth service works without a provider for signature verification
+        # The wallet auth provider works without a provider for signature verification
         self.web3 = Web3()
         
     async def get_nonce(self, wallet_address: str) -> NonceResponse:
@@ -130,7 +131,7 @@ class AuthService:
         signature: str
     ) -> Tuple[bool, str]:
         """
-        Authenticate a user with a signature.
+        Authenticate a user with a wallet signature.
         
         Args:
             wallet_address: The wallet address to authenticate
