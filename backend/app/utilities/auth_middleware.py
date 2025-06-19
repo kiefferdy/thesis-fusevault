@@ -4,7 +4,7 @@ from fastapi import Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.services.auth_service import AuthService
+from app.services.wallet_auth_provider import WalletAuthProvider
 from app.services.auth_manager import AuthManager
 from app.repositories.auth_repo import AuthRepository
 from app.repositories.user_repo import UserRepository
@@ -173,13 +173,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
             # Get database client
             db_client = get_db_client()
 
-            # Initialize repositories and service
+            # Initialize repositories and wallet auth provider
             auth_repo = AuthRepository(db_client)
             user_repo = UserRepository(db_client)
-            auth_service = AuthService(auth_repo, user_repo)
+            wallet_auth_provider = WalletAuthProvider(auth_repo, user_repo)
 
             # Validate session
-            session_data = await auth_service.validate_session(session_id)
+            session_data = await wallet_auth_provider.validate_session(session_id)
             if session_data:
                 logger.debug(f"Session validated successfully: {session_id}")
                 return session_data

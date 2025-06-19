@@ -7,7 +7,7 @@ from app.schemas.user_schema import UserCreate, UserResponse, UserUpdateRequest,
 from app.services.user_service import UserService
 from app.repositories.user_repo import UserRepository
 from app.repositories.auth_repo import AuthRepository
-from app.services.auth_service import AuthService
+from app.services.wallet_auth_provider import WalletAuthProvider
 from app.database import get_db_client
 from app.utilities.auth_middleware import get_current_user, get_wallet_address
 
@@ -122,10 +122,10 @@ async def update_user(
         # Initialize repositories and service
         auth_repo = AuthRepository(db_client)
         user_repo = UserRepository(db_client)
-        auth_service = AuthService(auth_repo, user_repo)
+        wallet_auth_provider = WalletAuthProvider(auth_repo, user_repo)
         
         # Validate session directly
-        session_data = await auth_service.validate_session(session_id)
+        session_data = await wallet_auth_provider.validate_session(session_id)
         
         if session_data:
             # Use this session data if available

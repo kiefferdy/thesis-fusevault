@@ -30,7 +30,17 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,
-      retry: 1,
+      retry: (failureCount, error) => {
+        // Don't retry on authentication errors or network errors
+        if (error?.response?.status === 401 || 
+            error?.code === 'ECONNABORTED' ||
+            error?.message?.includes('Network Error') ||
+            error?.message?.includes('Backend server is not responding')) {
+          return false;
+        }
+        // Retry other errors up to 1 time
+        return failureCount < 1;
+      },
     },
   },
 });
@@ -75,7 +85,7 @@ function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <Router>
-          <AuthProvider>
+          <AuthProvider queryClient={queryClient}>
             <NavBar />
             <main>
               <Routes>

@@ -64,7 +64,7 @@ class TestAuthHandlerLogic:
         assert cookie_args["key"] == "session_id"
         assert cookie_args["value"] == session_id
         assert cookie_args["httponly"] is True
-        assert cookie_args["max_age"] == 3600  # 1 hour
+        assert cookie_args["max_age"] == 86400  # 24 hours (JWT expiration)
         assert cookie_args["samesite"] == "lax"
     
     @pytest.mark.asyncio

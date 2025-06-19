@@ -15,7 +15,7 @@ from app.services.transaction_service import TransactionService
 from app.repositories.asset_repo import AssetRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.repositories.auth_repo import AuthRepository
-from app.services.auth_service import AuthService
+from app.services.wallet_auth_provider import WalletAuthProvider
 from app.database import get_db_client
 from app.utilities.auth_middleware import get_current_user, get_wallet_address
 

@@ -1,25 +1,26 @@
 from typing import Dict, Any, Optional
 from fastapi import HTTPException, Response, Request
 import logging
-from app.services.auth_service import AuthService
+from app.services.wallet_auth_provider import WalletAuthProvider
 from app.schemas.auth_schema import AuthenticationRequest, NonceResponse
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 class AuthHandler:
     """
     Handler for authentication-related operations.
-    Acts as a bridge between API routes and the auth service layer.
+    Acts as a bridge between API routes and the wallet auth provider layer.
     """
     
-    def __init__(self, auth_service: AuthService):
+    def __init__(self, wallet_auth_provider: WalletAuthProvider):
         """
-        Initialize with auth service.
+        Initialize with wallet auth provider.
         
         Args:
-            auth_service: Service for authentication operations
+            wallet_auth_provider: Wallet-based authentication provider
         """
-        self.auth_service = auth_service
+        self.auth_service = wallet_auth_provider
         
     async def get_nonce(self, wallet_address: str) -> NonceResponse:
         """
@@ -74,29 +75,36 @@ class AuthHandler:
             if not success:
                 raise HTTPException(status_code=401, detail=message)
                 
-            # Create session
-            session_id = await self.auth_service.create_session(request.wallet_address)
+            # Calculate session duration from JWT configuration
+            session_duration_seconds = settings.jwt_expiration_minutes * 60
+            
+            # Create session with configured duration
+            session_id = await self.auth_service.create_session(
+                request.wallet_address,
+                duration=session_duration_seconds
+            )
             
             if not session_id:
                 raise HTTPException(status_code=500, detail="Failed to create session")
                 
-            # Set session cookie
+            # Set session cookie with configured duration
             response.set_cookie(
                 key="session_id",
                 value=session_id,
                 httponly=True,
-                max_age=3600,  # 1 hour
+                max_age=session_duration_seconds,
                 samesite="lax",
                 secure=False,  # Allow non-HTTPS for development
                 path="/"  # Ensure cookie is available for all paths
             )
             
-            logger.debug(f"Set session cookie for {request.wallet_address}: {session_id}")
+            logger.info(f"Created session for {request.wallet_address} with {session_duration_seconds}s duration")
             
             return {
                 "status": "success",
                 "message": "Authentication successful",
-                "wallet_address": request.wallet_address
+                "wallet_address": request.wallet_address,
+                "expires_in": session_duration_seconds
             }
             
         except HTTPException:

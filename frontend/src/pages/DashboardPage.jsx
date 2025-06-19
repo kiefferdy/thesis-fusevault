@@ -64,7 +64,7 @@ function DashboardPage() {
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [isUsernameValid, setIsUsernameValid] = useState(false);
-  const { currentAccount } = useAuth();
+  const { currentAccount, isAuthenticated } = useAuth();
   const { user, isLoading: userLoading, register, onboard, isRegistering, isOnboarding, error: userError } = useUser();
   const { assets, isLoading: assetsLoading } = useAssets();
   const {
@@ -78,10 +78,10 @@ function DashboardPage() {
 
   // Fetch all transactions when dashboard loads
   useEffect(() => {
-    if (currentAccount) {
+    if (currentAccount && isAuthenticated) {
       getAllTransactions();
     }
-  }, [currentAccount, getAllTransactions]);
+  }, [currentAccount, isAuthenticated, getAllTransactions]);
 
   // Calculate action counts from all transactions
   const actionCounts = useMemo(() => {

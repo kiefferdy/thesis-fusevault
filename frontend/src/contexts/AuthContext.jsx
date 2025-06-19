@@ -6,17 +6,16 @@ import { authService } from '../services/authService';
 
 const AuthContext = createContext(null);
 
-export const AuthProvider = ({ children }) => {
+export const AuthProvider = ({ children, queryClient }) => {
   const [currentAccount, setCurrentAccount] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
 
-  // Check if MetaMask is installed
+  // Check if MetaMask is installed and validate session
   const checkIfWalletIsConnected = async () => {
     try {
-      
       const { ethereum } = window;
       
       if (!ethereum) {
@@ -32,30 +31,98 @@ export const AuthProvider = ({ children }) => {
         const account = accounts[0];
         setCurrentAccount(account);
         
-        // Check if user has active session
-        console.log("Checking for active session...");
-        try {
-          const sessionData = await authService.validateSession();
-          if (sessionData) {
-            console.log("Valid session found:", sessionData);
-            setIsAuthenticated(true);
-            // Store auth state in localStorage for persistence
-            localStorage.setItem('isAuthenticated', 'true');
+        // Check if localStorage indicates user was authenticated
+        const storedAuthState = localStorage.getItem('isAuthenticated') === 'true';
+        
+        if (storedAuthState) {
+          // Validate session with backend
+          console.log("Checking for active session...");
+          try {
+            const sessionData = await authService.validateSession();
+            if (sessionData && sessionData.walletAddress.toLowerCase() === account.toLowerCase()) {
+              console.log("Valid session found:", sessionData);
+              setIsAuthenticated(true);
+            } else {
+              console.log('Session validation failed or wallet mismatch');
+              handleSessionExpired();
+            }
+          } catch (error) {
+            // 401 errors indicate expired/invalid session
+            if (error.response && error.response.status === 401) {
+              console.log('Session expired or invalid');
+              handleSessionExpired();
+            } else {
+              console.error('Error validating session:', error);
+              handleSessionExpired();
+            }
           }
-        } catch (error) {
-          // 401 errors are expected when not logged in
-          if (error.response && error.response.status === 401) {
-            console.log('No active session found');
-          } else {
-            console.error('Error validating session:', error);
-          }
+        }
+      } else {
+        // No wallet connected, clear any stored auth state
+        if (localStorage.getItem('isAuthenticated')) {
+          localStorage.removeItem('isAuthenticated');
+          setIsAuthenticated(false);
         }
       }
     } catch (error) {
       console.error("Error during wallet connection check:", error);
-      // Don't show errors during initial load
+      handleSessionExpired();
     }
     setIsLoading(false);
+  };
+
+  // Handle expired or invalid sessions
+  const handleSessionExpired = (showMessage = true) => {
+    // Check if user was previously authenticated before clearing
+    const wasAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
+    
+    setIsAuthenticated(false);
+    setCurrentAccount(null);
+    localStorage.removeItem('isAuthenticated');
+    
+    // Clear all React Query cache and cancel ongoing requests
+    if (queryClient) {
+      queryClient.cancelQueries();
+      queryClient.clear();
+    }
+    
+    // Show message only if requested and user was previously authenticated
+    if (showMessage && wasAuthenticated) {
+      toast.error('Your session has expired. Please sign in again.');
+      
+      // Redirect to home if on protected routes
+      const protectedRoutes = ['/dashboard', '/profile', '/upload', '/history', '/api-keys'];
+      const currentPath = window.location.pathname;
+      
+      if (protectedRoutes.some(route => currentPath.startsWith(route))) {
+        navigate('/');
+      }
+    }
+  };
+
+  // Validate current session immediately (for protected route navigation)
+  const validateSessionNow = async () => {
+    if (!isAuthenticated) {
+      return false;
+    }
+
+    try {
+      const sessionData = await authService.validateSession();
+      if (sessionData && sessionData.walletAddress.toLowerCase() === currentAccount?.toLowerCase()) {
+        return true;
+      } else {
+        handleSessionExpired(true);
+        return false;
+      }
+    } catch (error) {
+      if (error.response && error.response.status === 401) {
+        handleSessionExpired(true);
+      } else {
+        console.error('Error validating session:', error);
+        handleSessionExpired(true);
+      }
+      return false;
+    }
   };
 
   // Connect wallet
@@ -138,36 +205,39 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsLoading(true);
       
+      // Immediately set auth state to false to stop all queries
+      setIsAuthenticated(false);
+      setCurrentAccount(null);
+      localStorage.removeItem('isAuthenticated');
       
-      // Call logout API
-      const response = await authService.logout();
-      
-      if (response.status === 'success') {
-        setIsAuthenticated(false);
-        localStorage.removeItem('isAuthenticated');
-        toast.success('Logged out successfully');
-        navigate('/');
-      } else {
-        toast.error('Logout failed: ' + response.message);
+      // Clear all React Query cache and cancel ongoing requests
+      if (queryClient) {
+        queryClient.cancelQueries();
+        queryClient.clear();
       }
       
+      // Call logout API (after stopping queries)
+      try {
+        const response = await authService.logout();
+        if (response.status === 'success') {
+          toast.success('Logged out successfully');
+        }
+      } catch (error) {
+        // Logout API call failed, but we've already cleared local state
+        console.log('Logout API call failed, but local logout completed');
+      }
+      
+      navigate('/');
       setIsLoading(false);
     } catch (error) {
       console.error('Error during logout:', error);
       setIsLoading(false);
-      toast.error('Logout failed');
     }
   };
 
   // Check wallet connection on initial load
   useEffect(() => {
     checkIfWalletIsConnected();
-    
-    // Check localStorage for persistent auth state
-    const storedAuthState = localStorage.getItem('isAuthenticated') === 'true';
-    if (storedAuthState) {
-      setIsAuthenticated(true);
-    }
     
     // Handle account changes
     if (window.ethereum) {
@@ -190,11 +260,48 @@ export const AuthProvider = ({ children }) => {
       });
     }
     
+    // Listen for auth:unauthorized events from API client
+    const handleUnauthorized = (event) => {
+      console.log('Received unauthorized event from API client:', event.detail);
+      handleSessionExpired(true);
+    };
+
+    // Listen for logout in other tabs via localStorage changes
+    const handleStorageChange = (event) => {
+      // Detect when isAuthenticated is removed in another tab
+      if (event.key === 'isAuthenticated' && event.oldValue === 'true' && event.newValue === null) {
+        console.log('Logout detected in another tab');
+        setIsAuthenticated(false);
+        setCurrentAccount(null);
+        
+        // Clear all React Query cache and cancel ongoing requests
+        if (queryClient) {
+          queryClient.cancelQueries();
+          queryClient.clear();
+        }
+        
+        toast('You have been logged out in another tab.');
+        
+        // Redirect to home if on protected routes
+        const protectedRoutes = ['/dashboard', '/profile', '/upload', '/history', '/api-keys'];
+        const currentPath = window.location.pathname;
+        
+        if (protectedRoutes.some(route => currentPath.startsWith(route))) {
+          navigate('/');
+        }
+      }
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    window.addEventListener('storage', handleStorageChange);
+    
     // Cleanup
     return () => {
       if (window.ethereum && window.ethereum.removeListener) {
         window.ethereum.removeListener('accountsChanged', () => {});
       }
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, [navigate]);
 
@@ -206,7 +313,8 @@ export const AuthProvider = ({ children }) => {
         isLoading,
         connectWallet,
         signIn,
-        signOut
+        signOut,
+        validateSessionNow
       }}
     >
       {children}

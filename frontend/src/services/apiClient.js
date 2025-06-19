@@ -50,16 +50,26 @@ apiClient.interceptors.response.use(
     
     // Handle specific status codes
     switch (error.response.status) {
-      case 401:
-        // For validation endpoints, we don't need to show errors for 401
-        // as it's expected behavior when not logged in
-        if (error.config.url === '/auth/validate') {
+      case 401: {
+        // Skip event for validation endpoints and nonce endpoints
+        const isValidationEndpoint = error.config.url === '/auth/validate';
+        const isNonceEndpoint = error.config.url?.includes('/auth/nonce/');
+        
+        if (isValidationEndpoint) {
           console.log('Session validation failed - not logged in');
+        } else if (isNonceEndpoint) {
+          console.log('Nonce request failed - expected during initial auth');
         } else {
-          console.error('Authentication error: Not authenticated or session expired');
-          window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+          console.error('Authentication error: Session expired or invalid');
+          window.dispatchEvent(new CustomEvent('auth:unauthorized', {
+            detail: { 
+              url: error.config.url,
+              message: 'Your session has expired. Please sign in again.'
+            }
+          }));
         }
         break;
+      }
       case 403:
         console.error('Authorization error: Insufficient permissions');
         break;

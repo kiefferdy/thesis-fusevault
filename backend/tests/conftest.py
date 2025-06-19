@@ -99,7 +99,7 @@ def mock_asset_service():
 
 @pytest.fixture
 def mock_auth_service():
-    """Create mock AuthService."""
+    """Create mock WalletAuthProvider (formerly AuthService)."""
     service = MagicMock()
     service.get_nonce = AsyncMock()
     service.generate_nonce = AsyncMock()

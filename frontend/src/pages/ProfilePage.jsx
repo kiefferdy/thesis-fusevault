@@ -42,16 +42,16 @@ import UsernameInput from '../components/UsernameInput';
 
 function ProfilePage() {
   const { user, isLoading, isError, update, isUpdating, updateUsername, isUpdatingUsername } = useUser();
-  const { currentAccount, signOut } = useAuth();
+  const { currentAccount, isAuthenticated, signOut } = useAuth();
   const { summary, isSummaryLoading, allTransactions, getAllTransactions } = useTransactions();
   const { assets } = useAssets();
   
   // Fetch all transactions when profile loads
   useEffect(() => {
-    if (currentAccount) {
+    if (currentAccount && isAuthenticated) {
       getAllTransactions();
     }
-  }, [currentAccount, getAllTransactions]);
+  }, [currentAccount, isAuthenticated, getAllTransactions]);
   const [tabValue, setTabValue] = useState(0);
   
   // Initialize form data from user data

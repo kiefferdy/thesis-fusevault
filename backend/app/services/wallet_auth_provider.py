@@ -12,10 +12,11 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-class AuthService:
+class WalletAuthProvider:
     """
-    Service for authentication-related operations.
-    Handles nonce generation, verification, and session management.
+    Wallet-based authentication provider for MetaMask and other Web3 wallets.
+    Handles nonce generation, signature verification, and session management
+    using cryptographic wallet signatures for authentication.
     """
     
     def __init__(
@@ -37,7 +38,7 @@ class AuthService:
         self.user_service = user_service
         
         # Initialize Web3
-        # The auth service works without a provider for signature verification
+        # The wallet auth provider works without a provider for signature verification
         self.web3 = Web3()
         
     async def get_nonce(self, wallet_address: str) -> NonceResponse:
@@ -130,7 +131,7 @@ class AuthService:
         signature: str
     ) -> Tuple[bool, str]:
         """
-        Authenticate a user with a signature.
+        Authenticate a user with a wallet signature.
         
         Args:
             wallet_address: The wallet address to authenticate
@@ -235,10 +236,6 @@ class AuthService:
                 "isActive": True
             })
             
-            if session:
-                # Extend session duration on successful validation
-                await self.extend_session(session_id)
-                
             return session
             
         except Exception as e:
@@ -265,13 +262,13 @@ class AuthService:
             logger.error(f"Error logging out: {str(e)}")
             return False
             
-    async def extend_session(self, session_id: str, duration: int = 3600) -> bool:
+    async def extend_session(self, session_id: str, duration: int = None) -> bool:
         """
         Extend the duration of a session.
         
         Args:
             session_id: The session ID to extend
-            duration: Additional duration in seconds (default: 1 hour)
+            duration: Duration in seconds (defaults to JWT expiration if None)
             
         Returns:
             True if session was extended, False otherwise
@@ -281,6 +278,10 @@ class AuthService:
             
             if not session:
                 return False
+            
+            # Use JWT expiration if no duration specified
+            if duration is None:
+                duration = settings.jwt_expiration_minutes * 60
             
             # Set new expiry from current time
             new_expiry = datetime.now(timezone.utc) + timedelta(seconds=duration)
