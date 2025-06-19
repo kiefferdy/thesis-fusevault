@@ -93,6 +93,31 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Validate current session immediately (for protected route navigation)
+  const validateSessionNow = async () => {
+    if (!isAuthenticated) {
+      return false;
+    }
+
+    try {
+      const sessionData = await authService.validateSession();
+      if (sessionData && sessionData.walletAddress.toLowerCase() === currentAccount?.toLowerCase()) {
+        return true;
+      } else {
+        handleSessionExpired(true);
+        return false;
+      }
+    } catch (error) {
+      if (error.response && error.response.status === 401) {
+        handleSessionExpired(true);
+      } else {
+        console.error('Error validating session:', error);
+        handleSessionExpired(true);
+      }
+      return false;
+    }
+  };
+
   // Connect wallet
   const connectWallet = async () => {
     try {
@@ -225,7 +250,27 @@ export const AuthProvider = ({ children }) => {
       handleSessionExpired(true);
     };
 
+    // Listen for logout in other tabs via localStorage changes
+    const handleStorageChange = (event) => {
+      // Detect when isAuthenticated is removed in another tab
+      if (event.key === 'isAuthenticated' && event.oldValue === 'true' && event.newValue === null) {
+        console.log('Logout detected in another tab');
+        setIsAuthenticated(false);
+        setCurrentAccount(null);
+        toast('You have been logged out in another tab.');
+        
+        // Redirect to home if on protected routes
+        const protectedRoutes = ['/dashboard', '/profile', '/upload', '/history', '/api-keys'];
+        const currentPath = window.location.pathname;
+        
+        if (protectedRoutes.some(route => currentPath.startsWith(route))) {
+          navigate('/');
+        }
+      }
+    };
+
     window.addEventListener('auth:unauthorized', handleUnauthorized);
+    window.addEventListener('storage', handleStorageChange);
     
     // Cleanup
     return () => {
@@ -233,6 +278,7 @@ export const AuthProvider = ({ children }) => {
         window.ethereum.removeListener('accountsChanged', () => {});
       }
       window.removeEventListener('auth:unauthorized', handleUnauthorized);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, [navigate]);
 
@@ -244,7 +290,8 @@ export const AuthProvider = ({ children }) => {
         isLoading,
         connectWallet,
         signIn,
-        signOut
+        signOut,
+        validateSessionNow
       }}
     >
       {children}

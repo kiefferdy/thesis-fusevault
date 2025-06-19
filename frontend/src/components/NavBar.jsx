@@ -26,19 +26,20 @@ import {
   VpnKey,
   Block
 } from '@mui/icons-material';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import WalletButton from './WalletButton';
 import { useAuth } from '../contexts/AuthContext';
 import useApiKeysStatus from '../hooks/useApiKeysStatus';
 
 function NavBar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, validateSessionNow } = useAuth();
   const { isDisabled: apiKeysDisabled, isEnabled: apiKeysEnabled } = useApiKeysStatus({
     pollingInterval: 0, // Disable polling in NavBar
     refetchOnFocus: true // But still refresh on window focus
   });
   const location = useLocation();
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -72,6 +73,19 @@ function NavBar() {
 
   const isActivePath = (path) => {
     return location.pathname === path;
+  };
+
+  // Handle navigation with session validation for protected routes
+  const handleNavigate = async (path, requiresAuth) => {
+    if (requiresAuth && isAuthenticated) {
+      // Validate session before navigating to protected route
+      const isValid = await validateSessionNow();
+      if (!isValid) {
+        // Session validation will handle the logout and redirect
+        return;
+      }
+    }
+    navigate(path);
   };
 
   return (
@@ -111,8 +125,7 @@ function NavBar() {
               {filteredItems.map((item) => (
                 <Box
                   key={item.text}
-                  component={Link}
-                  to={item.path}
+                  onClick={() => handleNavigate(item.path, item.requiresAuth)}
                   sx={{ 
                     textDecoration: 'none', 
                     color: 'white',
@@ -123,7 +136,11 @@ function NavBar() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1,
-                    position: 'relative'
+                    position: 'relative',
+                    cursor: 'pointer',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                    }
                   }}
                 >
                   {item.icon}
@@ -161,8 +178,7 @@ function NavBar() {
               <ListItem 
                 button 
                 key={item.text} 
-                component={Link} 
-                to={item.path}
+                onClick={() => handleNavigate(item.path, item.requiresAuth)}
                 selected={isActivePath(item.path)}
               >
                 <ListItemIcon>
