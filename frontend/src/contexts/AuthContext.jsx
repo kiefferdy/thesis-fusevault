@@ -6,7 +6,7 @@ import { authService } from '../services/authService';
 
 const AuthContext = createContext(null);
 
-export const AuthProvider = ({ children }) => {
+export const AuthProvider = ({ children, queryClient }) => {
   const [currentAccount, setCurrentAccount] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,7 +77,14 @@ export const AuthProvider = ({ children }) => {
     const wasAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
     
     setIsAuthenticated(false);
+    setCurrentAccount(null);
     localStorage.removeItem('isAuthenticated');
+    
+    // Clear all React Query cache and cancel ongoing requests
+    if (queryClient) {
+      queryClient.cancelQueries();
+      queryClient.clear();
+    }
     
     // Show message only if requested and user was previously authenticated
     if (showMessage && wasAuthenticated) {
@@ -198,24 +205,33 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsLoading(true);
       
+      // Immediately set auth state to false to stop all queries
+      setIsAuthenticated(false);
+      setCurrentAccount(null);
+      localStorage.removeItem('isAuthenticated');
       
-      // Call logout API
-      const response = await authService.logout();
-      
-      if (response.status === 'success') {
-        setIsAuthenticated(false);
-        localStorage.removeItem('isAuthenticated');
-        toast.success('Logged out successfully');
-        navigate('/');
-      } else {
-        toast.error('Logout failed: ' + response.message);
+      // Clear all React Query cache and cancel ongoing requests
+      if (queryClient) {
+        queryClient.cancelQueries();
+        queryClient.clear();
       }
       
+      // Call logout API (after stopping queries)
+      try {
+        const response = await authService.logout();
+        if (response.status === 'success') {
+          toast.success('Logged out successfully');
+        }
+      } catch (error) {
+        // Logout API call failed, but we've already cleared local state
+        console.log('Logout API call failed, but local logout completed');
+      }
+      
+      navigate('/');
       setIsLoading(false);
     } catch (error) {
       console.error('Error during logout:', error);
       setIsLoading(false);
-      toast.error('Logout failed');
     }
   };
 
@@ -257,6 +273,13 @@ export const AuthProvider = ({ children }) => {
         console.log('Logout detected in another tab');
         setIsAuthenticated(false);
         setCurrentAccount(null);
+        
+        // Clear all React Query cache and cancel ongoing requests
+        if (queryClient) {
+          queryClient.cancelQueries();
+          queryClient.clear();
+        }
+        
         toast('You have been logged out in another tab.');
         
         // Redirect to home if on protected routes

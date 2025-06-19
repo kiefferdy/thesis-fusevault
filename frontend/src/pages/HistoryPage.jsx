@@ -20,7 +20,7 @@ import TransactionsList from '../components/TransactionsList';
 import { useTransactions } from '../hooks/useTransactions';
 
 function HistoryPage() {
-  const { currentAccount } = useAuth();
+  const { currentAccount, isAuthenticated } = useAuth();
   const { summary, isSummaryLoading } = useTransactions();
   
   const [transactions, setTransactions] = useState([]);
@@ -31,7 +31,7 @@ function HistoryPage() {
   // Fetch transaction data
   useEffect(() => {
     const fetchTransactions = async () => {
-      if (!currentAccount) return;
+      if (!currentAccount || !isAuthenticated) return;
       
       setLoading(true);
       try {
@@ -46,7 +46,7 @@ function HistoryPage() {
     };
 
     fetchTransactions();
-  }, [currentAccount]);
+  }, [currentAccount, isAuthenticated]);
 
   // Filter transactions based on action type and search term
   const filteredTransactions = transactions.filter(tx => {

@@ -11,7 +11,6 @@ export const useTransactions = () => {
     queryFn: () => currentAccount ? transactionService.getTransactionSummary(currentAccount) : { summary: {} },
     enabled: !!currentAccount && isAuthenticated,
     staleTime: 60000, // 1 minute
-    retry: 3
   });
 
   // Query for recent transactions
@@ -20,7 +19,6 @@ export const useTransactions = () => {
     queryFn: () => currentAccount ? transactionService.getRecentTransactions(currentAccount) : { transactions: [] },
     enabled: !!currentAccount && isAuthenticated,
     staleTime: 30000, // 30 seconds
-    retry: 3
   });
   
   // Query for all transactions (automatically executed when authenticated)
@@ -29,7 +27,6 @@ export const useTransactions = () => {
     queryFn: () => currentAccount ? transactionService.getAllTransactions(currentAccount) : { transactions: [] },
     enabled: !!currentAccount && isAuthenticated, // Execute when authenticated
     staleTime: 60000, // 1 minute
-    retry: 3
   });
 
   // Function to get asset history (called on demand)
@@ -74,7 +71,13 @@ export const useTransactions = () => {
     recentError: recentQuery.error,
     getAssetHistory,
     // Add methods for all transactions
-    getAllTransactions: () => allTransactionsQuery.refetch(),
+    getAllTransactions: () => {
+      if (!isAuthenticated || !currentAccount) {
+        console.log('Skipping getAllTransactions - not authenticated');
+        return Promise.resolve({ data: { transactions: [] } });
+      }
+      return allTransactionsQuery.refetch();
+    },
     allTransactions: allTransactionsQuery.data?.transactions || [],
     isAllTransactionsLoading: allTransactionsQuery.isLoading,
     isAllTransactionsError: allTransactionsQuery.isError

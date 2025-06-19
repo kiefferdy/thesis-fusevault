@@ -4,16 +4,15 @@ import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 
 export const useAssets = () => {
-  const { currentAccount } = useAuth();
+  const { currentAccount, isAuthenticated } = useAuth();
   const queryClient = useQueryClient();
 
   // Query for user's assets
   const userAssetsQuery = useQuery({
     queryKey: ['assets', currentAccount],
     queryFn: () => currentAccount ? assetService.getUserAssets(currentAccount) : { assets: [] },
-    enabled: !!currentAccount,
+    enabled: !!currentAccount && isAuthenticated,
     staleTime: 30000, // 30 seconds
-    retry: 3,
     refetchOnWindowFocus: true
   });
 
