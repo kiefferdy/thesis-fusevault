@@ -235,10 +235,6 @@ class AuthService:
                 "isActive": True
             })
             
-            if session:
-                # Extend session duration on successful validation
-                await self.extend_session(session_id)
-                
             return session
             
         except Exception as e:
@@ -265,13 +261,13 @@ class AuthService:
             logger.error(f"Error logging out: {str(e)}")
             return False
             
-    async def extend_session(self, session_id: str, duration: int = 3600) -> bool:
+    async def extend_session(self, session_id: str, duration: int = None) -> bool:
         """
         Extend the duration of a session.
         
         Args:
             session_id: The session ID to extend
-            duration: Additional duration in seconds (default: 1 hour)
+            duration: Duration in seconds (defaults to JWT expiration if None)
             
         Returns:
             True if session was extended, False otherwise
@@ -281,6 +277,10 @@ class AuthService:
             
             if not session:
                 return False
+            
+            # Use JWT expiration if no duration specified
+            if duration is None:
+                duration = settings.jwt_expiration_minutes * 60
             
             # Set new expiry from current time
             new_expiry = datetime.now(timezone.utc) + timedelta(seconds=duration)

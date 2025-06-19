@@ -13,10 +13,9 @@ export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
 
 
-  // Check if MetaMask is installed
+  // Check if MetaMask is installed and validate session
   const checkIfWalletIsConnected = async () => {
     try {
-      
       const { ethereum } = window;
       
       if (!ethereum) {
@@ -32,30 +31,66 @@ export const AuthProvider = ({ children }) => {
         const account = accounts[0];
         setCurrentAccount(account);
         
-        // Check if user has active session
-        console.log("Checking for active session...");
-        try {
-          const sessionData = await authService.validateSession();
-          if (sessionData) {
-            console.log("Valid session found:", sessionData);
-            setIsAuthenticated(true);
-            // Store auth state in localStorage for persistence
-            localStorage.setItem('isAuthenticated', 'true');
+        // Check if localStorage indicates user was authenticated
+        const storedAuthState = localStorage.getItem('isAuthenticated') === 'true';
+        
+        if (storedAuthState) {
+          // Validate session with backend
+          console.log("Checking for active session...");
+          try {
+            const sessionData = await authService.validateSession();
+            if (sessionData && sessionData.walletAddress.toLowerCase() === account.toLowerCase()) {
+              console.log("Valid session found:", sessionData);
+              setIsAuthenticated(true);
+            } else {
+              console.log('Session validation failed or wallet mismatch');
+              handleSessionExpired();
+            }
+          } catch (error) {
+            // 401 errors indicate expired/invalid session
+            if (error.response && error.response.status === 401) {
+              console.log('Session expired or invalid');
+              handleSessionExpired();
+            } else {
+              console.error('Error validating session:', error);
+              handleSessionExpired();
+            }
           }
-        } catch (error) {
-          // 401 errors are expected when not logged in
-          if (error.response && error.response.status === 401) {
-            console.log('No active session found');
-          } else {
-            console.error('Error validating session:', error);
-          }
+        }
+      } else {
+        // No wallet connected, clear any stored auth state
+        if (localStorage.getItem('isAuthenticated')) {
+          localStorage.removeItem('isAuthenticated');
+          setIsAuthenticated(false);
         }
       }
     } catch (error) {
       console.error("Error during wallet connection check:", error);
-      // Don't show errors during initial load
+      handleSessionExpired();
     }
     setIsLoading(false);
+  };
+
+  // Handle expired or invalid sessions
+  const handleSessionExpired = (showMessage = true) => {
+    // Check if user was previously authenticated before clearing
+    const wasAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
+    
+    setIsAuthenticated(false);
+    localStorage.removeItem('isAuthenticated');
+    
+    // Show message only if requested and user was previously authenticated
+    if (showMessage && wasAuthenticated) {
+      toast.error('Your session has expired. Please sign in again.');
+      
+      // Redirect to home if on protected routes
+      const protectedRoutes = ['/dashboard', '/profile', '/upload', '/history', '/api-keys'];
+      const currentPath = window.location.pathname;
+      
+      if (protectedRoutes.some(route => currentPath.startsWith(route))) {
+        navigate('/');
+      }
+    }
   };
 
   // Connect wallet
@@ -163,12 +198,6 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     checkIfWalletIsConnected();
     
-    // Check localStorage for persistent auth state
-    const storedAuthState = localStorage.getItem('isAuthenticated') === 'true';
-    if (storedAuthState) {
-      setIsAuthenticated(true);
-    }
-    
     // Handle account changes
     if (window.ethereum) {
       window.ethereum.on('accountsChanged', (accounts) => {
@@ -190,11 +219,20 @@ export const AuthProvider = ({ children }) => {
       });
     }
     
+    // Listen for auth:unauthorized events from API client
+    const handleUnauthorized = (event) => {
+      console.log('Received unauthorized event from API client:', event.detail);
+      handleSessionExpired(true);
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    
     // Cleanup
     return () => {
       if (window.ethereum && window.ethereum.removeListener) {
         window.ethereum.removeListener('accountsChanged', () => {});
       }
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
     };
   }, [navigate]);
 
