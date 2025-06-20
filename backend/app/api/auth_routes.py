@@ -8,6 +8,7 @@ from app.services.user_service import UserService
 from app.repositories.auth_repo import AuthRepository
 from app.repositories.user_repo import UserRepository
 from app.database import get_db_client
+from app.config import settings
 
 # Setup router
 router = APIRouter(
@@ -96,7 +97,12 @@ async def logout(
         # If session is already invalid, just clear the cookie and return success
         if e.status_code == 401:
             logger.info("No valid session found during logout. Clearing cookie anyway.")
-            response.delete_cookie(key="session_id")
+            response.delete_cookie(
+                key="session_id",
+                secure=settings.is_production,
+                samesite="lax",
+                path="/"
+            )
             return LogoutResponse(status="success", message="Logged out successfully")
         else:
             raise

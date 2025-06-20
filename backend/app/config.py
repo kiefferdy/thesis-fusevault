@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     # Application settings
     debug: bool = Field(default=False, alias="DEBUG")
     cors_origins: str = Field(default="http://localhost:3001", alias="CORS_ORIGINS")
+    is_production: bool = Field(default=False, alias="IS_PRODUCTION")
     
     # API Key settings (new)
     api_key_auth_enabled: bool = Field(default=False, alias="API_KEY_AUTH_ENABLED")

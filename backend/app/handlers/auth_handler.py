@@ -94,7 +94,7 @@ class AuthHandler:
                 httponly=True,
                 max_age=session_duration_seconds,
                 samesite="lax",
-                secure=False,  # Allow non-HTTPS for development
+                secure=settings.is_production,  # Secure cookies in production
                 path="/"  # Ensure cookie is available for all paths
             )
             
@@ -162,7 +162,12 @@ class AuthHandler:
                 raise HTTPException(status_code=500, detail="Failed to invalidate session")
                 
             # Clear session cookie
-            response.delete_cookie(key="session_id")
+            response.delete_cookie(
+                key="session_id",
+                secure=settings.is_production,
+                samesite="lax",
+                path="/"
+            )
             
             return {
                 "status": "success",
