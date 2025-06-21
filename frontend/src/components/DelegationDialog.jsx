@@ -42,10 +42,11 @@ const DelegationDialog = ({
     try {
       await delegate();
       await refreshStatus();
-      setActiveStep(2); // Move to success step
+      setActiveStep(2); // Move to success step only after transaction is fully completed
     } catch (error) {
       console.error('Delegation failed:', error);
       // Error handling is done in the hook
+      // Don't advance to success step if there's an error
     }
   };
 
@@ -152,27 +153,11 @@ const DelegationDialog = ({
               </div>
             )}
 
-            <div className="action-buttons">
-              <button
-                className="btn btn-primary btn-large"
-                onClick={handleDelegate}
-                disabled={isDelegating || isDelegated || !hasWallet}
-              >
-                {isDelegating ? (
-                  <>
-                    <div className="spinner-small"></div>
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    🛡️ Approve Delegation
-                  </>
-                )}
-              </button>
-              {!hasWallet && (
-                <p className="wallet-warning">Please connect your wallet first</p>
-              )}
-            </div>
+            {!hasWallet && (
+              <div className="wallet-warning">
+                <p>Please connect your wallet first</p>
+              </div>
+            )}
           </div>
         </div>
       )
@@ -241,7 +226,8 @@ const DelegationDialog = ({
                   <div className="detail-row">
                     <span>Permissions:</span>
                     <div className="permissions">
-                      {delegationInfo.canUpdate && <span className="permission-badge">Update</span>}
+                      {delegationInfo.isDelegated && <span className="permission-badge">Read</span>}
+                      {delegationInfo.canUpdate && <span className="permission-badge">Write</span>}
                       {delegationInfo.canDelete && <span className="permission-badge">Delete</span>}
                     </div>
                   </div>
@@ -287,40 +273,57 @@ const DelegationDialog = ({
                 {steps[activeStep]?.content}
               </div>
 
-              <div className="step-navigation">
-                {activeStep > 0 && activeStep < 2 && (
-                  <button 
-                    className="btn btn-secondary"
-                    onClick={() => setActiveStep(activeStep - 1)}
-                  >
-                    Back
-                  </button>
-                )}
-                {activeStep < 1 && (
-                  <button 
-                    className="btn btn-primary"
-                    onClick={() => setActiveStep(activeStep + 1)}
-                  >
-                    Continue
-                  </button>
-                )}
-                {activeStep === 2 && (
-                  <button 
-                    className="btn btn-primary"
-                    onClick={handleClose}
-                  >
-                    Done
-                  </button>
-                )}
-              </div>
             </div>
           )}
         </div>
 
         <div className="dialog-footer">
-          <button className="btn btn-secondary" onClick={handleClose}>
-            {isDelegated || activeStep === 2 ? 'Close' : 'Cancel'}
-          </button>
+          {!isDelegated && (
+            <>
+              {activeStep > 0 && activeStep < 2 && (
+                <button 
+                  className="btn btn-secondary"
+                  onClick={() => setActiveStep(activeStep - 1)}
+                >
+                  Back
+                </button>
+              )}
+              {activeStep === 0 && (
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => setActiveStep(activeStep + 1)}
+                >
+                  Continue
+                </button>
+              )}
+              {activeStep === 1 && (
+                <button
+                  className="btn btn-primary"
+                  onClick={handleDelegate}
+                  disabled={isDelegating || isDelegated || !hasWallet}
+                >
+                  {isDelegating ? (
+                    <>
+                      <div className="spinner-small"></div>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      🛡️ Approve Delegation
+                    </>
+                  )}
+                </button>
+              )}
+              {activeStep === 2 && (
+                <button 
+                  className="btn btn-primary"
+                  onClick={handleClose}
+                >
+                  Done
+                </button>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

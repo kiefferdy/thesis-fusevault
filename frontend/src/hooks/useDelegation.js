@@ -94,12 +94,15 @@ export const useDelegation = (options = {}) => {
       // Step 2: Sign and send the transaction
       const tx = await signer.sendTransaction(txData.transaction);
       
-      // Step 3: Wait for confirmation
+      // Step 3: Wait for confirmation (this is where the delay happens)
       const receipt = await tx.wait();
       
       if (receipt.status === 0) {
         throw new Error('Transaction failed on blockchain');
       }
+
+      // Step 4: Wait a bit more for blockchain state to update
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       return { receipt, status, txHash: receipt.hash };
     },
