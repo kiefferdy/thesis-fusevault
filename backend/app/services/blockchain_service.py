@@ -139,6 +139,18 @@ class BlockchainService:
                 "stateMutability": "nonpayable",
                 "type": "function"
             },
+            {
+                "inputs": [
+                    {"internalType": "address", "name": "owner", "type": "address"},
+                    {"internalType": "address", "name": "delegate", "type": "address"}
+                ],
+                "name": "delegates",
+                "outputs": [
+                    {"internalType": "bool", "name": "", "type": "bool"}
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
 
             # Transfer Functions
             {
