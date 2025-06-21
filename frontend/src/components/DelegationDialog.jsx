@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { ethers } from 'ethers';
+import { toast } from 'react-hot-toast';
 import { useDelegation } from '../hooks/useDelegation';
 import delegationService from '../services/delegationService';
 import './DelegationDialog.css';
@@ -14,18 +16,41 @@ const DelegationDialog = ({
 }) => {
   const [activeStep, setActiveStep] = useState(0);
   const [isClosing, setIsClosing] = useState(false);
+  const [isDelegatingLocal, setIsDelegatingLocal] = useState(false);
   
   const {
     serverInfo,
     isDelegated,
-    delegate,
     revoke,
     isDelegating,
     refreshStatus,
     getDelegationInfo,
     hasWallet,
-    error
+    error,
+    walletAddress
   } = useDelegation();
+
+  // Get signer for manual transaction handling
+  const [signer, setSigner] = useState(null);
+  
+  useEffect(() => {
+    const initializeSigner = async () => {
+      if (walletAddress && window.ethereum) {
+        try {
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          const walletSigner = await provider.getSigner();
+          setSigner(walletSigner);
+        } catch (error) {
+          console.error('Error initializing signer:', error);
+          setSigner(null);
+        }
+      } else {
+        setSigner(null);
+      }
+    };
+
+    initializeSigner();
+  }, [walletAddress]);
 
   const delegationInfo = getDelegationInfo();
   const explanations = delegationService.getDelegationExplanations();
@@ -39,14 +64,78 @@ const DelegationDialog = ({
 
   // Handle delegation action
   const handleDelegate = async () => {
+    if (!serverInfo?.server_wallet_address) {
+      toast.error('Server wallet address not available');
+      return;
+    }
+
+    if (!signer) {
+      toast.error('Wallet signer not available. Please ensure MetaMask is connected.');
+      return;
+    }
+
+    setIsDelegatingLocal(true);
+    toast.loading('Preparing delegation transaction...', { id: 'delegation-loading' });
+
     try {
-      await delegate();
+      // Phase 1: Prepare transaction (stay on step 1, just show loading on button)
+      const txData = await delegationService.prepareDelegationTransaction(
+        serverInfo.server_wallet_address,
+        true
+      );
+
+      if (!txData.success) {
+        throw new Error(txData.error || 'Failed to prepare delegation transaction');
+      }
+
+      // Phase 2: Sign transaction (MetaMask prompt - still on step 1)
+      toast.loading('Please sign the transaction in MetaMask...', { id: 'delegation-loading' });
+      const tx = await signer.sendTransaction(txData.transaction);
+      
+      // Phase 3: Transaction sent! Now move to confirming step
+      toast.loading('Transaction submitted. Waiting for confirmation...', { id: 'delegation-loading' });
+      setActiveStep(2);
+      
+      // Phase 4: Wait for blockchain confirmation
+      const receipt = await tx.wait();
+      
+      if (receipt.status === 0) {
+        throw new Error('Transaction failed on blockchain');
+      }
+
+      // Phase 5: Refresh status and move to success
       await refreshStatus();
-      setActiveStep(2); // Move to success step only after transaction is fully completed
+      setActiveStep(3);
+      
+      toast.success(
+        `Delegation successful! Transaction: ${delegationService.formatAddress(receipt.hash)}`, 
+        { id: 'delegation-loading', duration: 5000 }
+      );
+      
     } catch (error) {
       console.error('Delegation failed:', error);
-      // Error handling is done in the hook
-      // Don't advance to success step if there's an error
+      
+      // Handle specific error types
+      let errorMessage = 'Delegation failed';
+      
+      if (error.code === 4001) {
+        errorMessage = 'Transaction rejected by user';
+      } else if (error.code === -32603) {
+        errorMessage = 'Network error - please check your connection';
+      } else if (error.message?.includes('insufficient funds')) {
+        errorMessage = 'Insufficient funds for gas fee';
+      } else if (error.message?.includes('nonce')) {
+        errorMessage = 'Transaction nonce error - please try again';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage, { id: 'delegation-loading' });
+      
+      // Stay on or go back to approval step if there's an error
+      setActiveStep(1);
+    } finally {
+      setIsDelegatingLocal(false);
     }
   };
 
@@ -163,6 +252,39 @@ const DelegationDialog = ({
       )
     },
     {
+      label: 'Transaction Confirming',
+      content: (
+        <div className="step-content">
+          <div className="step-header">
+            <h3>⏳ Confirming Transaction</h3>
+          </div>
+          <div className="confirming-content">
+            <div className="transaction-progress">
+              <div className="progress-spinner"></div>
+              <h4>Please wait while your transaction is being confirmed...</h4>
+              <p>
+                Your transaction has been submitted to the blockchain and is being processed. 
+                This usually takes 15-30 seconds on Sepolia testnet.
+              </p>
+            </div>
+            
+            <div className="info-box">
+              <h4>What's happening:</h4>
+              <ul>
+                <li>✅ Transaction signed and submitted</li>
+                <li>🔄 Waiting for blockchain confirmation</li>
+                <li>⏳ Processing delegation status update</li>
+              </ul>
+            </div>
+            
+            <div className="confirmation-note">
+              <p><strong>Note:</strong> Do not close this window or refresh the page.</p>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
       label: 'Delegation Complete',
       content: (
         <div className="step-content">
@@ -236,7 +358,7 @@ const DelegationDialog = ({
 
               <div className="management-actions">
                 <button 
-                  className="btn btn-danger"
+                  className="btn btn-danger btn-revoke"
                   onClick={handleRevoke}
                   disabled={isDelegating}
                 >
@@ -280,7 +402,8 @@ const DelegationDialog = ({
         <div className="dialog-footer">
           {!isDelegated && (
             <>
-              {activeStep > 0 && activeStep < 2 && (
+              {/* Back button for steps 1 only */}
+              {activeStep === 1 && (
                 <button 
                   className="btn btn-secondary"
                   onClick={() => setActiveStep(activeStep - 1)}
@@ -288,6 +411,8 @@ const DelegationDialog = ({
                   Back
                 </button>
               )}
+              
+              {/* Continue button for step 0 */}
               {activeStep === 0 && (
                 <button 
                   className="btn btn-primary"
@@ -296,13 +421,15 @@ const DelegationDialog = ({
                   Continue
                 </button>
               )}
+              
+              {/* Approve Delegation button for step 1 */}
               {activeStep === 1 && (
                 <button
                   className="btn btn-primary"
                   onClick={handleDelegate}
-                  disabled={isDelegating || isDelegated || !hasWallet}
+                  disabled={!hasWallet || isDelegatingLocal}
                 >
-                  {isDelegating ? (
+                  {isDelegatingLocal ? (
                     <>
                       <div className="spinner-small"></div>
                       Processing...
@@ -314,7 +441,11 @@ const DelegationDialog = ({
                   )}
                 </button>
               )}
-              {activeStep === 2 && (
+              
+              {/* No buttons for step 2 (transaction confirming) */}
+              
+              {/* Done button for step 3 */}
+              {activeStep === 3 && (
                 <button 
                   className="btn btn-primary"
                   onClick={handleClose}
