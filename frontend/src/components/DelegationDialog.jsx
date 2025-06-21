@@ -362,14 +362,16 @@ const DelegationDialog = ({
                   onClick={handleRevoke}
                   disabled={isDelegating}
                 >
-                  {isDelegating ? (
-                    <>
-                      <div className="spinner-small"></div>
-                      Revoking...
-                    </>
-                  ) : (
-                    'Revoke Delegation'
-                  )}
+                  <span style={{ display: 'contents' }}>
+                    {isDelegating ? (
+                      <>
+                        <div className="spinner-small"></div>
+                        Revoking...
+                      </>
+                    ) : (
+                      'Revoke Delegation'
+                    )}
+                  </span>
                 </button>
                 <p className="revoke-warning">
                   ⚠️ Revoking delegation will disable API key functionality

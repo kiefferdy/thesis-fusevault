@@ -536,7 +536,7 @@
 }
 
 .btn-revoke {
-  min-width: 185px;
+  min-width: 180px;
   white-space: nowrap;
 }
 
@@ -552,7 +552,10 @@
   border-top: 2px solid white;
   border-radius: 50%;
   animation: spin 1s linear infinite;
+  display: inline-flex;
   flex-shrink: 0;
+  margin-right: 0.5rem;
+  align-self: center;
 }
 
 /* Responsive design */
