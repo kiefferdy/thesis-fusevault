@@ -1096,6 +1096,37 @@ class BlockchainService:
             else:
                 raise HTTPException(status_code=500, detail=f"Failed to verify transaction: {str(e)}")
     
+    async def check_delegation(self, owner_address: str, delegate_address: str) -> bool:
+        """
+        Check if an address has been delegated by the owner.
+        
+        Args:
+            owner_address: The address of the owner
+            delegate_address: The address to check delegation for
+            
+        Returns:
+            True if delegated, False otherwise
+        """
+        try:
+            # Call the delegates mapping on the contract
+            is_delegated = self.contract.functions.delegates(
+                Web3.to_checksum_address(owner_address),
+                Web3.to_checksum_address(delegate_address)
+            ).call()
+            
+            logger.info(
+                f"Delegation check: {owner_address} -> {delegate_address} = {is_delegated}"
+            )
+            
+            return is_delegated
+            
+        except Exception as e:
+            logger.error(f"Error checking delegation: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Failed to check delegation: {str(e)}"
+            )
+
     def get_server_wallet_address(self) -> str:
         """
         Get the server's wallet address used for signing transactions.

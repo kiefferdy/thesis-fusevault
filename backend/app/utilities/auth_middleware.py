@@ -39,6 +39,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/auth/logout",
             "/users/register",
             "/api-keys/status",  # API keys status endpoint is public
+            "/delegation/server-info",  # Delegation server info is public
         ]
         
         # Routes that start with these prefixes are public

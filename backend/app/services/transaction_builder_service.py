@@ -309,3 +309,77 @@ class TransactionBuilderService:
                 "success": False,
                 "error": str(e)
             }
+    
+    async def build_set_delegate_transaction(
+        self,
+        delegate_address: str,
+        status: bool,
+        from_address: str,
+        gas_limit: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Build unsigned transaction for setDelegate.
+        
+        Args:
+            delegate_address: Address to delegate to
+            status: True to delegate, False to revoke
+            from_address: Address that will sign the transaction
+            gas_limit: Optional gas limit override
+            
+        Returns:
+            Dict with unsigned transaction data
+        """
+        try:
+            # Validate addresses
+            delegate_address = to_checksum_address(delegate_address)
+            from_address = to_checksum_address(from_address)
+            
+            # Build the transaction
+            function = self.contract.functions.setDelegate(delegate_address, status)
+            
+            # Estimate gas if not provided
+            if not gas_limit:
+                try:
+                    gas_limit = function.estimate_gas({'from': from_address})
+                    # Add 10% buffer
+                    gas_limit = int(gas_limit * 1.1)
+                except Exception as e:
+                    logger.warning(f"Gas estimation failed, using default: {e}")
+                    gas_limit = 150000
+            
+            # Get current gas price
+            gas_price = self.web3.eth.gas_price
+            
+            # Build transaction
+            nonce = self.web3.eth.get_transaction_count(from_address)
+            
+            transaction = function.build_transaction({
+                'from': from_address,
+                'nonce': nonce,
+                'gas': gas_limit,
+                'gasPrice': gas_price,
+                'chainId': self.web3.eth.chain_id
+            })
+            
+            # Remove 'from' field as it's not needed for signing
+            transaction.pop('from', None)
+            
+            logger.info(
+                f"Built setDelegate transaction: {delegate_address} "
+                f"(status: {status}) for {from_address}"
+            )
+            
+            return {
+                "success": True,
+                "transaction": transaction,
+                "estimated_gas": gas_limit,
+                "gas_price": gas_price,
+                "function_name": "setDelegate"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error building setDelegate transaction: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
