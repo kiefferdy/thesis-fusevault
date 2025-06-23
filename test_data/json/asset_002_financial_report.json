@@ -1,0 +1,23 @@
+{
+  "asset_id": "financial-report-q4-2023",
+  "wallet_address": "0x742d35Cc6643C0532925a3b8A9C2E7E7c18e1234",
+  "critical_metadata": {
+    "name": "Q4 2023 Financial Report",
+    "description": "Quarterly financial statements and analysis",
+    "assetType": "document",
+    "format": "pdf",
+    "category": "financial",
+    "tags": ["finance", "quarterly", "2023"],
+    "confidentialityLevel": "internal",
+    "reportingPeriod": "Q4-2023"
+  },
+  "non_critical_metadata": {
+    "fileSize": "2.1MB",
+    "pageCount": 45,
+    "author": "Finance Team",
+    "reviewedBy": "CFO John Doe",
+    "approvalDate": "2024-01-31",
+    "language": "English",
+    "keywords": ["revenue", "expenses", "profit", "analysis"]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "assetId": "user-behavior-study-2024",
+  "walletAddress": "0x111222333444555666777888999aaabbbcccddee",
+  "criticalMetadata": {
+    "name": "User Behavior Analysis Dataset 2024",
+    "description": "Anonymized user interaction data for platform optimization",
+    "assetType": "dataset",
+    "format": "csv",
+    "category": "research",
+    "tags": ["user-behavior", "analytics", "research"],
+    "studyPeriod": "2024-Q1",
+    "sampleSize": 10000,
+    "dataAnonymized": true
+  },
+  "nonCriticalMetadata": {
+    "fileSize": "45.2MB",
+    "recordCount": 125000,
+    "columns": 28,
+    "collectionMethod": "web-analytics",
+    "researcher": "Dr. Emma Thompson",
+    "institution": "Data Science Lab",
+    "ethicsApproval": "IRB-2024-001",
+    "dataRetentionPolicy": "3-years",
+    "accessLevel": "research-team-only"
+  }
+}

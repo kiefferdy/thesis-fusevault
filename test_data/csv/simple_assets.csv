@@ -1,0 +1,6 @@
+asset_id,wallet_address,name,description,category,priority,status,owner
+test-doc-001,0x742d35Cc6643C0532925a3b8A9C2E7E7c18e1234,Test Document 1,First test document for batch upload,documents,high,active,Alice
+test-image-002,0x742d35Cc6643C0532925a3b8A9C2E7E7c18e1234,Test Image 2,Sample image for testing,images,medium,draft,Bob  
+test-video-003,0x742d35Cc6643C0532925a3b8A9C2E7E7c18e1234,Test Video 3,Video content for testing,videos,low,active,Carol
+test-contract-004,0x987fcdeb51294a13f58a487b8e5c6789def01234,Legal Contract Test,Sample legal document,contracts,high,review,David
+test-data-005,0x987fcdeb51294a13f58a487b8e5c6789def01234,Research Dataset,Sample research data,datasets,medium,active,Eve

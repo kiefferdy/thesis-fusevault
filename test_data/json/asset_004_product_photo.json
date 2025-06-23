@@ -1,0 +1,25 @@
+{
+  "assetId": "product-photo-laptop-001",
+  "walletAddress": "0x987fcdeb51294a13f58a487b8e5c6789def01234",
+  "criticalMetadata": {
+    "name": "Gaming Laptop Product Photo",
+    "description": "High-resolution product photograph for e-commerce listing",
+    "assetType": "image",
+    "format": "jpeg",
+    "category": "product-media",
+    "tags": ["product", "laptop", "gaming", "photography"],
+    "productSKU": "LAPTOP-GAMING-001",
+    "shootDate": "2024-02-10"
+  },
+  "nonCriticalMetadata": {
+    "fileSize": "8.7MB",
+    "resolution": "4096x2732",
+    "photographer": "Mike Johnson",
+    "camera": "Canon EOS R5",
+    "lens": "RF 24-70mm f/2.8L IS USM",
+    "lighting": "studio-softbox",
+    "background": "seamless-white",
+    "retouched": true,
+    "colorProfile": "sRGB"
+  }
+}

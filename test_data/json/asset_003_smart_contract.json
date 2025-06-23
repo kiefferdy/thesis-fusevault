@@ -1,0 +1,24 @@
+{
+  "assetId": "token-contract-v2",
+  "criticalMetadata": {
+    "name": "FuseToken Smart Contract v2.0",
+    "description": "ERC-20 token contract with advanced features",
+    "assetType": "smart-contract",
+    "format": "solidity",
+    "category": "blockchain",
+    "tags": ["smart-contract", "token", "erc20"],
+    "version": "2.0.1",
+    "networkDeployed": "ethereum-mainnet",
+    "contractAddress": "0x1234567890abcdef1234567890abcdef12345678"
+  },
+  "nonCriticalMetadata": {
+    "compiler": "solc-0.8.19",
+    "gasOptimized": true,
+    "auditStatus": "completed",
+    "auditedBy": "CertiK",
+    "deploymentCost": "0.5 ETH",
+    "developer": "Blockchain Team",
+    "testnetAddress": "0xabcdef1234567890abcdef1234567890abcdef12",
+    "documentation": "https://docs.fusevault.com/contracts/token-v2"
+  }
+}

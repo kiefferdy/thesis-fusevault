@@ -1,0 +1,8 @@
+{
+  "assetId": "",
+  "walletAddress": "0x742d35Cc6643C0532925a3b8A9C2E7E7c18e1234",
+  "criticalMetadata": {
+    "name": "Test with Empty Asset ID",
+    "description": "This should fail - empty asset ID"
+  }
+}

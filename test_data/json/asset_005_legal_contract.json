@@ -1,0 +1,25 @@
+{
+  "asset_id": "nda-partnership-acme-corp",
+  "wallet_address": "0x456789abcdef0123456789abcdef0123456789ab",
+  "critical_metadata": {
+    "name": "Non-Disclosure Agreement - ACME Corp Partnership",
+    "description": "Mutual NDA for strategic partnership discussions",
+    "assetType": "legal-document",
+    "format": "pdf",
+    "category": "contracts",
+    "tags": ["nda", "partnership", "legal"],
+    "contractType": "non-disclosure-agreement",
+    "parties": ["FuseVault Inc", "ACME Corporation"],
+    "effectiveDate": "2024-02-01"
+  },
+  "non_critical_metadata": {
+    "fileSize": "156KB",
+    "pageCount": 8,
+    "signedBy": ["CEO Alice Brown", "ACME Legal Director"],
+    "witnessedBy": "Legal Counsel Sarah Wilson",
+    "jurisdiction": "Delaware, USA",
+    "termDuration": "3 years",
+    "renewalClause": "automatic",
+    "confidentialityLevel": "highly-confidential"
+  }
+}

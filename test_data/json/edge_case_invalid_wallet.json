@@ -1,0 +1,8 @@
+{
+  "assetId": "test-invalid-wallet",
+  "walletAddress": "not-a-valid-ethereum-address",
+  "criticalMetadata": {
+    "name": "Test with Invalid Wallet",
+    "description": "This should fail - invalid wallet address format"
+  }
+}
