@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import apiKeyService from '../services/apiKeyService';
 import useApiKeysStatus from '../hooks/useApiKeysStatus';
+import { useDelegation } from '../hooks/useDelegation';
+import DelegationStatus from '../components/DelegationStatus';
+import DelegationDialog from '../components/DelegationDialog';
 import './ApiKeysPage.css';
 
 const ApiKeysDisabledMessage = ({ onRefresh, isRefreshing }) => (
@@ -54,11 +57,18 @@ const ApiKeysPage = () => {
     pollingInterval: 60000, // Poll every minute on API keys page
     refetchOnFocus: true
   });
+  const { 
+    isDelegated, 
+    isLoading: delegationLoading, 
+    isDelegationRequiredForApiKeys 
+  } = useDelegation();
+  
   const [apiKeys, setApiKeys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showCreatedKey, setShowCreatedKey] = useState(null);
+  const [delegationDialogOpen, setDelegationDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     permissions: ['read'],
@@ -66,13 +76,16 @@ const ApiKeysPage = () => {
     metadata: {}
   });
 
+  // Check if API keys can be used (enabled + delegated if required)
+  const canUseApiKeys = isEnabled && (!isDelegationRequiredForApiKeys() || isDelegated);
+  
   useEffect(() => {
-    if (isAuthenticated && isEnabled) {
+    if (isAuthenticated && canUseApiKeys) {
       fetchApiKeys();
     } else {
       setLoading(false);
     }
-  }, [isAuthenticated, isEnabled]);
+  }, [isAuthenticated, canUseApiKeys]);
 
   const fetchApiKeys = async () => {
     try {
@@ -187,8 +200,8 @@ const ApiKeysPage = () => {
     );
   }
 
-  // Show loading while checking status
-  if (statusLoading) {
+  // Show loading while checking status and delegation
+  if (statusLoading || delegationLoading) {
     return (
       <div className="api-keys-page">
         <div className="container">
@@ -221,11 +234,18 @@ const ApiKeysPage = () => {
           <button 
             className="btn btn-primary"
             onClick={() => setShowCreateForm(true)}
-            disabled={loading}
+            disabled={loading || !canUseApiKeys}
           >
             Create New API Key
           </button>
         </div>
+
+        {/* Add delegation status if delegation is required */}
+        {isDelegationRequiredForApiKeys() && (
+          <DelegationStatus 
+            onSetupClick={() => setDelegationDialogOpen(true)} 
+          />
+        )}
 
         {error && (
           <div className="error-message">
@@ -321,7 +341,7 @@ const ApiKeysPage = () => {
           </div>
         )}
 
-        <div className="api-keys-list">
+        <div className={`api-keys-list ${!canUseApiKeys ? 'disabled' : ''}`}>
           <h2>Your API Keys</h2>
           {loading ? (
             <p>Loading...</p>
@@ -358,7 +378,7 @@ const ApiKeysPage = () => {
                         <button 
                           className="btn btn-danger btn-sm"
                           onClick={() => handleRevokeKey(key.name)}
-                          disabled={!key.is_active || loading}
+                          disabled={!key.is_active || loading || !canUseApiKeys}
                         >
                           Revoke
                         </button>
@@ -392,6 +412,12 @@ const ApiKeysPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Delegation Dialog */}
+      <DelegationDialog
+        isOpen={delegationDialogOpen}
+        onClose={() => setDelegationDialogOpen(false)}
+      />
     </div>
   );
 };
