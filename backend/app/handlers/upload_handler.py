@@ -479,7 +479,7 @@ class UploadHandler:
                 raise Exception(f"Pending transaction {pending_tx_id} not found or expired")
             
             # Verify the initiator
-            if pending_data.get("initiator_address", "").lower() != initiator_address.lower():
+            if pending_data.get("user_address", "").lower() != initiator_address.lower():
                 raise Exception("Unauthorized: initiator address mismatch")
             
             # Extract data from pending transaction
@@ -960,8 +960,7 @@ class UploadHandler:
                     
                     # Check if asset already exists and is not deleted
                     existing_doc = await self.asset_service.get_asset(
-                        asset_id=asset_id,
-                        wallet_address=owner_address
+                        asset_id=asset_id
                     )
                     
                     if existing_doc and not existing_doc.get("isDeleted"):
@@ -1016,14 +1015,16 @@ class UploadHandler:
             # Step 3: Handle blockchain interaction based on authentication method
             if self.auth_context and self.auth_context.get("auth_method") == "wallet":
                 # For wallet users, prepare unsigned transaction and return for signing
-                pending_tx = await self.transaction_state_service.create_pending_transaction(
-                    operation_type="BATCH_CREATE",
-                    asset_ids=[r["asset_id"] for r in ipfs_results],
-                    wallet_address=initiator_address,
-                    metadata={
-                        "ipfs_results": ipfs_results,
-                        "asset_count": len(ipfs_results),
-                        "initiator_address": initiator_address
+                pending_tx = await self.transaction_state_service.store_pending_transaction(
+                    user_address=initiator_address,
+                    transaction_data={
+                        "operation_type": "BATCH_CREATE",
+                        "asset_ids": [r["asset_id"] for r in ipfs_results],
+                        "metadata": {
+                            "ipfs_results": ipfs_results,
+                            "asset_count": len(ipfs_results),
+                            "initiator_address": initiator_address
+                        }
                     }
                 )
                 
@@ -1045,7 +1046,7 @@ class UploadHandler:
                     "status": "pending_signature",
                     "message": f"Sign transaction to create {len(assets)} assets in batch",
                     "asset_count": len(assets),
-                    "pending_tx_id": pending_tx.id,
+                    "pending_tx_id": pending_tx,
                     "transaction": blockchain_result["transaction"],
                     "estimated_gas": blockchain_result.get("estimated_gas"),
                     "gas_price": blockchain_result.get("gas_price"),
@@ -1155,7 +1156,7 @@ class UploadHandler:
                 raise Exception(f"Pending transaction {pending_tx_id} not found or expired")
             
             # Verify the initiator
-            if pending_data.get("initiator_address", "").lower() != initiator_address.lower():
+            if pending_data.get("user_address", "").lower() != initiator_address.lower():
                 raise Exception("Unauthorized: initiator address mismatch")
             
             # Extract data from pending transaction
@@ -1536,8 +1537,7 @@ class UploadHandler:
                     
                     # Check if asset already exists and is not deleted
                     existing_doc = await self.asset_service.get_asset(
-                        asset_id=asset_id,
-                        wallet_address=owner_address
+                        asset_id=asset_id
                     )
                     
                     if existing_doc and not existing_doc.get("isDeleted"):
@@ -1592,14 +1592,16 @@ class UploadHandler:
             # Step 3: Handle blockchain interaction based on authentication method
             if self.auth_context and self.auth_context.get("auth_method") == "wallet":
                 # For wallet users, prepare unsigned transaction and return for signing
-                pending_tx = await self.transaction_state_service.create_pending_transaction(
-                    operation_type="BATCH_CREATE",
-                    asset_ids=[r["asset_id"] for r in ipfs_results],
-                    wallet_address=initiator_address,
-                    metadata={
-                        "ipfs_results": ipfs_results,
-                        "asset_count": len(ipfs_results),
-                        "initiator_address": initiator_address
+                pending_tx = await self.transaction_state_service.store_pending_transaction(
+                    user_address=initiator_address,
+                    transaction_data={
+                        "operation_type": "BATCH_CREATE",
+                        "asset_ids": [r["asset_id"] for r in ipfs_results],
+                        "metadata": {
+                            "ipfs_results": ipfs_results,
+                            "asset_count": len(ipfs_results),
+                            "initiator_address": initiator_address
+                        }
                     }
                 )
                 
@@ -1621,7 +1623,7 @@ class UploadHandler:
                     "status": "pending_signature",
                     "message": f"Sign transaction to create {len(assets)} assets in batch",
                     "asset_count": len(assets),
-                    "pending_tx_id": pending_tx.id,
+                    "pending_tx_id": pending_tx,
                     "transaction": blockchain_result["transaction"],
                     "estimated_gas": blockchain_result.get("estimated_gas"),
                     "gas_price": blockchain_result.get("gas_price"),
@@ -1731,7 +1733,7 @@ class UploadHandler:
                 raise Exception(f"Pending transaction {pending_tx_id} not found or expired")
             
             # Verify the initiator
-            if pending_data.get("initiator_address", "").lower() != initiator_address.lower():
+            if pending_data.get("user_address", "").lower() != initiator_address.lower():
                 raise Exception("Unauthorized: initiator address mismatch")
             
             # Extract data from pending transaction
