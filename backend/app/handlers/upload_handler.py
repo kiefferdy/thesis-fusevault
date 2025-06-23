@@ -1160,7 +1160,6 @@ class UploadHandler:
             
             # Extract data from pending transaction
             ipfs_results = pending_data["metadata"]["ipfs_results"]
-            asset_count = pending_data["metadata"]["asset_count"]
             
             # Verify transaction was successful
             tx_verification = await self.blockchain_service.verify_transaction_success(blockchain_tx_hash)
@@ -1737,7 +1736,6 @@ class UploadHandler:
             
             # Extract data from pending transaction
             ipfs_results = pending_data["metadata"]["ipfs_results"]
-            asset_count = pending_data["metadata"]["asset_count"]
             
             # Verify transaction was successful
             tx_verification = await self.blockchain_service.verify_transaction_success(blockchain_tx_hash)
