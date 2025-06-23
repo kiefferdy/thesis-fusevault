@@ -1193,6 +1193,40 @@ class BlockchainService:
         """
         return await self.check_delegation(user_address, self.wallet_address)
 
+    async def check_two_step_delegation(self, owner_address: str, api_key_user_address: str) -> Dict[str, bool]:
+        """
+        Check both required delegations for API key usage (two-step delegation model).
+        
+        Args:
+            owner_address: The address of the asset owner
+            api_key_user_address: The address of the API key user
+            
+        Returns:
+            Dict with delegation status for both user and server wallet
+        """
+        try:
+            # Check both delegations in parallel for efficiency
+            user_delegated_task = self.check_delegation(owner_address, api_key_user_address)
+            server_delegated_task = self.check_delegation(owner_address, self.wallet_address)
+            
+            is_user_delegated = await user_delegated_task
+            is_server_delegated = await server_delegated_task
+            
+            return {
+                "user_delegated": is_user_delegated,
+                "server_delegated": is_server_delegated,
+                "both_delegated": is_user_delegated and is_server_delegated,
+                "api_key_user": api_key_user_address,
+                "server_wallet": self.wallet_address
+            }
+            
+        except Exception as e:
+            logger.error(f"Error checking two-step delegation: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Failed to check delegation: {str(e)}"
+            )
+
     def get_server_wallet_address(self) -> str:
         """
         Get the server's wallet address used for signing transactions.

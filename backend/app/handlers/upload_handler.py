@@ -757,6 +757,87 @@ class UploadHandler:
                 # Mark it as seen
                 seen_asset_ids.add(asset_id)
                 
+                # SECURITY: For API key auth, validate TWO-STEP delegation permissions
+                if self.auth_context and self.auth_context.get("auth_method") == "api_key":
+                    if owner_wallet_address.lower() != wallet_address.lower():
+                        # User is trying to create assets for a different wallet
+                        # TWO-STEP VALIDATION:
+                        # 1. Target wallet must delegate the API key user (permission layer)
+                        # 2. Target wallet must delegate the server wallet (technical layer)
+                        server_wallet = self.blockchain_service.get_server_wallet_address()
+                        
+                        try:
+                            # Step 1: Check if target wallet delegated the API key user
+                            is_user_delegated = await self.blockchain_service.check_delegation(
+                                owner_address=owner_wallet_address,
+                                delegate_address=wallet_address
+                            )
+                            
+                            # Step 2: Check if target wallet delegated the server wallet
+                            is_server_delegated = await self.blockchain_service.check_delegation(
+                                owner_address=owner_wallet_address,
+                                delegate_address=server_wallet
+                            )
+                            
+                            # Both delegations are required
+                            if not is_user_delegated and not is_server_delegated:
+                                results.append({
+                                    "filename": file_obj.filename,
+                                    "asset_id": asset_id,
+                                    "status": "error",
+                                    "detail": (
+                                        f"Wallet {owner_wallet_address} has not delegated either you ({wallet_address}) "
+                                        f"or the server wallet ({server_wallet}). "
+                                        f"For API key access, both delegations are required. "
+                                        f"Ask {owner_wallet_address} to call: "
+                                        f"setDelegate('{wallet_address}', true) AND "
+                                        f"setDelegate('{server_wallet}', true)"
+                                    )
+                                })
+                                continue
+                            elif not is_user_delegated:
+                                results.append({
+                                    "filename": file_obj.filename,
+                                    "asset_id": asset_id,
+                                    "status": "error",
+                                    "detail": (
+                                        f"Wallet {owner_wallet_address} has not delegated you ({wallet_address}). "
+                                        f"Cannot create assets for this wallet via API key. "
+                                        f"Ask {owner_wallet_address} to call setDelegate('{wallet_address}', true)"
+                                    )
+                                })
+                                continue
+                            elif not is_server_delegated:
+                                results.append({
+                                    "filename": file_obj.filename,
+                                    "asset_id": asset_id,
+                                    "status": "error",
+                                    "detail": (
+                                        f"Wallet {owner_wallet_address} has not delegated the server wallet ({server_wallet}). "
+                                        f"Cannot create assets for this wallet via API key. "
+                                        f"Ask {owner_wallet_address} to call setDelegate('{server_wallet}', true)"
+                                    )
+                                })
+                                continue
+                                
+                        except Exception as e:
+                            if "has not delegated" in str(e):
+                                results.append({
+                                    "filename": file_obj.filename,
+                                    "asset_id": asset_id,
+                                    "status": "error",
+                                    "detail": str(e)
+                                })
+                                continue
+                            else:
+                                results.append({
+                                    "filename": file_obj.filename,
+                                    "asset_id": asset_id,
+                                    "status": "error",
+                                    "detail": f"Unable to verify delegation for {owner_wallet_address}: {str(e)}"
+                                })
+                                continue
+                
                 # Process metadata with file info
                 # Pass both owner address (from JSON) and initiator address (from route parameter)
                 result = await self.process_metadata(
@@ -821,6 +902,58 @@ class UploadHandler:
                     owner_address = asset.get("wallet_address", initiator_address)
                     critical_metadata = asset.get("critical_metadata", {})
                     non_critical_metadata = asset.get("non_critical_metadata", {})
+                    
+                    # SECURITY: For API key auth, validate TWO-STEP delegation permissions
+                    if self.auth_context and self.auth_context.get("auth_method") == "api_key":
+                        if owner_address.lower() != initiator_address.lower():
+                            # User is trying to create assets for a different wallet
+                            # TWO-STEP VALIDATION:
+                            # 1. Target wallet must delegate the API key user (permission layer)
+                            # 2. Target wallet must delegate the server wallet (technical layer)
+                            server_wallet = self.blockchain_service.get_server_wallet_address()
+                            
+                            try:
+                                # Step 1: Check if target wallet delegated the API key user
+                                is_user_delegated = await self.blockchain_service.check_delegation(
+                                    owner_address=owner_address,
+                                    delegate_address=initiator_address
+                                )
+                                
+                                # Step 2: Check if target wallet delegated the server wallet
+                                is_server_delegated = await self.blockchain_service.check_delegation(
+                                    owner_address=owner_address,
+                                    delegate_address=server_wallet
+                                )
+                                
+                                # Both delegations are required
+                                if not is_user_delegated and not is_server_delegated:
+                                    raise ValueError(
+                                        f"Wallet {owner_address} has not delegated either you ({initiator_address}) "
+                                        f"or the server wallet ({server_wallet}). "
+                                        f"For API key access, both delegations are required. "
+                                        f"Ask {owner_address} to call: "
+                                        f"setDelegate('{initiator_address}', true) AND "
+                                        f"setDelegate('{server_wallet}', true)"
+                                    )
+                                elif not is_user_delegated:
+                                    raise ValueError(
+                                        f"Wallet {owner_address} has not delegated you ({initiator_address}). "
+                                        f"Cannot create assets for this wallet via API key. "
+                                        f"Ask {owner_address} to call setDelegate('{initiator_address}', true)"
+                                    )
+                                elif not is_server_delegated:
+                                    raise ValueError(
+                                        f"Wallet {owner_address} has not delegated the server wallet ({server_wallet}). "
+                                        f"Cannot create assets for this wallet via API key. "
+                                        f"Ask {owner_address} to call setDelegate('{server_wallet}', true)"
+                                    )
+                                    
+                            except Exception as e:
+                                if "has not delegated" in str(e):
+                                    raise e  # Re-raise our clear error message
+                                else:
+                                    raise ValueError(f"Unable to verify delegation for {owner_address}: {str(e)}")
+                    # Note: For wallet auth, user can specify any address but will own assets themselves
                     
                     if not asset_id:
                         raise ValueError(f"Asset at index {idx} missing asset_id")
@@ -1202,6 +1335,87 @@ class UploadHandler:
                     
                     seen_asset_ids.add(asset_id)
                     
+                    # SECURITY: For API key auth, validate TWO-STEP delegation permissions
+                    if self.auth_context and self.auth_context.get("auth_method") == "api_key":
+                        if owner_address.lower() != wallet_address.lower():
+                            # User is trying to create assets for a different wallet
+                            # TWO-STEP VALIDATION:
+                            # 1. Target wallet must delegate the API key user (permission layer)
+                            # 2. Target wallet must delegate the server wallet (technical layer)
+                            server_wallet = self.blockchain_service.get_server_wallet_address()
+                            
+                            try:
+                                # Step 1: Check if target wallet delegated the API key user
+                                is_user_delegated = await self.blockchain_service.check_delegation(
+                                    owner_address=owner_address,
+                                    delegate_address=wallet_address
+                                )
+                                
+                                # Step 2: Check if target wallet delegated the server wallet
+                                is_server_delegated = await self.blockchain_service.check_delegation(
+                                    owner_address=owner_address,
+                                    delegate_address=server_wallet
+                                )
+                                
+                                # Both delegations are required
+                                if not is_user_delegated and not is_server_delegated:
+                                    results.append({
+                                        "filename": file_obj.filename,
+                                        "asset_id": asset_id,
+                                        "status": "error",
+                                        "detail": (
+                                            f"Wallet {owner_address} has not delegated either you ({wallet_address}) "
+                                            f"or the server wallet ({server_wallet}). "
+                                            f"For API key access, both delegations are required. "
+                                            f"Ask {owner_address} to call: "
+                                            f"setDelegate('{wallet_address}', true) AND "
+                                            f"setDelegate('{server_wallet}', true)"
+                                        )
+                                    })
+                                    continue
+                                elif not is_user_delegated:
+                                    results.append({
+                                        "filename": file_obj.filename,
+                                        "asset_id": asset_id,
+                                        "status": "error",
+                                        "detail": (
+                                            f"Wallet {owner_address} has not delegated you ({wallet_address}). "
+                                            f"Cannot create assets for this wallet via API key. "
+                                            f"Ask {owner_address} to call setDelegate('{wallet_address}', true)"
+                                        )
+                                    })
+                                    continue
+                                elif not is_server_delegated:
+                                    results.append({
+                                        "filename": file_obj.filename,
+                                        "asset_id": asset_id,
+                                        "status": "error",
+                                        "detail": (
+                                            f"Wallet {owner_address} has not delegated the server wallet ({server_wallet}). "
+                                            f"Cannot create assets for this wallet via API key. "
+                                            f"Ask {owner_address} to call setDelegate('{server_wallet}', true)"
+                                        )
+                                    })
+                                    continue
+                                    
+                            except Exception as e:
+                                if "has not delegated" in str(e):
+                                    results.append({
+                                        "filename": file_obj.filename,
+                                        "asset_id": asset_id,
+                                        "status": "error",
+                                        "detail": str(e)
+                                    })
+                                    continue
+                                else:
+                                    results.append({
+                                        "filename": file_obj.filename,
+                                        "asset_id": asset_id,
+                                        "status": "error",
+                                        "detail": f"Unable to verify delegation for {owner_address}: {str(e)}"
+                                    })
+                                    continue
+                    
                     # Process metadata with file info
                     result = await self.process_metadata(
                         asset_id=asset_id,
@@ -1265,6 +1479,58 @@ class UploadHandler:
                     owner_address = asset.get("wallet_address", initiator_address)
                     critical_metadata = asset.get("critical_metadata", {})
                     non_critical_metadata = asset.get("non_critical_metadata", {})
+                    
+                    # SECURITY: For API key auth, validate TWO-STEP delegation permissions
+                    if self.auth_context and self.auth_context.get("auth_method") == "api_key":
+                        if owner_address.lower() != initiator_address.lower():
+                            # User is trying to create assets for a different wallet
+                            # TWO-STEP VALIDATION:
+                            # 1. Target wallet must delegate the API key user (permission layer)
+                            # 2. Target wallet must delegate the server wallet (technical layer)
+                            server_wallet = self.blockchain_service.get_server_wallet_address()
+                            
+                            try:
+                                # Step 1: Check if target wallet delegated the API key user
+                                is_user_delegated = await self.blockchain_service.check_delegation(
+                                    owner_address=owner_address,
+                                    delegate_address=initiator_address
+                                )
+                                
+                                # Step 2: Check if target wallet delegated the server wallet
+                                is_server_delegated = await self.blockchain_service.check_delegation(
+                                    owner_address=owner_address,
+                                    delegate_address=server_wallet
+                                )
+                                
+                                # Both delegations are required
+                                if not is_user_delegated and not is_server_delegated:
+                                    raise ValueError(
+                                        f"Wallet {owner_address} has not delegated either you ({initiator_address}) "
+                                        f"or the server wallet ({server_wallet}). "
+                                        f"For API key access, both delegations are required. "
+                                        f"Ask {owner_address} to call: "
+                                        f"setDelegate('{initiator_address}', true) AND "
+                                        f"setDelegate('{server_wallet}', true)"
+                                    )
+                                elif not is_user_delegated:
+                                    raise ValueError(
+                                        f"Wallet {owner_address} has not delegated you ({initiator_address}). "
+                                        f"Cannot create assets for this wallet via API key. "
+                                        f"Ask {owner_address} to call setDelegate('{initiator_address}', true)"
+                                    )
+                                elif not is_server_delegated:
+                                    raise ValueError(
+                                        f"Wallet {owner_address} has not delegated the server wallet ({server_wallet}). "
+                                        f"Cannot create assets for this wallet via API key. "
+                                        f"Ask {owner_address} to call setDelegate('{server_wallet}', true)"
+                                    )
+                                    
+                            except Exception as e:
+                                if "has not delegated" in str(e):
+                                    raise e  # Re-raise our clear error message
+                                else:
+                                    raise ValueError(f"Unable to verify delegation for {owner_address}: {str(e)}")
+                    # Note: For wallet auth, user can specify any address but will own assets themselves
                     
                     if not asset_id:
                         raise ValueError(f"Asset at index {idx} missing asset_id")
