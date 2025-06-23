@@ -1,0 +1,101 @@
+# FuseVault Benchmark Configuration
+# Environment variables in .env will override these defaults
+
+# Test Configuration
+test_config:
+  # Default test parameters (conservative for FuseVault)
+  default_operations: [50, 100, 200]
+  default_clients: [1, 3, 5]
+  default_data_sizes: [1024, 8192, 32768] # 1KB, 8KB, 32KB
+
+  # Quick test parameters (for development/CI)
+  quick_operations: [25, 50]
+  quick_clients: [1, 2]
+  quick_data_sizes: [1024, 8192]
+
+  # Full suite parameters (comprehensive testing)
+  full_operations: [50, 100, 200, 500]
+  full_clients: [1, 2, 3, 5, 10]
+  full_data_sizes: [1024, 8192, 32768, 131072] # Up to 128KB
+
+  # Timeout settings (longer for blockchain operations)
+  request_timeout_seconds: 60
+  worker_timeout_seconds: 600
+
+  # Retry settings
+  max_retries: 3
+  retry_delay_seconds: 2
+
+# FuseVault API Configuration
+fusevault_config:
+  # API endpoints (relative to base URL)
+  endpoints:
+    upload: "/upload/process"
+    retrieve: "/retrieve"
+    assets: "/assets/user"
+
+  # Expected response formats
+  upload_success_status: 200
+  retrieve_success_status: 200
+
+  # Performance expectations
+  expected_full_stack_latency_ms: 5000 # 5 seconds for blockchain+IPFS
+  expected_query_latency_ms: 100 # 100ms for MongoDB queries
+  expected_retrieval_latency_ms: 1000 # 1 second for retrieval
+
+# Benchmark Targets (for comparison)
+benchmark_targets:
+  bigchaindb:
+    typical_tps: 298
+    peak_tps: 1000
+    p95_latency_ms: 5143
+    p99_latency_ms: 9392
+    median_latency_ms: 2855
+    success_rate: 0.997
+
+  mongodb_ycsb:
+    read_tps: 1200
+    write_tps: 100
+    mixed_tps: 600
+    read_latency_ms: 10
+    write_latency_ms: 100
+    success_rate: 0.99
+
+  ipfs_baseline:
+    local_retrieval_ms: 21
+    network_retrieval_p95_ms: 194
+    small_file_overhead_ms: 50
+    large_file_degradation_factor: 2.0
+    success_rate: 0.95
+
+  hyperledger_fabric:
+    pbft_tps: 3000
+    consensus_latency_ms: 1000
+    read_tps: 10000
+    success_rate: 0.98
+
+# Output Configuration
+output:
+  generate_charts: true
+  generate_csv: true
+  generate_json: true
+  generate_markdown_report: true
+  chart_format: "png"
+  chart_dpi: 300
+
+  # Report sections
+  include_executive_summary: true
+  include_detailed_analysis: true
+  include_recommendations: true
+  include_raw_data: true
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  file: "fusevault_benchmark.log"
+  format: "%(asctime)s - %(levelname)s - %(message)s"
+
+  # Log specific components
+  log_api_requests: false # Set to true for debugging
+  log_database_queries: false # Set to true for debugging
+  log_performance_details: true
