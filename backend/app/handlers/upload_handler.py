@@ -782,6 +782,327 @@ class UploadHandler:
             "results": results
         }
 
+    async def process_batch_metadata(
+        self,
+        assets: List[Dict[str, Any]],
+        initiator_address: str
+    ) -> Dict[str, Any]:
+        """
+        Process multiple assets in a batch with single blockchain transaction.
+        
+        Args:
+            assets: List of asset dictionaries with metadata
+            initiator_address: The wallet address of the user initiating the batch
+            
+        Returns:
+            Dict with batch processing results
+        """
+        try:
+            # Validate batch size
+            if len(assets) > 50:  # Match smart contract limit
+                return {
+                    "status": "error",
+                    "message": "Batch size exceeds maximum of 50 assets",
+                    "asset_count": len(assets)
+                }
+            
+            if len(assets) == 0:
+                return {
+                    "status": "error", 
+                    "message": "Must provide at least one asset",
+                    "asset_count": 0
+                }
+            
+            # Step 1: Validate all assets and check for conflicts
+            validated_assets = []
+            for idx, asset in enumerate(assets):
+                try:
+                    asset_id = asset.get("asset_id")
+                    owner_address = asset.get("wallet_address", initiator_address)
+                    critical_metadata = asset.get("critical_metadata", {})
+                    non_critical_metadata = asset.get("non_critical_metadata", {})
+                    
+                    if not asset_id:
+                        raise ValueError(f"Asset at index {idx} missing asset_id")
+                    
+                    # Check if asset already exists and is not deleted
+                    existing_doc = await self.asset_service.get_asset(
+                        asset_id=asset_id,
+                        wallet_address=owner_address
+                    )
+                    
+                    if existing_doc and not existing_doc.get("isDeleted"):
+                        raise ValueError(f"Asset {asset_id} already exists")
+                    
+                    validated_assets.append({
+                        "asset_id": asset_id,
+                        "owner_address": owner_address,
+                        "critical_metadata": critical_metadata,
+                        "non_critical_metadata": non_critical_metadata,
+                        "index": idx
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"Validation error for asset {idx}: {str(e)}")
+                    return {
+                        "status": "error",
+                        "message": f"Validation failed for asset {idx}: {str(e)}",
+                        "asset_count": len(assets)
+                    }
+            
+            # Step 2: Upload all to IPFS
+            ipfs_results = []
+            for asset_data in validated_assets:
+                try:
+                    # Extract IPFS-relevant metadata
+                    ipfs_metadata = get_ipfs_metadata({
+                        "asset_id": asset_data["asset_id"],
+                        "wallet_address": asset_data["owner_address"],
+                        "critical_metadata": asset_data["critical_metadata"]
+                    })
+                    
+                    # Store metadata in IPFS
+                    cid = await self.ipfs_service.store_metadata(ipfs_metadata)
+                    
+                    ipfs_results.append({
+                        "asset_id": asset_data["asset_id"],
+                        "cid": cid,
+                        "owner_address": asset_data["owner_address"],
+                        "critical_metadata": asset_data["critical_metadata"],
+                        "non_critical_metadata": asset_data["non_critical_metadata"]
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"IPFS upload failed for asset {asset_data['asset_id']}: {str(e)}")
+                    return {
+                        "status": "error",
+                        "message": f"IPFS upload failed for asset {asset_data['asset_id']}: {str(e)}",
+                        "asset_count": len(assets)
+                    }
+            
+            # Step 3: Handle blockchain interaction based on authentication method
+            if self.auth_context and self.auth_context.get("auth_method") == "wallet":
+                # For wallet users, prepare unsigned transaction and return for signing
+                pending_tx = await self.transaction_state_service.create_pending_transaction(
+                    operation_type="BATCH_CREATE",
+                    asset_ids=[r["asset_id"] for r in ipfs_results],
+                    wallet_address=initiator_address,
+                    metadata={
+                        "ipfs_results": ipfs_results,
+                        "asset_count": len(ipfs_results),
+                        "initiator_address": initiator_address
+                    }
+                )
+                
+                # Prepare the batch blockchain transaction
+                asset_ids = [r["asset_id"] for r in ipfs_results]
+                cids = [r["cid"] for r in ipfs_results]
+                
+                # Use batchUpdateIPFS function (for now, keep it simple)
+                blockchain_result = await self.blockchain_service.prepare_batch_transaction(
+                    asset_ids=asset_ids,
+                    cids=cids,
+                    from_address=initiator_address,
+                    function_name="batchUpdateIPFS"
+                )
+                
+                if not blockchain_result.get("success"):
+                    raise Exception(f"Failed to prepare batch transaction: {blockchain_result.get('error')}")
+                
+                return {
+                    "status": "pending_signature",
+                    "message": f"Sign transaction to create {len(assets)} assets in batch",
+                    "asset_count": len(assets),
+                    "pending_tx_id": pending_tx.id,
+                    "transaction": blockchain_result["transaction"],
+                    "estimated_gas": blockchain_result.get("estimated_gas"),
+                    "gas_price": blockchain_result.get("gas_price"),
+                    "function_name": blockchain_result.get("function_name")
+                }
+            
+            else:
+                # For API key users, execute immediately (server-signed)
+                asset_ids = [r["asset_id"] for r in ipfs_results]
+                cids = [r["cid"] for r in ipfs_results]
+                
+                # Execute batch blockchain transaction
+                blockchain_result = await self.blockchain_service.execute_batch_transaction(
+                    asset_ids=asset_ids,
+                    cids=cids,
+                    function_name="batchUpdateIPFS"
+                )
+                
+                blockchain_tx_hash = blockchain_result.get("tx_hash")
+                
+                # Create all asset records in database
+                results = []
+                for asset_data in ipfs_results:
+                    try:
+                        doc_id = await self.asset_service.create_asset(
+                            asset_id=asset_data["asset_id"],
+                            wallet_address=asset_data["owner_address"],
+                            smart_contract_tx_id=blockchain_tx_hash,
+                            ipfs_hash=asset_data["cid"],
+                            critical_metadata=asset_data["critical_metadata"],
+                            non_critical_metadata=asset_data["non_critical_metadata"],
+                            ipfs_version=1
+                        )
+                        
+                        # Record transaction
+                        if self.transaction_service:
+                            await self.transaction_service.record_transaction(
+                                asset_id=asset_data["asset_id"],
+                                action="BATCH_CREATE",
+                                wallet_address=initiator_address,
+                                metadata={
+                                    "ipfsHash": asset_data["cid"],
+                                    "smartContractTxId": blockchain_tx_hash,
+                                    "batchUpload": True,
+                                    "ipfsVersion": 1,
+                                    "ownerAddress": asset_data["owner_address"]
+                                }
+                            )
+                        
+                        results.append({
+                            "asset_id": asset_data["asset_id"],
+                            "status": "success",
+                            "document_id": doc_id
+                        })
+                        
+                    except Exception as e:
+                        logger.error(f"Error creating asset {asset_data['asset_id']}: {str(e)}")
+                        results.append({
+                            "asset_id": asset_data["asset_id"],
+                            "status": "error",
+                            "detail": str(e)
+                        })
+                
+                success_count = sum(1 for r in results if r["status"] == "success")
+                
+                return {
+                    "status": "success",
+                    "message": f"Batch upload completed: {success_count}/{len(results)} assets created",
+                    "asset_count": len(results),
+                    "results": results,
+                    "blockchain_tx_hash": blockchain_tx_hash,
+                    "successful_count": success_count,
+                    "failed_count": len(results) - success_count
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in batch metadata processing: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"Batch upload failed: {str(e)}",
+                "asset_count": len(assets) if assets else 0
+            }
+
+    async def complete_batch_blockchain_upload(
+        self,
+        pending_tx_id: str,
+        blockchain_tx_hash: str,
+        initiator_address: str
+    ) -> Dict[str, Any]:
+        """
+        Complete batch upload after blockchain transaction is confirmed.
+        
+        Args:
+            pending_tx_id: ID of the pending transaction
+            blockchain_tx_hash: Hash of the confirmed blockchain transaction
+            initiator_address: Address of the user who initiated the transaction
+            
+        Returns:
+            Dict with completion results
+        """
+        try:
+            # Get pending transaction data
+            pending_data = await self.transaction_state_service.get_pending_transaction(pending_tx_id)
+            
+            if not pending_data:
+                raise Exception(f"Pending transaction {pending_tx_id} not found or expired")
+            
+            # Verify the initiator
+            if pending_data.get("initiator_address", "").lower() != initiator_address.lower():
+                raise Exception("Unauthorized: initiator address mismatch")
+            
+            # Extract data from pending transaction
+            ipfs_results = pending_data["metadata"]["ipfs_results"]
+            asset_count = pending_data["metadata"]["asset_count"]
+            
+            # Verify transaction was successful
+            tx_verification = await self.blockchain_service.verify_transaction_success(blockchain_tx_hash)
+            if not tx_verification.get("success"):
+                raise Exception(f"Blockchain transaction failed or not found: {blockchain_tx_hash}")
+            
+            # Create all asset records in database
+            results = []
+            for asset_data in ipfs_results:
+                try:
+                    doc_id = await self.asset_service.create_asset(
+                        asset_id=asset_data["asset_id"],
+                        wallet_address=asset_data["owner_address"],
+                        smart_contract_tx_id=blockchain_tx_hash,
+                        ipfs_hash=asset_data["cid"],
+                        critical_metadata=asset_data["critical_metadata"],
+                        non_critical_metadata=asset_data["non_critical_metadata"],
+                        ipfs_version=1
+                    )
+                    
+                    # Record transaction
+                    if self.transaction_service:
+                        await self.transaction_service.record_transaction(
+                            asset_id=asset_data["asset_id"],
+                            action="BATCH_CREATE",
+                            wallet_address=initiator_address,
+                            metadata={
+                                "ipfsHash": asset_data["cid"],
+                                "smartContractTxId": blockchain_tx_hash,
+                                "batchUpload": True,
+                                "batchId": pending_tx_id,
+                                "ipfsVersion": 1,
+                                "ownerAddress": asset_data["owner_address"]
+                            }
+                        )
+                    
+                    results.append({
+                        "asset_id": asset_data["asset_id"],
+                        "status": "success",
+                        "document_id": doc_id
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"Error creating asset {asset_data['asset_id']}: {str(e)}")
+                    results.append({
+                        "asset_id": asset_data["asset_id"],
+                        "status": "error",
+                        "detail": str(e)
+                    })
+            
+            # Clean up pending transaction
+            await self.transaction_state_service.remove_pending_transaction(pending_tx_id)
+            
+            # Count successes and failures
+            success_count = sum(1 for r in results if r["status"] == "success")
+            failed_count = len(results) - success_count
+            
+            return {
+                "status": "success",
+                "message": f"Batch upload completed: {success_count}/{len(results)} assets created",
+                "asset_count": len(results),
+                "results": results,
+                "blockchain_tx_hash": blockchain_tx_hash,
+                "successful_count": success_count,
+                "failed_count": failed_count
+            }
+            
+        except Exception as e:
+            logger.error(f"Error completing batch upload: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"Error completing batch upload: {str(e)}",
+                "asset_count": 0
+            }
+
     async def process_csv_upload(
         self,
         files: List[UploadFile],
@@ -904,3 +1225,324 @@ class UploadHandler:
             "upload_count": len(results),
             "results": results
         }
+
+    async def process_batch_metadata(
+        self,
+        assets: List[Dict[str, Any]],
+        initiator_address: str
+    ) -> Dict[str, Any]:
+        """
+        Process multiple assets in a batch with single blockchain transaction.
+        
+        Args:
+            assets: List of asset dictionaries with metadata
+            initiator_address: The wallet address of the user initiating the batch
+            
+        Returns:
+            Dict with batch processing results
+        """
+        try:
+            # Validate batch size
+            if len(assets) > 50:  # Match smart contract limit
+                return {
+                    "status": "error",
+                    "message": "Batch size exceeds maximum of 50 assets",
+                    "asset_count": len(assets)
+                }
+            
+            if len(assets) == 0:
+                return {
+                    "status": "error", 
+                    "message": "Must provide at least one asset",
+                    "asset_count": 0
+                }
+            
+            # Step 1: Validate all assets and check for conflicts
+            validated_assets = []
+            for idx, asset in enumerate(assets):
+                try:
+                    asset_id = asset.get("asset_id")
+                    owner_address = asset.get("wallet_address", initiator_address)
+                    critical_metadata = asset.get("critical_metadata", {})
+                    non_critical_metadata = asset.get("non_critical_metadata", {})
+                    
+                    if not asset_id:
+                        raise ValueError(f"Asset at index {idx} missing asset_id")
+                    
+                    # Check if asset already exists and is not deleted
+                    existing_doc = await self.asset_service.get_asset(
+                        asset_id=asset_id,
+                        wallet_address=owner_address
+                    )
+                    
+                    if existing_doc and not existing_doc.get("isDeleted"):
+                        raise ValueError(f"Asset {asset_id} already exists")
+                    
+                    validated_assets.append({
+                        "asset_id": asset_id,
+                        "owner_address": owner_address,
+                        "critical_metadata": critical_metadata,
+                        "non_critical_metadata": non_critical_metadata,
+                        "index": idx
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"Validation error for asset {idx}: {str(e)}")
+                    return {
+                        "status": "error",
+                        "message": f"Validation failed for asset {idx}: {str(e)}",
+                        "asset_count": len(assets)
+                    }
+            
+            # Step 2: Upload all to IPFS
+            ipfs_results = []
+            for asset_data in validated_assets:
+                try:
+                    # Extract IPFS-relevant metadata
+                    ipfs_metadata = get_ipfs_metadata({
+                        "asset_id": asset_data["asset_id"],
+                        "wallet_address": asset_data["owner_address"],
+                        "critical_metadata": asset_data["critical_metadata"]
+                    })
+                    
+                    # Store metadata in IPFS
+                    cid = await self.ipfs_service.store_metadata(ipfs_metadata)
+                    
+                    ipfs_results.append({
+                        "asset_id": asset_data["asset_id"],
+                        "cid": cid,
+                        "owner_address": asset_data["owner_address"],
+                        "critical_metadata": asset_data["critical_metadata"],
+                        "non_critical_metadata": asset_data["non_critical_metadata"]
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"IPFS upload failed for asset {asset_data['asset_id']}: {str(e)}")
+                    return {
+                        "status": "error",
+                        "message": f"IPFS upload failed for asset {asset_data['asset_id']}: {str(e)}",
+                        "asset_count": len(assets)
+                    }
+            
+            # Step 3: Handle blockchain interaction based on authentication method
+            if self.auth_context and self.auth_context.get("auth_method") == "wallet":
+                # For wallet users, prepare unsigned transaction and return for signing
+                pending_tx = await self.transaction_state_service.create_pending_transaction(
+                    operation_type="BATCH_CREATE",
+                    asset_ids=[r["asset_id"] for r in ipfs_results],
+                    wallet_address=initiator_address,
+                    metadata={
+                        "ipfs_results": ipfs_results,
+                        "asset_count": len(ipfs_results),
+                        "initiator_address": initiator_address
+                    }
+                )
+                
+                # Prepare the batch blockchain transaction
+                asset_ids = [r["asset_id"] for r in ipfs_results]
+                cids = [r["cid"] for r in ipfs_results]
+                
+                # Use batchUpdateIPFS function (for now, keep it simple)
+                blockchain_result = await self.blockchain_service.prepare_batch_transaction(
+                    asset_ids=asset_ids,
+                    cids=cids,
+                    from_address=initiator_address,
+                    function_name="batchUpdateIPFS"
+                )
+                
+                if not blockchain_result.get("success"):
+                    raise Exception(f"Failed to prepare batch transaction: {blockchain_result.get('error')}")
+                
+                return {
+                    "status": "pending_signature",
+                    "message": f"Sign transaction to create {len(assets)} assets in batch",
+                    "asset_count": len(assets),
+                    "pending_tx_id": pending_tx.id,
+                    "transaction": blockchain_result["transaction"],
+                    "estimated_gas": blockchain_result.get("estimated_gas"),
+                    "gas_price": blockchain_result.get("gas_price"),
+                    "function_name": blockchain_result.get("function_name")
+                }
+            
+            else:
+                # For API key users, execute immediately (server-signed)
+                asset_ids = [r["asset_id"] for r in ipfs_results]
+                cids = [r["cid"] for r in ipfs_results]
+                
+                # Execute batch blockchain transaction
+                blockchain_result = await self.blockchain_service.execute_batch_transaction(
+                    asset_ids=asset_ids,
+                    cids=cids,
+                    function_name="batchUpdateIPFS"
+                )
+                
+                blockchain_tx_hash = blockchain_result.get("tx_hash")
+                
+                # Create all asset records in database
+                results = []
+                for asset_data in ipfs_results:
+                    try:
+                        doc_id = await self.asset_service.create_asset(
+                            asset_id=asset_data["asset_id"],
+                            wallet_address=asset_data["owner_address"],
+                            smart_contract_tx_id=blockchain_tx_hash,
+                            ipfs_hash=asset_data["cid"],
+                            critical_metadata=asset_data["critical_metadata"],
+                            non_critical_metadata=asset_data["non_critical_metadata"],
+                            ipfs_version=1
+                        )
+                        
+                        # Record transaction
+                        if self.transaction_service:
+                            await self.transaction_service.record_transaction(
+                                asset_id=asset_data["asset_id"],
+                                action="BATCH_CREATE",
+                                wallet_address=initiator_address,
+                                metadata={
+                                    "ipfsHash": asset_data["cid"],
+                                    "smartContractTxId": blockchain_tx_hash,
+                                    "batchUpload": True,
+                                    "ipfsVersion": 1,
+                                    "ownerAddress": asset_data["owner_address"]
+                                }
+                            )
+                        
+                        results.append({
+                            "asset_id": asset_data["asset_id"],
+                            "status": "success",
+                            "document_id": doc_id
+                        })
+                        
+                    except Exception as e:
+                        logger.error(f"Error creating asset {asset_data['asset_id']}: {str(e)}")
+                        results.append({
+                            "asset_id": asset_data["asset_id"],
+                            "status": "error",
+                            "detail": str(e)
+                        })
+                
+                success_count = sum(1 for r in results if r["status"] == "success")
+                
+                return {
+                    "status": "success",
+                    "message": f"Batch upload completed: {success_count}/{len(results)} assets created",
+                    "asset_count": len(results),
+                    "results": results,
+                    "blockchain_tx_hash": blockchain_tx_hash,
+                    "successful_count": success_count,
+                    "failed_count": len(results) - success_count
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in batch metadata processing: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"Batch upload failed: {str(e)}",
+                "asset_count": len(assets) if assets else 0
+            }
+
+    async def complete_batch_blockchain_upload(
+        self,
+        pending_tx_id: str,
+        blockchain_tx_hash: str,
+        initiator_address: str
+    ) -> Dict[str, Any]:
+        """
+        Complete batch upload after blockchain transaction is confirmed.
+        
+        Args:
+            pending_tx_id: ID of the pending transaction
+            blockchain_tx_hash: Hash of the confirmed blockchain transaction
+            initiator_address: Address of the user who initiated the transaction
+            
+        Returns:
+            Dict with completion results
+        """
+        try:
+            # Get pending transaction data
+            pending_data = await self.transaction_state_service.get_pending_transaction(pending_tx_id)
+            
+            if not pending_data:
+                raise Exception(f"Pending transaction {pending_tx_id} not found or expired")
+            
+            # Verify the initiator
+            if pending_data.get("initiator_address", "").lower() != initiator_address.lower():
+                raise Exception("Unauthorized: initiator address mismatch")
+            
+            # Extract data from pending transaction
+            ipfs_results = pending_data["metadata"]["ipfs_results"]
+            asset_count = pending_data["metadata"]["asset_count"]
+            
+            # Verify transaction was successful
+            tx_verification = await self.blockchain_service.verify_transaction_success(blockchain_tx_hash)
+            if not tx_verification.get("success"):
+                raise Exception(f"Blockchain transaction failed or not found: {blockchain_tx_hash}")
+            
+            # Create all asset records in database
+            results = []
+            for asset_data in ipfs_results:
+                try:
+                    doc_id = await self.asset_service.create_asset(
+                        asset_id=asset_data["asset_id"],
+                        wallet_address=asset_data["owner_address"],
+                        smart_contract_tx_id=blockchain_tx_hash,
+                        ipfs_hash=asset_data["cid"],
+                        critical_metadata=asset_data["critical_metadata"],
+                        non_critical_metadata=asset_data["non_critical_metadata"],
+                        ipfs_version=1
+                    )
+                    
+                    # Record transaction
+                    if self.transaction_service:
+                        await self.transaction_service.record_transaction(
+                            asset_id=asset_data["asset_id"],
+                            action="BATCH_CREATE",
+                            wallet_address=initiator_address,
+                            metadata={
+                                "ipfsHash": asset_data["cid"],
+                                "smartContractTxId": blockchain_tx_hash,
+                                "batchUpload": True,
+                                "batchId": pending_tx_id,
+                                "ipfsVersion": 1,
+                                "ownerAddress": asset_data["owner_address"]
+                            }
+                        )
+                    
+                    results.append({
+                        "asset_id": asset_data["asset_id"],
+                        "status": "success",
+                        "document_id": doc_id
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"Error creating asset {asset_data['asset_id']}: {str(e)}")
+                    results.append({
+                        "asset_id": asset_data["asset_id"],
+                        "status": "error",
+                        "detail": str(e)
+                    })
+            
+            # Clean up pending transaction
+            await self.transaction_state_service.remove_pending_transaction(pending_tx_id)
+            
+            # Count successes and failures
+            success_count = sum(1 for r in results if r["status"] == "success")
+            failed_count = len(results) - success_count
+            
+            return {
+                "status": "success",
+                "message": f"Batch upload completed: {success_count}/{len(results)} assets created",
+                "asset_count": len(results),
+                "results": results,
+                "blockchain_tx_hash": blockchain_tx_hash,
+                "successful_count": success_count,
+                "failed_count": failed_count
+            }
+            
+        except Exception as e:
+            logger.error(f"Error completing batch upload: {str(e)}")
+            return {
+                "status": "error",
+                "message": f"Error completing batch upload: {str(e)}",
+                "asset_count": 0
+            }

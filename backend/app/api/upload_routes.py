@@ -1,9 +1,13 @@
 from fastapi import APIRouter, Depends, File, Form, UploadFile, Body, HTTPException, Request
 from typing import List, Optional, Dict, Any
 import logging
+import json
 
 from app.handlers.upload_handler import UploadHandler
-from app.schemas.upload_schema import MetadataUploadRequest, MetadataUploadResponse, CsvUploadResponse, JsonUploadResponse
+from app.schemas.upload_schema import (
+    MetadataUploadRequest, MetadataUploadResponse, CsvUploadResponse, JsonUploadResponse,
+    BatchUploadRequest, BatchUploadResponse, BatchCompletionRequest
+)
 from app.services.asset_service import AssetService
 from app.services.ipfs_service import IPFSService
 from app.services.blockchain_service import BlockchainService
@@ -410,3 +414,176 @@ async def cancel_pending_transaction(
     except Exception as e:
         logger.error(f"Error canceling pending transaction: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/batch/prepare", response_model=BatchUploadResponse)
+async def prepare_batch_upload(
+    request: BatchUploadRequest,
+    upload_handler: UploadHandler = Depends(get_upload_handler),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> BatchUploadResponse:
+    """
+    Prepare a batch upload requiring blockchain signature.
+    
+    This endpoint:
+    1. Validates all assets in the batch
+    2. Uploads metadata to IPFS for all assets
+    3. Returns transaction data for MetaMask signing
+    """
+    # Verify that the authenticated user is the one initiating the upload
+    authenticated_wallet = current_user.get("walletAddress")
+    if authenticated_wallet.lower() != request.wallet_address.lower():
+        logger.warning(f"Unauthorized batch upload attempt: {authenticated_wallet} tried to upload as {request.wallet_address}")
+        raise HTTPException(
+            status_code=403,
+            detail="You can only upload assets for your own wallet address"
+        )
+    
+    try:
+        # Convert BatchAssetItem objects to dictionaries
+        assets_data = []
+        for asset in request.assets:
+            assets_data.append({
+                "asset_id": asset.asset_id,
+                "wallet_address": asset.wallet_address,
+                "critical_metadata": asset.critical_metadata,
+                "non_critical_metadata": asset.non_critical_metadata or {}
+            })
+        
+        result = await upload_handler.process_batch_metadata(
+            assets=assets_data,
+            initiator_address=request.wallet_address
+        )
+        
+        return BatchUploadResponse(**result)
+        
+    except Exception as e:
+        logger.error(f"Error in batch upload preparation: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to prepare batch upload: {str(e)}"
+        )
+
+@router.post("/batch/complete", response_model=BatchUploadResponse)
+async def complete_batch_upload(
+    request: BatchCompletionRequest,
+    upload_handler: UploadHandler = Depends(get_upload_handler),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> BatchUploadResponse:
+    """
+    Complete batch upload after blockchain confirmation.
+    Only available for wallet-authenticated users.
+    """
+    try:
+        # Get the authenticated user's wallet address
+        authenticated_wallet = current_user.get("walletAddress")
+        
+        if not authenticated_wallet:
+            raise HTTPException(status_code=401, detail="Unable to determine wallet address")
+        
+        logger.info(f"Completing batch upload for pending_tx_id: {request.pending_tx_id}, tx_hash: {request.blockchain_tx_hash}")
+        
+        # Complete the batch blockchain upload
+        result = await upload_handler.complete_batch_blockchain_upload(
+            pending_tx_id=request.pending_tx_id,
+            blockchain_tx_hash=request.blockchain_tx_hash,
+            initiator_address=authenticated_wallet
+        )
+        
+        logger.info(f"Batch upload completion result: {result}")
+        
+        if result.get("status") == "error":
+            logger.error(f"Batch upload completion error: {result.get('message', 'Unknown error')}")
+            raise HTTPException(
+                status_code=400,
+                detail=result.get("message", "Batch upload completion failed")
+            )
+        
+        return BatchUploadResponse(**result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error completing batch upload: {str(e)}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/json/batch", response_model=BatchUploadResponse)
+async def upload_json_files_batch(
+    wallet_address: str = Form(...),
+    files: List[UploadFile] = File(...),
+    upload_handler: UploadHandler = Depends(get_upload_handler),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> BatchUploadResponse:
+    """
+    Upload JSON files using the new batch flow with single MetaMask signature.
+    This replaces the old JSON upload endpoint for better UX.
+    """
+    # Verify that the authenticated user is the one initiating the upload
+    authenticated_wallet = current_user.get("walletAddress")
+    if authenticated_wallet.lower() != wallet_address.lower():
+        logger.warning(f"Unauthorized JSON batch upload attempt: {authenticated_wallet} tried to upload as {wallet_address}")
+        raise HTTPException(
+            status_code=403,
+            detail="You can only upload files for your own wallet address"
+        )
+    
+    try:
+        # Parse all JSON files into assets array
+        assets_data = []
+        for file in files:
+            if not file.filename.lower().endswith(".json"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File {file.filename} is not a JSON file"
+                )
+            
+            try:
+                content = await file.read()
+                data = json.loads(content.decode("utf-8"))
+                
+                # Validate required fields
+                if not data.get("asset_id"):
+                    raise ValueError(f"Missing asset_id in {file.filename}")
+                if not data.get("critical_metadata"):
+                    raise ValueError(f"Missing critical_metadata in {file.filename}")
+                
+                assets_data.append({
+                    "asset_id": data["asset_id"],
+                    "wallet_address": data.get("wallet_address", wallet_address),
+                    "critical_metadata": data["critical_metadata"],
+                    "non_critical_metadata": data.get("non_critical_metadata", {})
+                })
+                
+            except json.JSONDecodeError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid JSON in file {file.filename}: {str(e)}"
+                )
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Validation error in {file.filename}: {str(e)}"
+                )
+        
+        if len(assets_data) > 50:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Too many assets ({len(assets_data)}). Maximum 50 assets per batch."
+            )
+        
+        # Use batch upload flow
+        result = await upload_handler.process_batch_metadata(
+            assets=assets_data,
+            initiator_address=wallet_address
+        )
+        
+        return BatchUploadResponse(**result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in JSON batch upload: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"JSON batch upload failed: {str(e)}"
+        )

@@ -49,7 +49,7 @@ function UploadPage() {
   const [error, setError] = useState(null);
 
   const { currentAccount } = useAuth();
-  const { uploadJson, isUploading } = useAssets();
+  const { uploadJson, uploadBatch, isUploading, isBatchUploading } = useAssets();
   const navigate = useNavigate();
 
   // Get edit mode info
@@ -111,39 +111,77 @@ function UploadPage() {
       setUploadProgress(0);
       setUploadStep(0);
 
-      // Simulate progress for each step
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          const newProgress = prev + 1;
-
-          // Change steps at certain thresholds
-          if (newProgress === 25) setUploadStep(1);
-          if (newProgress === 50) setUploadStep(2);
-          if (newProgress === 75) setUploadStep(3);
-
-          return newProgress < 99 ? newProgress : 99;
-        });
-      }, 150);
-
       if (fileType === 'json') {
-        await uploadJson({ files }, {
-          onSuccess: () => {
-            clearInterval(progressInterval);
+        // Parse all JSON files into assets for batch upload
+        const assets = [];
+        
+        for (const file of files) {
+          try {
+            const content = await file.text();
+            const data = JSON.parse(content);
+            
+            // Validate required fields
+            if (!data.assetId && !data.asset_id) {
+              throw new Error(`Missing asset ID in file ${file.name}`);
+            }
+            if (!data.criticalMetadata && !data.critical_metadata) {
+              throw new Error(`Missing critical metadata in file ${file.name}`);
+            }
+            
+            // Normalize field names for batch upload
+            assets.push({
+              assetId: data.assetId || data.asset_id,
+              walletAddress: data.walletAddress || data.wallet_address || currentAccount,
+              criticalMetadata: data.criticalMetadata || data.critical_metadata,
+              nonCriticalMetadata: data.nonCriticalMetadata || data.non_critical_metadata || {}
+            });
+            
+          } catch (error) {
+            toast.error(`Error parsing ${file.name}: ${error.message}`);
+            return;
+          }
+        }
+        
+        if (assets.length > 50) {
+          toast.error(`Too many assets (${assets.length}). Maximum 50 assets per batch.`);
+          return;
+        }
+        
+        // Use batch upload with progress tracking
+        uploadBatch({
+          assets: assets
+        }, {
+          onProgress: (message, progress) => {
+            setUploadProgress(progress);
+            
+            // Update step based on progress
+            if (progress <= 25) setUploadStep(0);
+            else if (progress <= 50) setUploadStep(1);
+            else if (progress <= 75) setUploadStep(2);
+            else setUploadStep(3);
+          },
+          onSuccess: (result) => {
             setUploadProgress(100);
-
-            // Wait a moment before navigating to give user visual feedback
+            setUploadStep(3);
+            
+            // Navigate after showing completion
             setTimeout(() => {
               navigate('/dashboard');
-            }, 1000);
+            }, 1500);
+          },
+          onError: (error) => {
+            setUploadProgress(0);
+            setUploadStep(0);
+            // Error toast is already shown by the hook
           }
         });
-      } else {
-        // CSV upload would need to be implemented on backend
-        clearInterval(progressInterval);
-        toast.error('CSV upload not yet implemented');
+        
+      } else if (fileType === 'csv') {
+        toast.error('CSV upload not yet implemented with batch signing');
       }
     } catch (error) {
       setUploadProgress(0);
+      setUploadStep(0);
       toast.error(`Upload failed: ${error.message}`);
     }
   };
@@ -395,17 +433,52 @@ function UploadPage() {
                 </Grid>
               )}
 
+              {/* Progress Display for Batch Upload */}
+              {isBatchUploading && (
+                <Grid item xs={12}>
+                  <Card sx={{ p: 3, mt: 2 }}>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        Batch Upload Progress
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Uploading {files.length} assets with single blockchain transaction...
+                      </Typography>
+                      
+                      <Box sx={{ mb: 2 }}>
+                        <Stepper activeStep={uploadStep} alternativeLabel>
+                          {uploadSteps.map((label) => (
+                            <Step key={label}>
+                              <StepLabel>{label}</StepLabel>
+                            </Step>
+                          ))}
+                        </Stepper>
+                      </Box>
+                      
+                      <LinearProgress 
+                        variant="determinate" 
+                        value={uploadProgress} 
+                        sx={{ mb: 1 }}
+                      />
+                      <Typography variant="body2" color="text.secondary" textAlign="center">
+                        {uploadProgress.toFixed(0)}%
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              )}
+
               <Grid item xs={12}>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
                   <Button
                     variant="contained"
                     color="primary"
                     onClick={handleUpload}
-                    disabled={isUploading || files.length === 0}
-                    startIcon={isUploading ? <CircularProgress size={20} /> : <CloudUpload />}
+                    disabled={isUploading || isBatchUploading || files.length === 0}
+                    startIcon={isBatchUploading ? <CircularProgress size={20} /> : <CloudUpload />}
                     size="large"
                   >
-                    {isUploading ? 'Processing...' : 'Upload Files'}
+                    {isBatchUploading ? 'Processing Batch...' : 'Upload Files'}
                   </Button>
                 </Box>
               </Grid>

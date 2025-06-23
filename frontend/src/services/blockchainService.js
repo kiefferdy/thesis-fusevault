@@ -268,6 +268,97 @@ export const metamaskUtils = {
 
 // Main transaction flow orchestrator
 export const transactionFlow = {
+  // Complete batch upload flow with user signing
+  batchUploadWithSigning: async (batchData, onProgress = () => {}) => {
+    try {
+      onProgress('Preparing batch upload...', 10);
+      
+      // Validate input data
+      if (!batchData?.assets || !Array.isArray(batchData.assets)) {
+        throw new Error('Assets array is required');
+      }
+      
+      if (!batchData?.walletAddress) {
+        throw new Error('Wallet address is required');
+      }
+      
+      if (batchData.assets.length === 0) {
+        throw new Error('Must provide at least one asset');
+      }
+      
+      if (batchData.assets.length > 50) {
+        throw new Error('Batch size cannot exceed 50 assets');
+      }
+      
+      // Check network before starting
+      if (metamaskUtils.isMetaMaskAvailable()) {
+        const networkCheck = await metamaskUtils.checkNetwork();
+        if (!networkCheck.isCorrectNetwork) {
+          throw new Error(
+            `Wrong network detected. Please switch to Sepolia Testnet. ` +
+            `Currently on: ${networkCheck.networkName}`
+          );
+        }
+        console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
+      }
+      
+      onProgress('Uploading assets to IPFS...', 30);
+      
+      // Step 1: Prepare batch upload
+      const prepareResult = await apiClient.post('/upload/batch/prepare', {
+        assets: batchData.assets,
+        walletAddress: batchData.walletAddress
+      });
+      
+      if (prepareResult.data.status !== 'pending_signature') {
+        throw new Error(prepareResult.data.message || 'Batch preparation failed');
+      }
+      
+      onProgress(`Prepared ${prepareResult.data.assetCount} assets. Waiting for signature...`, 50);
+      
+      // Step 2: Sign transaction with MetaMask
+      const formattedTx = metamaskUtils.formatTransactionForMetaMask(
+        prepareResult.data.transaction
+      );
+      const txHash = await metamaskUtils.signTransaction(formattedTx);
+      
+      if (!txHash) {
+        throw new Error('Transaction was not signed');
+      }
+      
+      console.log(`✅ Batch transaction sent to Sepolia: ${txHash}`);
+      onProgress('Transaction sent, waiting for confirmation...', 70);
+      
+      // Step 3: Wait for blockchain confirmation
+      await transactionFlow.waitForConfirmation(txHash, (message, progress) => {
+        // Scale progress from 70-90
+        const scaledProgress = 70 + (progress * 0.2);
+        onProgress(message, scaledProgress);
+      });
+      
+      onProgress('Completing batch upload...', 90);
+      
+      // Step 4: Complete batch upload
+      const completionResult = await apiClient.post('/upload/batch/complete', {
+        pendingTxId: prepareResult.data.pendingTxId,
+        blockchainTxHash: txHash
+      });
+      
+      if (completionResult.data.status !== 'success') {
+        throw new Error(completionResult.data.message || 'Batch completion failed');
+      }
+      
+      onProgress('Batch upload completed!', 100);
+      
+      return completionResult.data;
+      
+    } catch (error) {
+      const friendlyError = transactionFlow.handleTransactionError(error);
+      console.error('Error in batch upload:', friendlyError);
+      throw friendlyError;
+    }
+  },
+
   // Complete upload flow with user signing
   uploadWithSigning: async (assetData, onProgress = () => {}) => {
     try {
