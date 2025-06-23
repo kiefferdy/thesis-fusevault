@@ -898,12 +898,11 @@ class UploadHandler:
                 asset_ids = [r["asset_id"] for r in ipfs_results]
                 cids = [r["cid"] for r in ipfs_results]
                 
-                # Use batchUpdateIPFS function (for now, keep it simple)
+                # Prepare unsigned transaction for wallet auth
                 blockchain_result = await self.blockchain_service.prepare_batch_transaction(
                     asset_ids=asset_ids,
                     cids=cids,
-                    from_address=initiator_address,
-                    function_name="batchUpdateIPFS"
+                    from_address=initiator_address
                 )
                 
                 if not blockchain_result.get("success"):
@@ -924,12 +923,13 @@ class UploadHandler:
                 # For API key users, execute immediately (server-signed)
                 asset_ids = [r["asset_id"] for r in ipfs_results]
                 cids = [r["cid"] for r in ipfs_results]
+                owner_addresses = [r["owner_address"] for r in ipfs_results]
                 
-                # Execute batch blockchain transaction
+                # Execute batch blockchain transaction using batchUpdateIPFSFor
                 blockchain_result = await self.blockchain_service.execute_batch_transaction(
                     asset_ids=asset_ids,
                     cids=cids,
-                    function_name="batchUpdateIPFS"
+                    owner_addresses=owner_addresses
                 )
                 
                 blockchain_tx_hash = blockchain_result.get("tx_hash")
@@ -1342,12 +1342,11 @@ class UploadHandler:
                 asset_ids = [r["asset_id"] for r in ipfs_results]
                 cids = [r["cid"] for r in ipfs_results]
                 
-                # Use batchUpdateIPFS function (for now, keep it simple)
+                # Prepare unsigned transaction for wallet auth
                 blockchain_result = await self.blockchain_service.prepare_batch_transaction(
                     asset_ids=asset_ids,
                     cids=cids,
-                    from_address=initiator_address,
-                    function_name="batchUpdateIPFS"
+                    from_address=initiator_address
                 )
                 
                 if not blockchain_result.get("success"):
@@ -1368,12 +1367,13 @@ class UploadHandler:
                 # For API key users, execute immediately (server-signed)
                 asset_ids = [r["asset_id"] for r in ipfs_results]
                 cids = [r["cid"] for r in ipfs_results]
+                owner_addresses = [r["owner_address"] for r in ipfs_results]
                 
-                # Execute batch blockchain transaction
+                # Execute batch blockchain transaction using batchUpdateIPFSFor
                 blockchain_result = await self.blockchain_service.execute_batch_transaction(
                     asset_ids=asset_ids,
                     cids=cids,
-                    function_name="batchUpdateIPFS"
+                    owner_addresses=owner_addresses
                 )
                 
                 blockchain_tx_hash = blockchain_result.get("tx_hash")

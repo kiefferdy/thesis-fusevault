@@ -59,6 +59,48 @@ class BlockchainService:
                 "type": "function"
             },
 
+            # Batch Functions
+            {
+                "inputs": [
+                    {"internalType": "string[]", "name": "_assetIds", "type": "string[]"},
+                    {"internalType": "string[]", "name": "_cids", "type": "string[]"}
+                ],
+                "name": "batchUpdateIPFS",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {"internalType": "address", "name": "_owner", "type": "address"},
+                    {"internalType": "string[]", "name": "_assetIds", "type": "string[]"},
+                    {"internalType": "string[]", "name": "_cids", "type": "string[]"}
+                ],
+                "name": "batchUpdateIPFSFor",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {"internalType": "string[]", "name": "_assetIds", "type": "string[]"}
+                ],
+                "name": "batchDeleteAssets",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {"internalType": "address", "name": "_owner", "type": "address"},
+                    {"internalType": "string[]", "name": "_assetIds", "type": "string[]"}
+                ],
+                "name": "batchDeleteAssetsFor",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+
             # Info and Verification Functions
             {
                 "inputs": [
@@ -1139,6 +1181,18 @@ class BlockchainService:
                 detail=f"Failed to check delegation: {str(e)}"
             )
 
+    async def check_server_delegation(self, user_address: str) -> bool:
+        """
+        Check if the user has delegated the server wallet for API key usage.
+        
+        Args:
+            user_address: The address of the user
+            
+        Returns:
+            True if user has delegated server wallet, False otherwise
+        """
+        return await self.check_delegation(user_address, self.wallet_address)
+
     def get_server_wallet_address(self) -> str:
         """
         Get the server's wallet address used for signing transactions.
@@ -1147,3 +1201,178 @@ class BlockchainService:
             Server wallet address
         """
         return self.wallet_address
+
+    async def prepare_batch_transaction(
+        self, 
+        asset_ids: list, 
+        cids: list, 
+        from_address: str
+    ) -> Dict[str, Any]:
+        """
+        Prepare an unsigned batch transaction for wallet authentication (MetaMask signing).
+        Always uses batchUpdateIPFS function for wallet auth.
+        
+        Args:
+            asset_ids: List of asset IDs
+            cids: List of IPFS CIDs
+            from_address: Wallet address of the user (who will sign)
+            
+        Returns:
+            Dict containing unsigned transaction and gas estimates
+        """
+        try:
+            if len(asset_ids) != len(cids):
+                raise ValueError("Asset IDs and CIDs arrays must have the same length")
+            
+            if len(asset_ids) == 0:
+                raise ValueError("Must provide at least one asset")
+            
+            if len(asset_ids) > 50:  # MAX_BATCH_SIZE from contract
+                raise ValueError("Batch size cannot exceed 50 assets")
+            
+            # For wallet auth, always use batchUpdateIPFS (user owns the assets)
+            contract_function = self.contract.functions.batchUpdateIPFS(asset_ids, cids)
+            
+            # Build transaction
+            nonce = self.web3.eth.get_transaction_count(Web3.to_checksum_address(from_address))
+            gas_price = self.web3.eth.gas_price
+            
+            # Estimate gas
+            estimated_gas = contract_function.estimate_gas({
+                'from': Web3.to_checksum_address(from_address),
+                'gasPrice': gas_price
+            })
+            
+            # Add 20% buffer to gas estimate
+            gas_limit = int(estimated_gas * 1.2)
+            
+            # Build the unsigned transaction
+            transaction = contract_function.build_transaction({
+                'from': Web3.to_checksum_address(from_address),
+                'nonce': nonce,
+                'gasPrice': gas_price,
+                'gas': gas_limit,
+            })
+            
+            logger.info(f"Prepared batch transaction for {len(asset_ids)} assets from {from_address}")
+            
+            return {
+                "success": True,
+                "transaction": transaction,
+                "estimated_gas": estimated_gas,
+                "gas_limit": gas_limit,
+                "gas_price": gas_price,
+                "function_name": "batchUpdateIPFS",
+                "asset_count": len(asset_ids)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error preparing batch transaction: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    async def execute_batch_transaction(
+        self, 
+        asset_ids: list, 
+        cids: list, 
+        owner_addresses: list = None
+    ) -> Dict[str, Any]:
+        """
+        Execute a batch transaction with server wallet signature for API key authentication.
+        Uses batchUpdateIPFSFor if owner_addresses provided, otherwise batchUpdateIPFS.
+        
+        Args:
+            asset_ids: List of asset IDs
+            cids: List of IPFS CIDs  
+            owner_addresses: List of owner addresses (for API key auth - assets owned by users)
+            
+        Returns:
+            Dict containing transaction hash
+        """
+        try:
+            if len(asset_ids) != len(cids):
+                raise ValueError("Asset IDs and CIDs arrays must have the same length")
+            
+            if len(asset_ids) == 0:
+                raise ValueError("Must provide at least one asset")
+            
+            if len(asset_ids) > 50:  # MAX_BATCH_SIZE from contract
+                raise ValueError("Batch size cannot exceed 50 assets")
+            
+            # For API key auth, we need to use batchUpdateIPFSFor because:
+            # - Server wallet signs the transaction
+            # - But assets should be owned by the API key user's wallet
+            if owner_addresses:
+                if len(owner_addresses) != len(asset_ids):
+                    raise ValueError("Owner addresses array must have the same length as asset IDs")
+                
+                # Use batchUpdateIPFSFor - all assets must have the same owner for this function
+                unique_owners = list(set(owner_addresses))
+                if len(unique_owners) != 1:
+                    raise ValueError("All assets in a batch must have the same owner for API key authentication")
+                
+                owner_address = unique_owners[0]
+                contract_function = self.contract.functions.batchUpdateIPFSFor(
+                    Web3.to_checksum_address(owner_address),
+                    asset_ids,
+                    cids
+                )
+                logger.info(f"Executing batch transaction for {len(asset_ids)} assets owned by {owner_address}")
+            else:
+                # Fallback to batchUpdateIPFS (server owns assets - probably not desired)
+                contract_function = self.contract.functions.batchUpdateIPFS(asset_ids, cids)
+                logger.warning(f"Executing batch transaction with server as owner - this may not be intended")
+            
+            # Build transaction
+            nonce = self.web3.eth.get_transaction_count(self.wallet_address)
+            gas_price = self.web3.eth.gas_price
+            
+            # Estimate gas
+            estimated_gas = contract_function.estimate_gas({
+                'from': self.wallet_address,
+                'gasPrice': gas_price
+            })
+            
+            # Add 20% buffer to gas estimate
+            gas_limit = int(estimated_gas * 1.2)
+            
+            # Build and sign transaction
+            tx = contract_function.build_transaction({
+                'from': self.wallet_address,
+                'nonce': nonce,
+                'gasPrice': gas_price,
+                'gas': gas_limit,
+            })
+            
+            # Sign transaction
+            signed_tx = self.web3.eth.account.sign_transaction(tx, private_key=self.private_key)
+            
+            # Handle different Web3.py versions
+            if hasattr(signed_tx, 'rawTransaction'):
+                raw_tx = signed_tx.rawTransaction
+            elif hasattr(signed_tx, 'raw_transaction'):
+                raw_tx = signed_tx.raw_transaction
+            else:
+                raw_tx = bytes(signed_tx)
+            
+            # Send transaction
+            tx_hash = self.web3.eth.send_raw_transaction(raw_tx)
+            
+            # Wait for transaction receipt
+            receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash)
+            
+            tx_hash_hex = receipt.transactionHash.hex()
+            logger.info(f"Batch transaction successful. {len(asset_ids)} assets processed. Transaction hash: {tx_hash_hex}")
+            
+            return {
+                "success": True,
+                "tx_hash": tx_hash_hex,
+                "asset_count": len(asset_ids),
+                "gas_used": receipt.gasUsed
+            }
+            
+        except Exception as e:
+            logger.error(f"Error executing batch transaction: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Batch transaction failed: {str(e)}")
