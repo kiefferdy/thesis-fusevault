@@ -311,10 +311,10 @@ function UploadPage() {
               <Info sx={{ mr: 1 }} />
               <div>
                 <Typography variant="body2" fontWeight="bold">
-                  Enhanced batch upload allows you to create multiple assets using templates, file uploads, or JSON input.
+                  Enhanced batch upload supports templates, JSON files, CSV imports, and direct JSON input.
                 </Typography>
                 <Typography variant="body2">
-                  Use templates for quick asset creation, upload JSON files, or paste JSON content directly.
+                  Use templates for quick asset creation, upload JSON/CSV files, or paste JSON content directly.
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 0.5 }}>
                   Maximum 50 assets per batch. Preview and edit assets before uploading.
@@ -339,15 +339,16 @@ function UploadPage() {
               <Grid item xs={12}>
                 <Paper variant="outlined" sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom>
-                    Upload Files or Paste JSON
+                    Upload Files, Import CSV, or Paste JSON
                   </Typography>
                   <BatchUploadZone
                     onFilesChange={handleBatchFilesChange}
                     onAssetsChange={handleBatchAssetsChange}
-                    acceptedFormats={['.json']}
+                    acceptedFormats={['.json', '.csv']}
                     maxFiles={50}
                     currentFiles={batchFiles}
                     currentAssets={batchAssets}
+                    currentAccount={currentAccount}
                   />
                 </Paper>
               </Grid>

@@ -18,7 +18,10 @@ import {
   ListItemIcon,
   Collapse,
   Tabs,
-  Tab
+  Tab,
+  Stepper,
+  Step,
+  StepLabel
 } from '@mui/material';
 import {
   CloudUpload,
@@ -31,25 +34,37 @@ import {
   FileUpload,
   Error,
   CheckCircle,
-  Warning
+  Warning,
+  TableChart
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
+import CSVParser from './CSVParser';
+import CSVColumnMapper from './CSVColumnMapper';
 
 const BatchUploadZone = ({
   onFilesChange,
   onAssetsChange,
-  acceptedFormats = ['.json'],
+  acceptedFormats = ['.json', '.csv'],
   maxFiles = 50,
   currentFiles = [],
-  currentAssets = []
+  currentAssets = [],
+  currentAccount
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
-  const [uploadMethod, setUploadMethod] = useState(0); // 0: Files, 1: JSON Paste
+  const [uploadMethod, setUploadMethod] = useState(0); // 0: Files, 1: JSON Paste, 2: CSV Upload
   const [jsonInput, setJsonInput] = useState('');
   const [previewDialog, setPreviewDialog] = useState({ open: false, content: null, fileName: '' });
   const [expandedFiles, setExpandedFiles] = useState(new Set());
   const [fileValidation, setFileValidation] = useState({});
   const fileInputRef = useRef(null);
+
+  // CSV-specific state
+  const [csvWorkflow, setCsvWorkflow] = useState({
+    step: 0, // 0: upload, 1: parse, 2: map, 3: preview
+    file: null,
+    parsedData: null,
+    mappedAssets: null
+  });
 
   // Validate JSON content
   const validateJsonContent = useCallback((content, fileName = 'input') => {
@@ -217,6 +232,61 @@ const BatchUploadZone = ({
     toast.success(`Added ${validation.assetCount} asset(s) from JSON`);
   }, [jsonInput, currentAssets, onAssetsChange, validateJsonContent]);
 
+  // CSV workflow handlers
+  const handleCSVFileSelect = useCallback((file) => {
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      toast.error('Please select a CSV file');
+      return;
+    }
+
+    setCsvWorkflow({
+      step: 1,
+      file,
+      parsedData: null,
+      mappedAssets: null
+    });
+  }, []);
+
+  const handleCSVParsed = useCallback((parsedData) => {
+    setCsvWorkflow(prev => ({
+      ...prev,
+      step: 2,
+      parsedData
+    }));
+  }, []);
+
+  const handleCSVMapped = useCallback((mappedAssets, validation) => {
+    setCsvWorkflow(prev => ({
+      ...prev,
+      step: 3,
+      mappedAssets
+    }));
+
+    // Add mapped assets to the existing assets
+    onAssetsChange([...currentAssets, ...mappedAssets]);
+    toast.success(`Added ${mappedAssets.length} assets from CSV`);
+
+    // Reset CSV workflow
+    setCsvWorkflow({
+      step: 0,
+      file: null,
+      parsedData: null,
+      mappedAssets: null
+    });
+
+    // Switch back to files tab to show added assets
+    setUploadMethod(0);
+  }, [currentAssets, onAssetsChange]);
+
+  const resetCSVWorkflow = useCallback(() => {
+    setCsvWorkflow({
+      step: 0,
+      file: null,
+      parsedData: null,
+      mappedAssets: null
+    });
+  }, []);
+
   // Remove file
   const removeFile = useCallback((fileName) => {
     const newFiles = currentFiles.filter(f => f.name !== fileName);
@@ -269,6 +339,7 @@ const BatchUploadZone = ({
         <Tabs value={uploadMethod} onChange={(e, value) => setUploadMethod(value)}>
           <Tab icon={<FileUpload />} label="Upload Files" />
           <Tab icon={<ContentPaste />} label="Paste JSON" />
+          <Tab icon={<TableChart />} label="CSV Import" />
         </Tabs>
       </Box>
 
@@ -313,7 +384,7 @@ const BatchUploadZone = ({
           />
           
           <Typography variant="h6" gutterBottom>
-            {isDragOver ? 'Drop files here' : 'Drag and drop JSON files here'}
+            {isDragOver ? 'Drop files here' : 'Drag and drop JSON or CSV files here'}
           </Typography>
           
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -351,6 +422,123 @@ const BatchUploadZone = ({
           >
             Add from JSON
           </Button>
+        </Box>
+      )}
+
+      {/* CSV Import Tab */}
+      {uploadMethod === 2 && (
+        <Box>
+          {/* CSV Workflow Steps */}
+          <Box sx={{ mb: 3 }}>
+            <Stepper activeStep={csvWorkflow.step} alternativeLabel>
+              <Step>
+                <StepLabel>Upload CSV</StepLabel>
+              </Step>
+              <Step>
+                <StepLabel>Parse Data</StepLabel>
+              </Step>
+              <Step>
+                <StepLabel>Map Columns</StepLabel>
+              </Step>
+              <Step>
+                <StepLabel>Complete</StepLabel>
+              </Step>
+            </Stepper>
+          </Box>
+
+          {/* Step 0: File Upload */}
+          {csvWorkflow.step === 0 && (
+            <Paper
+              variant="outlined"
+              component="label"
+              sx={{
+                p: 4,
+                textAlign: 'center',
+                cursor: 'pointer',
+                borderStyle: 'dashed',
+                borderWidth: 2,
+                borderColor: 'primary.light',
+                bgcolor: 'primary.lighter',
+                '&:hover': {
+                  borderColor: 'primary.main'
+                }
+              }}
+            >
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => handleCSVFileSelect(e.target.files[0])}
+                style={{ display: 'none' }}
+              />
+
+              <TableChart sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
+              
+              <Typography variant="h6" gutterBottom>
+                Select CSV File to Import
+              </Typography>
+              
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Upload a CSV file with asset data to import multiple assets at once
+              </Typography>
+
+              <Button variant="outlined" component="span">
+                Choose CSV File
+              </Button>
+
+              <Typography variant="caption" display="block" sx={{ mt: 2 }}>
+                Maximum file size: 5MB • Maximum 50 rows
+              </Typography>
+            </Paper>
+          )}
+
+          {/* Step 1: CSV Parser */}
+          {csvWorkflow.step === 1 && csvWorkflow.file && (
+            <Paper variant="outlined" sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">
+                  Parse CSV File: {csvWorkflow.file.name}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={resetCSVWorkflow}
+                >
+                  Start Over
+                </Button>
+              </Box>
+              
+              <CSVParser
+                onParsedData={handleCSVParsed}
+                maxRows={maxFiles}
+                showPreview={true}
+              />
+            </Paper>
+          )}
+
+          {/* Step 2: Column Mapping */}
+          {csvWorkflow.step === 2 && csvWorkflow.parsedData && (
+            <Paper variant="outlined" sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">
+                  Map CSV Columns to Asset Fields
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={resetCSVWorkflow}
+                >
+                  Start Over
+                </Button>
+              </Box>
+              
+              <CSVColumnMapper
+                csvData={csvWorkflow.parsedData.data}
+                csvHeaders={csvWorkflow.parsedData.meta.fields}
+                onMappingComplete={handleCSVMapped}
+                currentAccount={currentAccount}
+              />
+            </Paper>
+          )}
         </Box>
       )}
 
