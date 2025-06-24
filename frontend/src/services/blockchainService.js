@@ -330,15 +330,22 @@ export const transactionFlow = {
       onProgress('Transaction sent, waiting for confirmation...', 70);
       
       // Step 3: Wait for blockchain confirmation
-      await transactionFlow.waitForConfirmation(txHash, (message, progress) => {
+      const confirmationResult = await transactionFlow.waitForConfirmation(txHash, (message, progress) => {
         // Scale progress from 70-90
         const scaledProgress = 70 + (progress * 0.2);
         onProgress(message, scaledProgress);
       });
       
+      // Check if auto-completion occurred
+      if (confirmationResult && confirmationResult.auto_completed) {
+        console.log('Batch upload auto-completed:', confirmationResult.completion_result);
+        onProgress('Batch upload completed!', 100);
+        return confirmationResult.completion_result;
+      }
+      
       onProgress('Completing batch upload...', 90);
       
-      // Step 4: Complete batch upload
+      // Step 4: Complete batch upload (only if not auto-completed)
       const completionResult = await apiClient.post('/upload/batch/complete', {
         pendingTxId: prepareResult.data.pendingTxId,
         blockchainTxHash: txHash
@@ -737,7 +744,19 @@ export const transactionFlow = {
         const status = await blockchainService.getTransactionStatus(txHash);
         
         if (status.status === 'confirmed') {
-          if (status.details && status.details.success) {
+          // Check for success at top level (auto-completion) or in details
+          const success = status.success || (status.details && status.details.success);
+          
+          if (success) {
+            // Handle auto-completion response
+            if (status.auto_completed) {
+              console.log('Auto-completion detected:', status.completion_result);
+              return {
+                auto_completed: true,
+                completion_result: status.completion_result,
+                ...status.details
+              };
+            }
             return status.details;
           } else {
             throw new Error(

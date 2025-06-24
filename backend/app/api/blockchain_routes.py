@@ -314,12 +314,13 @@ async def get_transaction_status(
                             pending_transactions = await transaction_state_service.get_user_pending_transactions(user_wallet)
                             
                             for pending_tx in pending_transactions:
-                                # Check if this is a batch upload that matches this transaction
+                                # Check if this is a batch upload that matches this specific transaction
                                 if (pending_tx.get("operation_type") == "BATCH_CREATE" and 
                                     "metadata" in pending_tx and 
-                                    "ipfs_results" in pending_tx["metadata"]):
+                                    "ipfs_results" in pending_tx["metadata"] and
+                                    pending_tx.get("blockchain_tx_hash") == tx_hash):
                                     
-                                    logger.warning(f"🔥 AUTO-COMPLETING BATCH UPLOAD - pending_tx_id: {pending_tx.get('tx_id')}, tx_hash: {tx_hash}")
+                                    logger.info(f"AUTO-COMPLETING BATCH UPLOAD - pending_tx_id: {pending_tx.get('tx_id')}, tx_hash: {tx_hash}")
                                     
                                     # Auto-trigger batch completion
                                     try:
@@ -328,9 +329,9 @@ async def get_transaction_status(
                                             blockchain_tx_hash=tx_hash,
                                             initiator_address=user_wallet
                                         )
-                                        logger.info(f"✅ AUTO-COMPLETION SUCCESS: {completion_result}")
+                                        logger.info(f"AUTO-COMPLETION SUCCESS: {completion_result}")
                                         
-                                        # Add completion info to response
+                                        # Add completion info to response with frontend-compatible format
                                         result = {
                                             "status": "confirmed",
                                             "success": success,
@@ -340,13 +341,14 @@ async def get_transaction_status(
                                                 "tx_hash": tx_hash,
                                                 "block_number": receipt.blockNumber,
                                                 "gas_used": receipt.gasUsed,
-                                                "status": receipt.status
+                                                "status": receipt.status,
+                                                "message": f"Auto-completed batch upload: {completion_result.get('successful_count', 0)} assets created"
                                             }
                                         }
                                         return result
                                         
                                     except Exception as completion_error:
-                                        logger.error(f"❌ AUTO-COMPLETION FAILED: {str(completion_error)}")
+                                        logger.error(f"AUTO-COMPLETION FAILED: {str(completion_error)}")
                                         # Continue with normal response even if auto-completion fails
                                         break
                     except Exception as auto_complete_error:
