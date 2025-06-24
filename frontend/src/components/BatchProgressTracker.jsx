@@ -315,33 +315,35 @@ const BatchProgressTracker = ({
                         )}
                       </ListItemIcon>
                       <ListItemText
-                        primary={
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="body2" noWrap sx={{ maxWidth: '60%' }}>
-                              {asset.criticalMetadata?.name || asset.assetId}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {progress}%
-                            </Typography>
-                          </Box>
-                        }
-                        secondary={
-                          <Box>
-                            <LinearProgress 
-                              variant="determinate" 
-                              value={progress} 
-                              size="small"
-                              sx={{ mt: 0.5, height: 4 }}
-                              color={error ? 'error' : warning ? 'warning' : 'primary'}
-                            />
-                            {(error || warning) && (
-                              <Typography variant="caption" color={error ? 'error' : 'warning.main'} sx={{ mt: 0.5, display: 'block' }}>
-                                {error || warning}
-                              </Typography>
-                            )}
-                          </Box>
-                        }
+                        primary={asset.criticalMetadata?.name || asset.assetId}
+                        secondary={`${progress}%`}
+                        sx={{ 
+                          '& .MuiListItemText-primary': { 
+                            fontSize: '0.875rem',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            maxWidth: '60%'
+                          },
+                          '& .MuiListItemText-secondary': {
+                            fontSize: '0.75rem'
+                          }
+                        }}
                       />
+                      <Box sx={{ flexGrow: 1, ml: 2 }}>
+                        <LinearProgress 
+                          variant="determinate" 
+                          value={progress} 
+                          size="small"
+                          sx={{ height: 4, mb: 0.5 }}
+                          color={error ? 'error' : warning ? 'warning' : 'primary'}
+                        />
+                        {(error || warning) && (
+                          <Typography variant="caption" color={error ? 'error' : 'warning.main'}>
+                            {error || warning}
+                          </Typography>
+                        )}
+                      </Box>
                     </ListItem>
                   );
                 })}
