@@ -1045,7 +1045,21 @@ class UploadHandler:
             
             # Step 3: Handle blockchain interaction based on authentication method
             if self.auth_context and self.auth_context.get("auth_method") == "wallet":
-                # For wallet users, prepare unsigned transaction and return for signing
+                # First prepare blockchain transaction (fail fast if issues)
+                asset_ids = [r["asset_id"] for r in ipfs_results]
+                cids = [r["cid"] for r in ipfs_results]
+                
+                # Prepare unsigned transaction for wallet auth
+                blockchain_result = await self.blockchain_service.prepare_batch_transaction(
+                    asset_ids=asset_ids,
+                    cids=cids,
+                    from_address=initiator_address
+                )
+                
+                if not blockchain_result.get("success"):
+                    raise Exception(f"Failed to prepare batch transaction: {blockchain_result.get('error')}")
+                
+                # Only store pending transaction AFTER successful blockchain prep
                 pending_tx = await self.transaction_state_service.store_pending_transaction(
                     user_address=initiator_address,
                     transaction_data={
@@ -1059,20 +1073,6 @@ class UploadHandler:
                     },
                     ttl=self.calculate_batch_ttl(len(ipfs_results))  # Dynamic TTL based on batch size
                 )
-                
-                # Prepare the batch blockchain transaction
-                asset_ids = [r["asset_id"] for r in ipfs_results]
-                cids = [r["cid"] for r in ipfs_results]
-                
-                # Prepare unsigned transaction for wallet auth
-                blockchain_result = await self.blockchain_service.prepare_batch_transaction(
-                    asset_ids=asset_ids,
-                    cids=cids,
-                    from_address=initiator_address
-                )
-                
-                if not blockchain_result.get("success"):
-                    raise Exception(f"Failed to prepare batch transaction: {blockchain_result.get('error')}")
                 
                 return {
                     "status": "pending_signature",
@@ -1629,7 +1629,21 @@ class UploadHandler:
             
             # Step 3: Handle blockchain interaction based on authentication method
             if self.auth_context and self.auth_context.get("auth_method") == "wallet":
-                # For wallet users, prepare unsigned transaction and return for signing
+                # First prepare blockchain transaction (fail fast if issues)
+                asset_ids = [r["asset_id"] for r in ipfs_results]
+                cids = [r["cid"] for r in ipfs_results]
+                
+                # Prepare unsigned transaction for wallet auth
+                blockchain_result = await self.blockchain_service.prepare_batch_transaction(
+                    asset_ids=asset_ids,
+                    cids=cids,
+                    from_address=initiator_address
+                )
+                
+                if not blockchain_result.get("success"):
+                    raise Exception(f"Failed to prepare batch transaction: {blockchain_result.get('error')}")
+                
+                # Only store pending transaction AFTER successful blockchain prep
                 pending_tx = await self.transaction_state_service.store_pending_transaction(
                     user_address=initiator_address,
                     transaction_data={
@@ -1643,20 +1657,6 @@ class UploadHandler:
                     },
                     ttl=self.calculate_batch_ttl(len(ipfs_results))  # Dynamic TTL based on batch size
                 )
-                
-                # Prepare the batch blockchain transaction
-                asset_ids = [r["asset_id"] for r in ipfs_results]
-                cids = [r["cid"] for r in ipfs_results]
-                
-                # Prepare unsigned transaction for wallet auth
-                blockchain_result = await self.blockchain_service.prepare_batch_transaction(
-                    asset_ids=asset_ids,
-                    cids=cids,
-                    from_address=initiator_address
-                )
-                
-                if not blockchain_result.get("success"):
-                    raise Exception(f"Failed to prepare batch transaction: {blockchain_result.get('error')}")
                 
                 return {
                     "status": "pending_signature",
