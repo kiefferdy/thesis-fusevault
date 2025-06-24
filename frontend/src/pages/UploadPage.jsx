@@ -23,6 +23,10 @@ import {
 import { CloudUpload, Description, Info } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import UploadFormWithSigning from '../components/UploadFormWithSigning';
+import BatchUploadZone from '../components/BatchUploadZone';
+import AssetPreviewGrid from '../components/AssetPreviewGrid';
+import BatchProgressTracker from '../components/BatchProgressTracker';
+import TemplateSelector from '../components/TemplateSelector';
 import { useAuth } from '../contexts/AuthContext';
 import { useAssets } from '../hooks/useAssets';
 import { toast } from 'react-hot-toast';
@@ -37,11 +41,21 @@ function getEditModeInfo() {
 
 function UploadPage() {
   const [tabValue, setTabValue] = useState(0);
-  const [files, setFiles] = useState([]);
-  const [fileType, setFileType] = useState('json'); // 'json' or 'csv'
-  const [criticalFields, setCriticalFields] = useState('');
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStep, setUploadStep] = useState(0);
+  
+  // Batch upload state
+  const [batchFiles, setBatchFiles] = useState([]);
+  const [batchAssets, setBatchAssets] = useState([]);
+  const [batchProgress, setBatchProgress] = useState({
+    uploadProgress: 0,
+    currentStage: 0,
+    assetProgress: {},
+    errors: {},
+    warnings: {},
+    estimatedTimeRemaining: null,
+    blockchainTxHash: null,
+    networkStatus: null
+  });
+
 
   // Edit mode state
   const [existingAsset, setExistingAsset] = useState(null);
@@ -49,14 +63,11 @@ function UploadPage() {
   const [error, setError] = useState(null);
 
   const { currentAccount } = useAuth();
-  const { uploadJson, uploadBatch, isUploading, isBatchUploading } = useAssets();
+  const { uploadBatch, isBatchUploading } = useAssets();
   const navigate = useNavigate();
 
   // Get edit mode info
   const { isEditMode, assetId } = getEditModeInfo();
-
-  // Steps for the upload process
-  const uploadSteps = ['Preparing files', 'Uploading to IPFS', 'Storing on blockchain', 'Finalizing'];
 
   // Fetch existing asset data when in edit mode
   useEffect(() => {
@@ -96,95 +107,105 @@ function UploadPage() {
     setTabValue(newValue);
   };
 
-  const handleFileChange = (event) => {
-    const selectedFiles = Array.from(event.target.files);
-    setFiles(selectedFiles);
+  // Enhanced batch upload handlers
+  const handleBatchFilesChange = (newFiles) => {
+    setBatchFiles(newFiles);
   };
 
-  const handleUpload = async () => {
-    if (files.length === 0) {
-      toast.error('Please select files to upload');
+  const handleBatchAssetsChange = (newAssets) => {
+    setBatchAssets(newAssets);
+  };
+
+  const handleAssetEdit = (assetIndex, updatedAsset) => {
+    const newAssets = [...batchAssets];
+    newAssets[assetIndex] = updatedAsset;
+    setBatchAssets(newAssets);
+  };
+
+  const handleAssetDelete = (assetIndex) => {
+    const newAssets = batchAssets.filter((_, index) => index !== assetIndex);
+    setBatchAssets(newAssets);
+    toast.success('Asset removed from batch');
+  };
+
+  const handleCreateAssetsFromTemplate = (newAssets) => {
+    setBatchAssets(prev => [...prev, ...newAssets]);
+  };
+
+  const handleBatchUpload = async () => {
+    if (batchAssets.length === 0) {
+      toast.error('Please add assets to upload');
       return;
     }
 
-    try {
-      setUploadProgress(0);
-      setUploadStep(0);
+    if (batchAssets.length > 50) {
+      toast.error(`Too many assets (${batchAssets.length}). Maximum 50 assets per batch.`);
+      return;
+    }
 
-      if (fileType === 'json') {
-        // Parse all JSON files into assets for batch upload
-        const assets = [];
-        
-        for (const file of files) {
-          try {
-            const content = await file.text();
-            const data = JSON.parse(content);
-            
-            // Validate required fields
-            if (!data.assetId && !data.asset_id) {
-              throw new Error(`Missing asset ID in file ${file.name}`);
-            }
-            if (!data.criticalMetadata && !data.critical_metadata) {
-              throw new Error(`Missing critical metadata in file ${file.name}`);
-            }
-            
-            // Normalize field names for batch upload
-            assets.push({
-              assetId: data.assetId || data.asset_id,
-              walletAddress: data.walletAddress || data.wallet_address || currentAccount,
-              criticalMetadata: data.criticalMetadata || data.critical_metadata,
-              nonCriticalMetadata: data.nonCriticalMetadata || data.non_critical_metadata || {}
-            });
-            
-          } catch (error) {
-            toast.error(`Error parsing ${file.name}: ${error.message}`);
-            return;
-          }
+    // Reset progress
+    setBatchProgress({
+      uploadProgress: 0,
+      currentStage: 0,
+      assetProgress: {},
+      errors: {},
+      warnings: {},
+      estimatedTimeRemaining: null,
+      blockchainTxHash: null,
+      networkStatus: null
+    });
+
+    try {
+      // Use enhanced batch upload with detailed progress tracking
+      uploadBatch({
+        assets: batchAssets
+      }, {
+        onProgress: (message, progress, additionalData = {}) => {
+          setBatchProgress(prev => ({
+            ...prev,
+            uploadProgress: progress,
+            currentStage: additionalData.stage || prev.currentStage,
+            assetProgress: additionalData.assetProgress || prev.assetProgress,
+            errors: additionalData.errors || prev.errors,
+            warnings: additionalData.warnings || prev.warnings,
+            estimatedTimeRemaining: additionalData.estimatedTimeRemaining || prev.estimatedTimeRemaining,
+            blockchainTxHash: additionalData.blockchainTxHash || prev.blockchainTxHash,
+            networkStatus: additionalData.networkStatus || prev.networkStatus
+          }));
+        },
+        onSuccess: (result) => {
+          setBatchProgress(prev => ({
+            ...prev,
+            uploadProgress: 100,
+            currentStage: 4,
+            blockchainTxHash: result.blockchainTxHash || prev.blockchainTxHash
+          }));
+          
+          // Navigate after showing completion
+          setTimeout(() => {
+            navigate('/dashboard');
+          }, 2000);
+        },
+        onError: (error) => {
+          setBatchProgress(prev => ({
+            ...prev,
+            errors: { general: error.message, ...prev.errors }
+          }));
         }
-        
-        if (assets.length > 50) {
-          toast.error(`Too many assets (${assets.length}). Maximum 50 assets per batch.`);
-          return;
-        }
-        
-        // Use batch upload with progress tracking
-        uploadBatch({
-          assets: assets
-        }, {
-          onProgress: (message, progress) => {
-            setUploadProgress(progress);
-            
-            // Update step based on progress
-            if (progress <= 25) setUploadStep(0);
-            else if (progress <= 50) setUploadStep(1);
-            else if (progress <= 75) setUploadStep(2);
-            else setUploadStep(3);
-          },
-          onSuccess: (result) => {
-            setUploadProgress(100);
-            setUploadStep(3);
-            
-            // Navigate after showing completion
-            setTimeout(() => {
-              navigate('/dashboard');
-            }, 1500);
-          },
-          onError: (error) => {
-            setUploadProgress(0);
-            setUploadStep(0);
-            // Error toast is already shown by the hook
-          }
-        });
-        
-      } else if (fileType === 'csv') {
-        toast.error('CSV upload not yet implemented with batch signing');
-      }
+      });
     } catch (error) {
-      setUploadProgress(0);
-      setUploadStep(0);
+      setBatchProgress(prev => ({
+        ...prev,
+        errors: { general: error.message }
+      }));
       toast.error(`Upload failed: ${error.message}`);
     }
   };
+
+  const handleRetryUpload = () => {
+    handleBatchUpload();
+  };
+
 
   // Show loading state when fetching asset data for edit
   if (isEditMode && loading) {
@@ -283,206 +304,125 @@ function UploadPage() {
           </Box>
         )}
 
-        {/* Batch Upload - only show when not in edit mode */}
+        {/* Enhanced Batch Upload - only show when not in edit mode */}
         {!isEditMode && tabValue === 1 && (
           <Box sx={{ p: 3 }}>
+            <Alert severity="info" sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
+              <Info sx={{ mr: 1 }} />
+              <div>
+                <Typography variant="body2" fontWeight="bold">
+                  Enhanced batch upload allows you to create multiple assets using templates, file uploads, or JSON input.
+                </Typography>
+                <Typography variant="body2">
+                  Use templates for quick asset creation, upload JSON files, or paste JSON content directly.
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  Maximum 50 assets per batch. Preview and edit assets before uploading.
+                </Typography>
+              </div>
+            </Alert>
+
             <Grid container spacing={3}>
+              {/* Template Selector */}
               <Grid item xs={12}>
-                <Alert severity="info" sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
-                  <Info sx={{ mr: 1 }} />
-                  <div>
-                    <Typography variant="body2" fontWeight="bold">
-                      Batch upload allows you to create multiple assets at once using JSON or CSV files.
-                    </Typography>
-                    <Typography variant="body2">
-                      Each file should contain the required fields for creating assets.
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 0.5 }}>
-                      The upload process can take several minutes depending on file size.
-                    </Typography>
-                  </div>
-                </Alert>
+                <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
+                  <TemplateSelector
+                    onCreateAssets={handleCreateAssetsFromTemplate}
+                    currentAccount={currentAccount}
+                    maxAssets={50}
+                    currentAssetCount={batchAssets.length}
+                  />
+                </Paper>
               </Grid>
 
-              <Grid item xs={12} md={6}>
+              {/* File Upload Zone */}
+              <Grid item xs={12}>
                 <Paper variant="outlined" sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom>
-                    Upload Format
+                    Upload Files or Paste JSON
                   </Typography>
-
-                  <Box sx={{ mb: 2 }}>
-                    <Tabs
-                      value={fileType}
-                      onChange={(e, value) => setFileType(value)}
-                      indicatorColor="primary"
-                      textColor="primary"
-                    >
-                      <Tab value="json" label="JSON" />
-                      <Tab value="csv" label="CSV" disabled />
-                    </Tabs>
-                  </Box>
-
-                  {fileType === 'json' && (
-                    <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1 }}>
-                      <Typography variant="body2" color="text.primary" fontWeight="medium">
-                        Each JSON file should include:
-                      </Typography>
-                      <Box component="pre" sx={{ bgcolor: 'action.hover', p: 2, borderRadius: 1, overflowX: 'auto', fontSize: '0.85rem', mt: 1 }}>
-                        {`{
-  "asset_id": "unique-id", 
-  "wallet_address": "${currentAccount || '0x...'}",
-  "critical_metadata": {
-    "name": "Asset name",
-    "description": "Description",
-    "tags": ["tag1", "tag2"]
-    // Other user-defined fields as needed
-  },
-  "non_critical_metadata": {
-    // Any additional properties
-    "custom_field1": "value1",
-    "custom_field2": "value2"
-  }
-}`}
-                      </Box>
-                    </Box>
-                  )}
-
-                  {fileType === 'csv' && (
-                    <>
-                      <Typography variant="body2" color="text.secondary" paragraph>
-                        Your CSV must include 'asset_id' and 'wallet_address' columns.
-                        Specify which other columns should be treated as critical metadata:
-                      </Typography>
-
-                      <TextField
-                        label="Critical Fields (comma-separated)"
-                        value={criticalFields}
-                        onChange={(e) => setCriticalFields(e.target.value)}
-                        helperText="e.g., name,description,category"
-                        fullWidth
-                        margin="normal"
-                      />
-                    </>
-                  )}
-                </Paper>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <Paper
-                  variant="outlined"
-                  component="label"
-                  sx={{
-                    p: 3,
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    borderStyle: 'dashed',
-                    borderRadius: 2,
-                    borderWidth: 2,
-                    borderColor: theme => theme.palette.primary.light,
-                    bgcolor: theme => theme.palette.primary.lighter || 'rgba(0, 0, 255, 0.03)',
-                    '&:hover': {
-                      bgcolor: theme => theme.palette.primary.lighter || 'rgba(0, 0, 255, 0.05)',
-                      borderColor: 'primary.main'
-                    }
-                  }}
-                >
-                  <input
-                    type="file"
-                    multiple
-                    onChange={handleFileChange}
-                    accept={fileType === 'json' ? '.json' : '.csv'}
-                    style={{ display: 'none' }}
+                  <BatchUploadZone
+                    onFilesChange={handleBatchFilesChange}
+                    onAssetsChange={handleBatchAssetsChange}
+                    acceptedFormats={['.json']}
+                    maxFiles={50}
+                    currentFiles={batchFiles}
+                    currentAssets={batchAssets}
                   />
-
-                  <CloudUpload fontSize="large" color="primary" sx={{ mb: 2, fontSize: 60 }} />
-
-                  <Typography variant="h6" color="primary.main" gutterBottom>
-                    Click to select files
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary">
-                    or drag and drop here
-                  </Typography>
-
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-                    Accepted format: {fileType === 'json' ? '*.json' : '*.csv'}
-                  </Typography>
                 </Paper>
               </Grid>
 
-              {files.length > 0 && (
+              {/* Asset Preview and Management */}
+              {batchAssets.length > 0 && (
                 <Grid item xs={12}>
-                  <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Selected Files ({files.length})
+                  <Paper variant="outlined" sx={{ p: 3 }}>
+                    <Typography variant="h6" gutterBottom>
+                      Asset Management
                     </Typography>
-
-                    {files.map((file, index) => (
-                      <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                        <Description fontSize="small" sx={{ mr: 1 }} />
-                        <Typography variant="body2">
-                          {file.name} ({(file.size / 1024).toFixed(2)} KB)
-                        </Typography>
-                      </Box>
-                    ))}
+                    <AssetPreviewGrid
+                      assets={batchAssets}
+                      onAssetsChange={handleBatchAssetsChange}
+                      onAssetEdit={handleAssetEdit}
+                      onAssetDelete={handleAssetDelete}
+                      showBulkActions={true}
+                      maxAssets={50}
+                    />
                   </Paper>
                 </Grid>
               )}
 
-              {/* Progress Display for Batch Upload */}
-              {isBatchUploading && (
+              {/* Upload Controls */}
+              {batchAssets.length > 0 && (
                 <Grid item xs={12}>
-                  <Card sx={{ p: 3, mt: 2 }}>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
-                        Batch Upload Progress
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        Uploading {files.length} assets with single blockchain transaction...
-                      </Typography>
-                      
-                      <Box sx={{ mb: 2 }}>
-                        <Stepper activeStep={uploadStep} alternativeLabel>
-                          {uploadSteps.map((label) => (
-                            <Step key={label}>
-                              <StepLabel>{label}</StepLabel>
-                            </Step>
-                          ))}
-                        </Stepper>
-                      </Box>
-                      
-                      <LinearProgress 
-                        variant="determinate" 
-                        value={uploadProgress} 
-                        sx={{ mb: 1 }}
-                      />
-                      <Typography variant="body2" color="text.secondary" textAlign="center">
-                        {uploadProgress.toFixed(0)}%
-                      </Typography>
-                    </CardContent>
-                  </Card>
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        setBatchAssets([]);
+                        setBatchFiles([]);
+                        setBatchProgress({
+                          uploadProgress: 0,
+                          currentStage: 0,
+                          assetProgress: {},
+                          errors: {},
+                          warnings: {},
+                          estimatedTimeRemaining: null,
+                          blockchainTxHash: null,
+                          networkStatus: null
+                        });
+                      }}
+                      disabled={isBatchUploading}
+                    >
+                      Clear All
+                    </Button>
+                    <Button
+                      variant="contained"
+                      size="large"
+                      onClick={handleBatchUpload}
+                      disabled={isBatchUploading || batchAssets.length === 0 || batchAssets.length > 50}
+                      startIcon={isBatchUploading ? <CircularProgress size={20} /> : <CloudUpload />}
+                    >
+                      {isBatchUploading ? 'Uploading...' : `Upload ${batchAssets.length} Asset${batchAssets.length > 1 ? 's' : ''}`}
+                    </Button>
+                  </Box>
                 </Grid>
               )}
-
-              <Grid item xs={12}>
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handleUpload}
-                    disabled={isUploading || isBatchUploading || files.length === 0}
-                    startIcon={isBatchUploading ? <CircularProgress size={20} /> : <CloudUpload />}
-                    size="large"
-                  >
-                    {isBatchUploading ? 'Processing Batch...' : 'Upload Files'}
-                  </Button>
-                </Box>
-              </Grid>
             </Grid>
+
+            {/* Enhanced Progress Tracking */}
+            <BatchProgressTracker
+              isUploading={isBatchUploading}
+              uploadProgress={batchProgress.uploadProgress}
+              currentStage={batchProgress.currentStage}
+              assets={batchAssets}
+              assetProgress={batchProgress.assetProgress}
+              errors={batchProgress.errors}
+              warnings={batchProgress.warnings}
+              onRetry={handleRetryUpload}
+              estimatedTimeRemaining={batchProgress.estimatedTimeRemaining}
+              blockchainTxHash={batchProgress.blockchainTxHash}
+              networkStatus={batchProgress.networkStatus}
+            />
           </Box>
         )}
       </Paper>

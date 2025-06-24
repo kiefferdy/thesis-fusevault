@@ -283,6 +283,7 @@ function AssetForm({ existingAsset = null }) {
                   <HelpOutline fontSize="small" color="primary" sx={{ mr: 1 }} />
                   <Typography variant="caption" color="text.secondary">
                     High Security
+                  </Typography>
                 </Box>
               </Tooltip>
             </Box>
