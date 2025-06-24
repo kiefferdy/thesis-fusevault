@@ -638,7 +638,7 @@ class BlockchainService:
             logger.error(f"Blockchain error deleting asset for another owner: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Blockchain transaction failed: {str(e)}")
 
-    async def get_transaction_details(self, tx_hash: str) -> Dict[str, Any]:
+    async def get_transaction_details(self, tx_hash: str, asset_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Get details of a transaction.
         
@@ -696,6 +696,23 @@ class BlockchainService:
                     result["asset_id"] = func_params['_assetId']
                     result["cid"] = func_params['_cid']
                     result["owner"] = func_params['_owner']
+                elif func_obj.fn_name == 'batchUpdateIPFS':
+                    result["asset_ids"] = func_params['_assetIds']
+                    result["cids"] = func_params['_cids']
+                    # If specific asset_id requested, find its CID
+                    if asset_id and asset_id in func_params['_assetIds']:
+                        asset_index = func_params['_assetIds'].index(asset_id)
+                        result["cid"] = func_params['_cids'][asset_index]
+                        result["asset_id"] = asset_id
+                elif func_obj.fn_name == 'batchUpdateIPFSFor':
+                    result["asset_ids"] = func_params['_assetIds']
+                    result["cids"] = func_params['_cids']
+                    result["owner"] = func_params['_owner']
+                    # If specific asset_id requested, find its CID
+                    if asset_id and asset_id in func_params['_assetIds']:
+                        asset_index = func_params['_assetIds'].index(asset_id)
+                        result["cid"] = func_params['_cids'][asset_index]
+                        result["asset_id"] = asset_id
                 
                 return result
                 
@@ -1131,9 +1148,7 @@ class BlockchainService:
             # Check if transaction was successful
             success = receipt.status == 1
             
-            logger.info(f"Transaction {tx_hash} verification: {'success' if success else 'failed'}")
-            
-            return {
+            result = {
                 "success": success,
                 "tx_hash": tx_hash,
                 "block_number": receipt.blockNumber,
@@ -1141,6 +1156,42 @@ class BlockchainService:
                 "status": receipt.status,
                 "contract_address": receipt.contractAddress if hasattr(receipt, 'contractAddress') else None
             }
+            
+            # If transaction failed, try to get revert reason
+            if not success:
+                try:
+                    # Get the transaction data
+                    tx_data = self.web3.eth.get_transaction(tx_hash_bytes)
+                    
+                    # Try to call the transaction to get revert reason
+                    call_result = self.web3.eth.call(
+                        {
+                            'to': tx_data['to'],
+                            'from': tx_data['from'],
+                            'data': tx_data['input'],
+                            'gas': tx_data['gas'],
+                            'gasPrice': tx_data['gasPrice'] if 'gasPrice' in tx_data else tx_data['maxFeePerGas'],
+                            'value': tx_data['value']
+                        },
+                        receipt.blockNumber - 1  # Call at block before the failed transaction
+                    )
+                except Exception as revert_error:
+                    revert_reason = str(revert_error)
+                    if "execution reverted" in revert_reason.lower():
+                        # Extract the actual revert message
+                        if "revert" in revert_reason:
+                            revert_msg = revert_reason.split("revert")[-1].strip()
+                            result["revert_reason"] = revert_msg
+                        else:
+                            result["revert_reason"] = revert_reason
+                    else:
+                        result["revert_reason"] = f"Transaction failed: {revert_reason}"
+                
+                logger.error(f"Transaction {tx_hash} failed. Gas used: {receipt.gasUsed}. Revert reason: {result.get('revert_reason', 'Unknown')}")
+            else:
+                logger.info(f"Transaction {tx_hash} verification: success")
+            
+            return result
             
         except Exception as e:
             logger.error(f"Error verifying transaction {tx_hash}: {str(e)}")

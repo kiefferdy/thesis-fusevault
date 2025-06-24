@@ -473,6 +473,7 @@ async def complete_batch_upload(
     Complete batch upload after blockchain confirmation.
     Only available for wallet-authenticated users.
     """
+    logger.info(f"BATCH COMPLETION ENDPOINT CALLED - pending_tx_id: {request.pending_tx_id}, tx_hash: {request.blockchain_tx_hash}")
     try:
         # Get the authenticated user's wallet address
         authenticated_wallet = current_user.get("walletAddress")

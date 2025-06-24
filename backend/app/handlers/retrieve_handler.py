@@ -127,7 +127,7 @@ class RetrieveHandler:
                 ipfs_hash_verified = verify_result["is_valid"]
                 
                 # Get transaction details for additional verification
-                tx_data = await self.blockchain_service.get_transaction_details(blockchain_tx_id)
+                tx_data = await self.blockchain_service.get_transaction_details(blockchain_tx_id, asset_id)
                 blockchain_cid = tx_data.get("cid", "unknown")
                 tx_sender = tx_data.get("tx_sender", None)
 

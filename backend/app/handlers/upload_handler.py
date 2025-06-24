@@ -496,7 +496,8 @@ class UploadHandler:
             # Verify transaction was successful
             tx_verification = await self.blockchain_service.verify_transaction_success(blockchain_tx_hash)
             if not tx_verification.get("success"):
-                raise Exception(f"Blockchain transaction failed or not found: {blockchain_tx_hash}")
+                revert_reason = tx_verification.get("revert_reason", "Unknown reason")
+                raise Exception(f"Blockchain transaction failed: {revert_reason} (TX: {blockchain_tx_hash})")
             
             # Process based on the operation type
             if is_new_document:
@@ -1086,7 +1087,7 @@ class UploadHandler:
                         if self.transaction_service:
                             await self.transaction_service.record_transaction(
                                 asset_id=asset_data["asset_id"],
-                                action="BATCH_CREATE",
+                                action="CREATE",
                                 wallet_address=initiator_address,
                                 metadata={
                                     "ipfsHash": asset_data["cid"],
@@ -1165,7 +1166,8 @@ class UploadHandler:
             # Verify transaction was successful
             tx_verification = await self.blockchain_service.verify_transaction_success(blockchain_tx_hash)
             if not tx_verification.get("success"):
-                raise Exception(f"Blockchain transaction failed or not found: {blockchain_tx_hash}")
+                revert_reason = tx_verification.get("revert_reason", "Unknown reason")
+                raise Exception(f"Blockchain transaction failed: {revert_reason} (TX: {blockchain_tx_hash})")
             
             # Create all asset records in database
             results = []
@@ -1185,7 +1187,7 @@ class UploadHandler:
                     if self.transaction_service:
                         await self.transaction_service.record_transaction(
                             asset_id=asset_data["asset_id"],
-                            action="BATCH_CREATE",
+                            action="CREATE",
                             wallet_address=initiator_address,
                             metadata={
                                 "ipfsHash": asset_data["cid"],
@@ -1663,7 +1665,7 @@ class UploadHandler:
                         if self.transaction_service:
                             await self.transaction_service.record_transaction(
                                 asset_id=asset_data["asset_id"],
-                                action="BATCH_CREATE",
+                                action="CREATE",
                                 wallet_address=initiator_address,
                                 metadata={
                                     "ipfsHash": asset_data["cid"],
@@ -1742,7 +1744,8 @@ class UploadHandler:
             # Verify transaction was successful
             tx_verification = await self.blockchain_service.verify_transaction_success(blockchain_tx_hash)
             if not tx_verification.get("success"):
-                raise Exception(f"Blockchain transaction failed or not found: {blockchain_tx_hash}")
+                revert_reason = tx_verification.get("revert_reason", "Unknown reason")
+                raise Exception(f"Blockchain transaction failed: {revert_reason} (TX: {blockchain_tx_hash})")
             
             # Create all asset records in database
             results = []
@@ -1762,7 +1765,7 @@ class UploadHandler:
                     if self.transaction_service:
                         await self.transaction_service.record_transaction(
                             asset_id=asset_data["asset_id"],
-                            action="BATCH_CREATE",
+                            action="CREATE",
                             wallet_address=initiator_address,
                             metadata={
                                 "ipfsHash": asset_data["cid"],
