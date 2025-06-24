@@ -49,6 +49,31 @@ class UploadHandler:
         self.auth_context = auth_context
         load_dotenv()
 
+    def calculate_batch_ttl(self, asset_count: int) -> int:
+        """
+        Calculate TTL for batch uploads based on the number of assets.
+        
+        Formula: 5 minutes base + 1 minute per asset, capped at 60 minutes
+        - Small uploads (1-3 assets): 6-8 minutes (reasonable for quick transactions)
+        - Medium batches (10-20 assets): 15-25 minutes  
+        - Large batches (40-50 assets): 45-55 minutes
+        
+        Args:
+            asset_count: Number of assets in the batch
+            
+        Returns:
+            TTL in seconds
+        """
+        base_ttl = 300  # 5 minutes base (reduced from 15)
+        per_asset_ttl = 60  # 1 minute per asset
+        max_ttl = 3600  # 60 minutes maximum (reduced from 90)
+        
+        calculated_ttl = base_ttl + (asset_count * per_asset_ttl)
+        final_ttl = min(calculated_ttl, max_ttl)
+        
+        logger.info(f"Calculated batch TTL for {asset_count} assets: {final_ttl}s ({final_ttl//60} minutes)")
+        return final_ttl
+
     async def process_metadata(
         self, 
         asset_id: str,
@@ -872,6 +897,11 @@ class UploadHandler:
         """
         Process multiple assets in a batch with single blockchain transaction.
         
+        Uses dynamic TTL for auto-completion protection:
+        - Formula: 5 minutes base + 1 minute per asset (capped at 60 minutes)
+        - Small uploads (1-3 assets): 6-8 minutes protection
+        - Large batches (40-50 assets): 45-55 minutes protection
+        
         Args:
             assets: List of asset dictionaries with metadata
             initiator_address: The wallet address of the user initiating the batch
@@ -1026,7 +1056,8 @@ class UploadHandler:
                             "asset_count": len(ipfs_results),
                             "initiator_address": initiator_address
                         }
-                    }
+                    },
+                    ttl=self.calculate_batch_ttl(len(ipfs_results))  # Dynamic TTL based on batch size
                 )
                 
                 # Prepare the batch blockchain transaction
@@ -1450,6 +1481,11 @@ class UploadHandler:
         """
         Process multiple assets in a batch with single blockchain transaction.
         
+        Uses dynamic TTL for auto-completion protection:
+        - Formula: 5 minutes base + 1 minute per asset (capped at 60 minutes)
+        - Small uploads (1-3 assets): 6-8 minutes protection
+        - Large batches (40-50 assets): 45-55 minutes protection
+        
         Args:
             assets: List of asset dictionaries with metadata
             initiator_address: The wallet address of the user initiating the batch
@@ -1604,7 +1640,8 @@ class UploadHandler:
                             "asset_count": len(ipfs_results),
                             "initiator_address": initiator_address
                         }
-                    }
+                    },
+                    ttl=self.calculate_batch_ttl(len(ipfs_results))  # Dynamic TTL based on batch size
                 )
                 
                 # Prepare the batch blockchain transaction

@@ -99,7 +99,7 @@ async def prepare_transaction(
     request: TransactionPrepareRequest,
     req: Request,
     blockchain_service: BlockchainService = Depends(get_blockchain_service),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    _current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> TransactionResponse:
     """
     Prepare an unsigned transaction for frontend signing.
@@ -178,7 +178,7 @@ async def prepare_transaction(
 async def broadcast_transaction(
     request: SignedTransactionRequest,
     blockchain_service: BlockchainService = Depends(get_blockchain_service),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    _current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> BroadcastResponse:
     """
     Broadcast a signed transaction to the blockchain.
@@ -250,7 +250,7 @@ async def estimate_gas(
 async def verify_transaction(
     tx_hash: str,
     blockchain_service: BlockchainService = Depends(get_blockchain_service),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    _current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Verify that a transaction was successful on the blockchain.
