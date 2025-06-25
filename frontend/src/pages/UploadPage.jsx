@@ -68,6 +68,9 @@ function UploadPage() {
   
   // Template creation ref
   const createTemplateRef = useRef(null);
+  
+  // Progress tracker ref for auto-scroll
+  const progressTrackerRef = useRef(null);
 
   const { currentAccount } = useAuth();
   const { uploadBatch, isBatchUploading } = useAssets();
@@ -162,11 +165,18 @@ function UploadPage() {
       networkStatus: null
     });
 
+    // Auto-scroll to progress tracker
+    if (progressTrackerRef.current) {
+      progressTrackerRef.current.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start' 
+      });
+    }
+
     try {
       // Use enhanced batch upload with detailed progress tracking
       uploadBatch({
-        assets: batchAssets
-      }, {
+        assets: batchAssets,
         onProgress: (message, progress, additionalData = {}) => {
           setBatchProgress(prev => ({
             ...prev,
@@ -179,7 +189,8 @@ function UploadPage() {
             blockchainTxHash: additionalData.blockchainTxHash || prev.blockchainTxHash,
             networkStatus: additionalData.networkStatus || prev.networkStatus
           }));
-        },
+        }
+      }, {
         onSuccess: (result) => {
           setBatchProgress(prev => ({
             ...prev,
@@ -540,6 +551,25 @@ image-002,Company Logo,Updated brand logo,Jane Smith,"logo,brand",500KB`}
                 </Accordion>
               </Grid>
 
+              {/* Enhanced Progress Tracking */}
+              <Grid item xs={12}>
+                <Box ref={progressTrackerRef}>
+                  <BatchProgressTracker
+                    isUploading={isBatchUploading}
+                    uploadProgress={batchProgress.uploadProgress}
+                    currentStage={batchProgress.currentStage}
+                    assets={batchAssets}
+                    assetProgress={batchProgress.assetProgress}
+                    errors={batchProgress.errors}
+                    warnings={batchProgress.warnings}
+                    onRetry={handleRetryUpload}
+                    estimatedTimeRemaining={batchProgress.estimatedTimeRemaining}
+                    blockchainTxHash={batchProgress.blockchainTxHash}
+                    networkStatus={batchProgress.networkStatus}
+                  />
+                </Box>
+              </Grid>
+
               {/* File Upload Zone */}
               <Grid item xs={12}>
                 <Paper variant="outlined" sx={{ p: 3 }}>
@@ -646,20 +676,6 @@ image-002,Company Logo,Updated brand logo,Jane Smith,"logo,brand",500KB`}
               </Grid>
             </Grid>
 
-            {/* Enhanced Progress Tracking */}
-            <BatchProgressTracker
-              isUploading={isBatchUploading}
-              uploadProgress={batchProgress.uploadProgress}
-              currentStage={batchProgress.currentStage}
-              assets={batchAssets}
-              assetProgress={batchProgress.assetProgress}
-              errors={batchProgress.errors}
-              warnings={batchProgress.warnings}
-              onRetry={handleRetryUpload}
-              estimatedTimeRemaining={batchProgress.estimatedTimeRemaining}
-              blockchainTxHash={batchProgress.blockchainTxHash}
-              networkStatus={batchProgress.networkStatus}
-            />
           </Box>
         )}
       </Paper>

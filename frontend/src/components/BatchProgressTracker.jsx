@@ -59,7 +59,6 @@ const BatchProgressTracker = ({
   networkStatus = null
 }) => {
   const [expandedStages, setExpandedStages] = useState(new Set([0]));
-  const [showAssetDetails, setShowAssetDetails] = useState(false);
   const [txDetailsDialog, setTxDetailsDialog] = useState(false);
   const [startTime, setStartTime] = useState(null);
 
@@ -188,15 +187,8 @@ const BatchProgressTracker = ({
     return counts;
   }, [assets, assetProgress, errors]);
 
-  // Calculate overall progress
-  const overallProgress = useMemo(() => {
-    if (assets.length === 0) return uploadProgress;
-    
-    const totalAssetProgress = Object.values(assetProgress).reduce((sum, progress) => sum + progress, 0);
-    const maxProgress = assets.length * 100;
-    
-    return maxProgress > 0 ? (totalAssetProgress / maxProgress) * 100 : uploadProgress;
-  }, [assets.length, assetProgress, uploadProgress]);
+  // Use uploadProgress directly from props (calculated by backend progress tracking)
+  const overallProgress = uploadProgress;
 
   if (!isUploading && uploadProgress === 0) {
     return null;
@@ -266,26 +258,17 @@ const BatchProgressTracker = ({
         </Box>
 
         {/* Asset Status Summary */}
-        {assets.length > 0 && (
+        {assets.length > 0 && currentStage === 1 && (
           <Box sx={{ mb: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                Asset Status ({assets.length} total)
-              </Typography>
-              <Button
-                size="small"
-                onClick={() => setShowAssetDetails(!showAssetDetails)}
-                endIcon={showAssetDetails ? <ExpandLess /> : <ExpandMore />}
-              >
-                Details
-              </Button>
-            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Asset Status ({assets.length} total)
+            </Typography>
             
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {assetStatusCounts.completed > 0 && (
                 <Chip 
                   icon={<CheckCircle />}
-                  label={`${assetStatusCounts.completed} completed`}
+                  label={`${assetStatusCounts.completed} uploaded`}
                   size="small"
                   color="success"
                   sx={{ fontWeight: 500 }}
@@ -294,7 +277,7 @@ const BatchProgressTracker = ({
               {assetStatusCounts.processing > 0 && (
                 <Chip 
                   icon={<Pending />}
-                  label={`${assetStatusCounts.processing} processing`}
+                  label={`${assetStatusCounts.processing} uploading`}
                   size="small"
                   color="primary"
                   sx={{ fontWeight: 500 }}
@@ -322,88 +305,96 @@ const BatchProgressTracker = ({
           </Box>
         )}
 
-        {/* Detailed Asset Progress */}
-        <Collapse in={showAssetDetails}>
+        {/* Compact IPFS Asset Progress - Only show during IPFS upload stage */}
+        {currentStage === 1 && assets.length > 0 && (
           <Card 
             variant="outlined" 
             sx={{ 
               mb: 3,
               border: '1px solid',
-              borderColor: 'divider',
-              bgcolor: 'grey.50'
+              borderColor: 'primary.main',
+              bgcolor: 'primary.50'
             }}
           >
             <CardContent sx={{ pt: 2, pb: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Individual Asset Progress
+              <Typography variant="subtitle2" gutterBottom sx={{ color: 'primary.main', fontWeight: 600 }}>
+                📁 IPFS Upload Progress
               </Typography>
-              <List dense>
+              
+              {/* Compact grid layout for assets */}
+              <Box sx={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: 1,
+                mt: 1
+              }}>
                 {assets.map((asset) => {
-                  const progress = assetProgress[asset.assetId] || 0;
-                  const error = errors[asset.assetId];
-                  const warning = warnings[asset.assetId];
+                  const assetProgressData = assetProgress[asset.assetId];
+                  const status = assetProgressData?.status || 'pending';
+                  const progress = assetProgressData?.progress || 0;
                   
                   return (
-                    <ListItem key={asset.assetId} sx={{ px: 0 }}>
-                      <ListItemIcon sx={{ minWidth: 36 }}>
-                        {error ? (
-                          <Error color="error" />
-                        ) : warning ? (
-                          <Warning color="warning" />
-                        ) : progress === 100 ? (
-                          <CheckCircle color="success" />
-                        ) : progress > 0 ? (
-                          <Pending color="primary" />
+                    <Box 
+                      key={asset.assetId}
+                      sx={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 1,
+                        p: 1,
+                        bgcolor: 'background.paper',
+                        borderRadius: 1,
+                        border: '1px solid',
+                        borderColor: 'divider'
+                      }}
+                    >
+                      {/* Status icon */}
+                      <Box sx={{ minWidth: 20 }}>
+                        {status === 'completed' ? (
+                          <CheckCircle sx={{ fontSize: 16, color: 'success.main' }} />
+                        ) : status === 'uploading' ? (
+                          <CloudUpload sx={{ fontSize: 16, color: 'primary.main' }} />
+                        ) : status === 'error' ? (
+                          <Error sx={{ fontSize: 16, color: 'error.main' }} />
                         ) : (
-                          <Pending color="disabled" />
-                        )}
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={asset.criticalMetadata?.name || asset.assetId}
-                        secondary={`${progress}%`}
-                        sx={{ 
-                          '& .MuiListItemText-primary': { 
-                            fontSize: '0.875rem',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            maxWidth: '60%'
-                          },
-                          '& .MuiListItemText-secondary': {
-                            fontSize: '0.75rem'
-                          }
-                        }}
-                      />
-                      <Box sx={{ flexGrow: 1, ml: 2 }}>
-                        <LinearProgress 
-                          variant="determinate" 
-                          value={progress} 
-                          size="small"
-                          sx={{ 
-                            height: 4, 
-                            mb: 0.5, 
-                            borderRadius: 2,
-                            bgcolor: 'grey.200',
-                            '& .MuiLinearProgress-bar': {
-                              borderRadius: 2,
-                              transition: 'transform 0.3s ease'
-                            }
-                          }}
-                          color={error ? 'error' : warning ? 'warning' : 'primary'}
-                        />
-                        {(error || warning) && (
-                          <Typography variant="caption" color={error ? 'error' : 'warning.main'}>
-                            {error || warning}
-                          </Typography>
+                          <Pending sx={{ fontSize: 16, color: 'grey.400' }} />
                         )}
                       </Box>
-                    </ListItem>
+                      
+                      {/* Asset name - truncated */}
+                      <Typography 
+                        variant="caption" 
+                        sx={{ 
+                          flex: 1,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          fontSize: '0.75rem',
+                          fontWeight: status === 'uploading' ? 600 : 400
+                        }}
+                        title={asset.criticalMetadata?.name || asset.assetId}
+                      >
+                        {asset.criticalMetadata?.name || asset.assetId}
+                      </Typography>
+                      
+                      {/* Status badge */}
+                      <Chip 
+                        label={status === 'completed' ? '✓' : status === 'uploading' ? '...' : '○'} 
+                        size="small"
+                        variant={status === 'completed' ? 'filled' : 'outlined'}
+                        color={status === 'completed' ? 'success' : status === 'uploading' ? 'primary' : 'default'}
+                        sx={{ 
+                          height: 16, 
+                          fontSize: '0.6rem',
+                          '& .MuiChip-label': { px: 0.5 }
+                        }}
+                      />
+                    </Box>
                   );
                 })}
-              </List>
+              </Box>
             </CardContent>
           </Card>
-        </Collapse>
+        )}
 
         {/* Blockchain Transaction Info */}
         {blockchainTxHash && (
@@ -496,25 +487,110 @@ const BatchProgressTracker = ({
                         {stage.details}
                       </Typography>
                       
-                      {/* Stage-specific progress */}
-                      {status === 'active' && (
-                        <Box sx={{ mt: 2 }}>
-                          <LinearProgress 
-                            variant={uploadProgress > 0 ? 'determinate' : 'indeterminate'}
-                            value={uploadProgress}
-                            sx={{ 
-                              mb: 1, 
-                              height: 6,
-                              borderRadius: 3,
-                              bgcolor: 'grey.200',
-                              '& .MuiLinearProgress-bar': {
-                                borderRadius: 3
-                              }
-                            }}
-                          />
-                          <Typography variant="caption" color="primary.main" sx={{ fontWeight: 500 }}>
-                            {stage.label} in progress... {uploadProgress > 0 ? `${Math.round(uploadProgress)}%` : ''}
+                      {/* Stage-specific content */}
+                      {index === 0 && ( // Validation stage
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            • Checking asset data structure and required fields
                           </Typography>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            • Validating asset IDs for uniqueness
+                          </Typography>
+                          <Typography variant="body2">
+                            • Preparing {assets.length} assets for upload
+                          </Typography>
+                          {status === 'active' && (
+                            <LinearProgress 
+                              variant="indeterminate"
+                              sx={{ mt: 2, height: 4, borderRadius: 2 }}
+                            />
+                          )}
+                        </Box>
+                      )}
+                      
+                      {index === 1 && ( // IPFS stage
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            • Uploading critical metadata to IPFS (up to 10 concurrent)
+                          </Typography>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            • Each asset stored on decentralized network
+                          </Typography>
+                          {Object.keys(assetProgress).length > 0 && (
+                            <Typography variant="body2" sx={{ fontWeight: 500, color: 'primary.main' }}>
+                              Progress: {Object.values(assetProgress).filter(p => p?.status === 'completed').length}/{assets.length} assets uploaded
+                            </Typography>
+                          )}
+                          {status === 'active' && (
+                            <LinearProgress 
+                              variant="determinate"
+                              value={uploadProgress}
+                              sx={{ mt: 2, height: 6, borderRadius: 3 }}
+                            />
+                          )}
+                        </Box>
+                      )}
+                      
+                      {index === 2 && ( // Blockchain stage
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            • Creating blockchain transaction for all assets
+                          </Typography>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            • Single transaction covers {assets.length} assets (gas efficient)
+                          </Typography>
+                          <Typography variant="body2">
+                            • Waiting for MetaMask signature...
+                          </Typography>
+                          {status === 'active' && (
+                            <LinearProgress 
+                              variant="indeterminate"
+                              sx={{ mt: 2, height: 4, borderRadius: 2 }}
+                            />
+                          )}
+                        </Box>
+                      )}
+                      
+                      {index === 3 && ( // Confirmation stage
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            • Waiting for Sepolia network confirmation
+                          </Typography>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            • Typically takes 15-30 seconds
+                          </Typography>
+                          {blockchainTxHash && (
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                              TX: {blockchainTxHash.slice(0, 20)}...
+                            </Typography>
+                          )}
+                          {status === 'active' && (
+                            <LinearProgress 
+                              variant="indeterminate"
+                              sx={{ mt: 2, height: 4, borderRadius: 2 }}
+                            />
+                          )}
+                        </Box>
+                      )}
+                      
+                      {index === 4 && ( // Completion stage
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            • Recording assets in database
+                          </Typography>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            • Updating transaction records
+                          </Typography>
+                          <Typography variant="body2">
+                            • Finalizing batch upload process
+                          </Typography>
+                          {status === 'active' && (
+                            <LinearProgress 
+                              variant="determinate"
+                              value={uploadProgress}
+                              sx={{ mt: 2, height: 6, borderRadius: 3 }}
+                            />
+                          )}
                         </Box>
                       )}
                       
@@ -543,7 +619,7 @@ const BatchProgressTracker = ({
         </Stepper>
 
         {/* Completion Status */}
-        {!isUploading && uploadProgress === 100 && (
+        {!isUploading && uploadProgress === 100 && currentStage === 4 && (
           <Alert severity="success" sx={{ mt: 2 }}>
             <Typography variant="body2" fontWeight="bold">
               Batch upload completed successfully!

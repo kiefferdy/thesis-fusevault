@@ -588,3 +588,41 @@ async def upload_json_files_batch(
             status_code=500,
             detail=f"JSON batch upload failed: {str(e)}"
         )
+
+@router.get("/batch/{batch_id}/progress")
+async def get_batch_progress(
+    batch_id: str,
+    wallet_address: str = Depends(get_wallet_address)
+):
+    """
+    Get real-time progress for a batch upload.
+    
+    Args:
+        batch_id: Unique identifier for the batch upload
+        wallet_address: Wallet address from authentication
+        
+    Returns:
+        Dict containing batch progress information
+    """
+    try:
+        from app.services.progress_service import progress_tracker
+        
+        # Get progress data
+        progress_data = progress_tracker.get_batch_progress(batch_id)
+        
+        if progress_data is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Batch {batch_id} not found"
+            )
+        
+        return progress_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting batch progress for {batch_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get batch progress: {str(e)}"
+        )

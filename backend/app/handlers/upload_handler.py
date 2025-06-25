@@ -1013,35 +1013,72 @@ class UploadHandler:
                         "asset_count": len(assets)
                     }
             
-            # Step 2: Upload all to IPFS
-            ipfs_results = []
+            # Step 2: Upload all to IPFS concurrently with progress tracking
+            from app.services.progress_service import progress_tracker
+            import uuid
+            
+            # Generate unique batch ID  
+            batch_id = str(uuid.uuid4())
+            asset_ids = [asset_data["asset_id"] for asset_data in validated_assets]
+            
+            # Initialize progress tracking
+            progress_tracker.create_batch(batch_id, asset_ids, len(validated_assets))
+            
+            # Prepare metadata for concurrent upload
+            ipfs_metadata_list = []
             for asset_data in validated_assets:
-                try:
-                    # Extract IPFS-relevant metadata
-                    ipfs_metadata = get_ipfs_metadata({
-                        "asset_id": asset_data["asset_id"],
-                        "wallet_address": asset_data["owner_address"],
-                        "critical_metadata": asset_data["critical_metadata"]
-                    })
-                    
-                    # Store metadata in IPFS
-                    cid = await self.ipfs_service.store_metadata(ipfs_metadata)
-                    
+                ipfs_metadata = get_ipfs_metadata({
+                    "asset_id": asset_data["asset_id"],
+                    "wallet_address": asset_data["owner_address"],
+                    "critical_metadata": asset_data["critical_metadata"]
+                })
+                ipfs_metadata_list.append(ipfs_metadata)
+            
+            # Define progress callback
+            def update_progress(asset_id: str, progress: int, status: str):
+                progress_tracker.update_asset_progress(batch_id, asset_id, progress, status)
+            
+            # Upload all assets concurrently
+            try:
+                upload_results = await self.ipfs_service.store_metadata_batch_concurrent(
+                    ipfs_metadata_list, 
+                    progress_callback=update_progress,
+                    max_concurrent=10
+                )
+                
+                # Check for any failed uploads
+                failed_uploads = [r for r in upload_results if r["status"] == "error"]
+                if failed_uploads:
+                    error_details = "; ".join([f"{r['asset_id']}: {r['error']}" for r in failed_uploads])
+                    return {
+                        "status": "error",
+                        "message": f"IPFS upload failed for {len(failed_uploads)} assets: {error_details}",
+                        "asset_count": len(assets),
+                        "batch_id": pending_tx
+                    }
+                
+                # Combine upload results with original asset data
+                ipfs_results = []
+                upload_results_by_id = {r["asset_id"]: r for r in upload_results}
+                
+                for asset_data in validated_assets:
+                    upload_result = upload_results_by_id[asset_data["asset_id"]]
                     ipfs_results.append({
                         "asset_id": asset_data["asset_id"],
-                        "cid": cid,
+                        "cid": upload_result["cid"],
                         "owner_address": asset_data["owner_address"],
                         "critical_metadata": asset_data["critical_metadata"],
                         "non_critical_metadata": asset_data["non_critical_metadata"]
                     })
-                    
-                except Exception as e:
-                    logger.error(f"IPFS upload failed for asset {asset_data['asset_id']}: {str(e)}")
-                    return {
-                        "status": "error",
-                        "message": f"IPFS upload failed for asset {asset_data['asset_id']}: {str(e)}",
-                        "asset_count": len(assets)
-                    }
+                
+            except Exception as e:
+                logger.error(f"Concurrent IPFS upload failed: {str(e)}")
+                return {
+                    "status": "error",
+                    "message": f"Concurrent IPFS upload failed: {str(e)}",
+                    "asset_count": len(assets),
+                    "batch_id": pending_tx
+                }
             
             # Step 3: Handle blockchain interaction based on authentication method
             if self.auth_context and self.auth_context.get("auth_method") == "wallet":
@@ -1082,7 +1119,8 @@ class UploadHandler:
                     "transaction": blockchain_result["transaction"],
                     "estimated_gas": blockchain_result.get("estimated_gas"),
                     "gas_price": blockchain_result.get("gas_price"),
-                    "function_name": blockchain_result.get("function_name")
+                    "function_name": blockchain_result.get("function_name"),
+                    "batch_id": pending_tx
                 }
             
             else:
@@ -1152,7 +1190,8 @@ class UploadHandler:
                     "results": results,
                     "blockchain_tx_hash": blockchain_tx_hash,
                     "successful_count": success_count,
-                    "failed_count": len(results) - success_count
+                    "failed_count": len(results) - success_count,
+                    "batch_id": pending_tx
                 }
                 
         except Exception as e:
@@ -1258,7 +1297,8 @@ class UploadHandler:
                 "results": results,
                 "blockchain_tx_hash": blockchain_tx_hash,
                 "successful_count": success_count,
-                "failed_count": failed_count
+                "failed_count": failed_count,
+                "batch_id": pending_tx_id
             }
             
         except Exception as e:
@@ -1597,35 +1637,72 @@ class UploadHandler:
                         "asset_count": len(assets)
                     }
             
-            # Step 2: Upload all to IPFS
-            ipfs_results = []
+            # Step 2: Upload all to IPFS concurrently with progress tracking
+            from app.services.progress_service import progress_tracker
+            import uuid
+            
+            # Generate unique batch ID  
+            batch_id = str(uuid.uuid4())
+            asset_ids = [asset_data["asset_id"] for asset_data in validated_assets]
+            
+            # Initialize progress tracking
+            progress_tracker.create_batch(batch_id, asset_ids, len(validated_assets))
+            
+            # Prepare metadata for concurrent upload
+            ipfs_metadata_list = []
             for asset_data in validated_assets:
-                try:
-                    # Extract IPFS-relevant metadata
-                    ipfs_metadata = get_ipfs_metadata({
-                        "asset_id": asset_data["asset_id"],
-                        "wallet_address": asset_data["owner_address"],
-                        "critical_metadata": asset_data["critical_metadata"]
-                    })
-                    
-                    # Store metadata in IPFS
-                    cid = await self.ipfs_service.store_metadata(ipfs_metadata)
-                    
+                ipfs_metadata = get_ipfs_metadata({
+                    "asset_id": asset_data["asset_id"],
+                    "wallet_address": asset_data["owner_address"],
+                    "critical_metadata": asset_data["critical_metadata"]
+                })
+                ipfs_metadata_list.append(ipfs_metadata)
+            
+            # Define progress callback
+            def update_progress(asset_id: str, progress: int, status: str):
+                progress_tracker.update_asset_progress(batch_id, asset_id, progress, status)
+            
+            # Upload all assets concurrently
+            try:
+                upload_results = await self.ipfs_service.store_metadata_batch_concurrent(
+                    ipfs_metadata_list, 
+                    progress_callback=update_progress,
+                    max_concurrent=10
+                )
+                
+                # Check for any failed uploads
+                failed_uploads = [r for r in upload_results if r["status"] == "error"]
+                if failed_uploads:
+                    error_details = "; ".join([f"{r['asset_id']}: {r['error']}" for r in failed_uploads])
+                    return {
+                        "status": "error",
+                        "message": f"IPFS upload failed for {len(failed_uploads)} assets: {error_details}",
+                        "asset_count": len(assets),
+                        "batch_id": pending_tx
+                    }
+                
+                # Combine upload results with original asset data
+                ipfs_results = []
+                upload_results_by_id = {r["asset_id"]: r for r in upload_results}
+                
+                for asset_data in validated_assets:
+                    upload_result = upload_results_by_id[asset_data["asset_id"]]
                     ipfs_results.append({
                         "asset_id": asset_data["asset_id"],
-                        "cid": cid,
+                        "cid": upload_result["cid"],
                         "owner_address": asset_data["owner_address"],
                         "critical_metadata": asset_data["critical_metadata"],
                         "non_critical_metadata": asset_data["non_critical_metadata"]
                     })
-                    
-                except Exception as e:
-                    logger.error(f"IPFS upload failed for asset {asset_data['asset_id']}: {str(e)}")
-                    return {
-                        "status": "error",
-                        "message": f"IPFS upload failed for asset {asset_data['asset_id']}: {str(e)}",
-                        "asset_count": len(assets)
-                    }
+                
+            except Exception as e:
+                logger.error(f"Concurrent IPFS upload failed: {str(e)}")
+                return {
+                    "status": "error",
+                    "message": f"Concurrent IPFS upload failed: {str(e)}",
+                    "asset_count": len(assets),
+                    "batch_id": pending_tx
+                }
             
             # Step 3: Handle blockchain interaction based on authentication method
             if self.auth_context and self.auth_context.get("auth_method") == "wallet":
@@ -1666,7 +1743,8 @@ class UploadHandler:
                     "transaction": blockchain_result["transaction"],
                     "estimated_gas": blockchain_result.get("estimated_gas"),
                     "gas_price": blockchain_result.get("gas_price"),
-                    "function_name": blockchain_result.get("function_name")
+                    "function_name": blockchain_result.get("function_name"),
+                    "batch_id": pending_tx
                 }
             
             else:
@@ -1736,7 +1814,8 @@ class UploadHandler:
                     "results": results,
                     "blockchain_tx_hash": blockchain_tx_hash,
                     "successful_count": success_count,
-                    "failed_count": len(results) - success_count
+                    "failed_count": len(results) - success_count,
+                    "batch_id": pending_tx
                 }
                 
         except Exception as e:
@@ -1842,7 +1921,8 @@ class UploadHandler:
                 "results": results,
                 "blockchain_tx_hash": blockchain_tx_hash,
                 "successful_count": success_count,
-                "failed_count": failed_count
+                "failed_count": failed_count,
+                "batch_id": pending_tx_id
             }
             
         except Exception as e:

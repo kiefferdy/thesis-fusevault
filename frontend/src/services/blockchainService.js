@@ -271,7 +271,11 @@ export const transactionFlow = {
   // Complete batch upload flow with user signing
   batchUploadWithSigning: async (batchData, onProgress = () => {}) => {
     try {
-      onProgress('Preparing batch upload...', 10);
+      // Stage 0: Validation
+      onProgress('Validating assets and preparing batch upload...', 10, { 
+        stage: 0,
+        networkStatus: 'checking'
+      });
       
       // Validate input data
       if (!batchData?.assets || !Array.isArray(batchData.assets)) {
@@ -302,19 +306,95 @@ export const transactionFlow = {
         console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
       }
       
-      onProgress('Uploading assets to IPFS...', 30);
+      // Stage 1: IPFS Upload with real-time progress polling
+      onProgress('Starting IPFS upload for individual assets...', 25, { 
+        stage: 1,
+        networkStatus: 'connected'
+      });
       
-      // Step 1: Prepare batch upload
+      // Start the backend upload
       const prepareResult = await apiClient.post('/upload/batch/prepare', {
         assets: batchData.assets,
         walletAddress: batchData.walletAddress
       });
       
+      // If batch_id is returned, poll for real progress during Stage 1
+      if (prepareResult.data.batch_id) {
+        const batchId = prepareResult.data.batch_id;
+        
+        // Wait for IPFS uploads to complete with real-time progress
+        await new Promise((resolve) => {
+          let pollCount = 0;
+          const maxPollAttempts = 60; // 30 seconds of polling
+          
+          const pollProgress = async () => {
+            try {
+              const progressResponse = await apiClient.get(`/upload/batch/${batchId}/progress`);
+              const progressData = progressResponse.data;
+              
+              if (progressData && progressData.assets) {
+                // Calculate overall IPFS progress
+                const completedCount = progressData.completed_count || 0;
+                const totalCount = progressData.total_assets || batchData.assets.length;
+                const ipfsProgress = Math.round((completedCount / totalCount) * 20); // 20% for IPFS stage
+                
+                onProgress(`Uploading assets to IPFS: ${completedCount}/${totalCount} completed`, 25 + ipfsProgress, { 
+                  stage: 1,
+                  networkStatus: 'connected',
+                  assetProgress: progressData.assets
+                });
+                
+                // Check if all assets are complete
+                if (completedCount >= totalCount) {
+                  onProgress(`All ${totalCount} assets uploaded to IPFS successfully`, 45, { 
+                    stage: 1,
+                    networkStatus: 'connected',
+                    assetProgress: progressData.assets
+                  });
+                  resolve(); // IPFS stage complete
+                  return;
+                }
+                
+                // Continue polling if not all assets are complete
+                if (pollCount < maxPollAttempts) {
+                  pollCount++;
+                  setTimeout(pollProgress, 500); // Poll every 500ms
+                } else {
+                  // Timeout - continue anyway
+                  console.log('IPFS progress polling timed out');
+                  resolve();
+                }
+              } else {
+                // No progress data - continue anyway
+                setTimeout(pollProgress, 500);
+              }
+            } catch (error) {
+              console.log('Progress polling failed:', error.message);
+              // Continue with next stage even if polling fails
+              resolve();
+            }
+          };
+          
+          // Start polling immediately
+          pollProgress();
+        });
+      } else {
+        // No batch_id - fallback to simple progress update
+        onProgress('Assets uploaded to IPFS', 45, { 
+          stage: 1,
+          networkStatus: 'connected'
+        });
+      }
+      
       if (prepareResult.data.status !== 'pending_signature') {
         throw new Error(prepareResult.data.message || 'Batch preparation failed');
       }
       
-      onProgress(`Prepared ${prepareResult.data.assetCount} assets. Waiting for signature...`, 50);
+      // Stage 2: Blockchain Transaction
+      onProgress(`Assets uploaded to IPFS. Preparing blockchain transaction...`, 50, { 
+        stage: 2,
+        assetProgress: prepareResult.data.assetResults || {}
+      });
       
       // Step 2: Sign transaction with MetaMask
       const formattedTx = metamaskUtils.formatTransactionForMetaMask(
@@ -327,23 +407,38 @@ export const transactionFlow = {
       }
       
       console.log(`✅ Batch transaction sent to Sepolia: ${txHash}`);
-      onProgress('Transaction sent, waiting for confirmation...', 70);
+      // Stage 3: Confirmation
+      onProgress('Transaction sent, waiting for blockchain confirmation...', 70, { 
+        stage: 3,
+        blockchainTxHash: txHash
+      });
       
       // Step 3: Wait for blockchain confirmation
       const confirmationResult = await transactionFlow.waitForConfirmation(txHash, (message, progress) => {
-        // Scale progress from 70-90
+        // Scale progress from 70-90 while staying in stage 3
         const scaledProgress = 70 + (progress * 0.2);
-        onProgress(message, scaledProgress);
+        onProgress(message, scaledProgress, { 
+          stage: 3,
+          blockchainTxHash: txHash
+        });
       });
       
       // Check if auto-completion occurred
       if (confirmationResult && confirmationResult.auto_completed) {
         console.log('Batch upload auto-completed:', confirmationResult.completion_result);
-        onProgress('Batch upload completed!', 100);
+        // Stage 4: Completion (auto-completed)
+        onProgress('Batch upload completed!', 100, { 
+          stage: 4,
+          blockchainTxHash: txHash
+        });
         return confirmationResult.completion_result;
       }
       
-      onProgress('Completing batch upload...', 90);
+      // Stage 4: Completion
+      onProgress('Finalizing batch upload...', 90, { 
+        stage: 4,
+        blockchainTxHash: txHash
+      });
       
       // Step 4: Complete batch upload (only if not auto-completed)
       const completionResult = await apiClient.post('/upload/batch/complete', {
@@ -355,7 +450,10 @@ export const transactionFlow = {
         throw new Error(completionResult.data.message || 'Batch completion failed');
       }
       
-      onProgress('Batch upload completed!', 100);
+      onProgress('Batch upload completed!', 100, { 
+        stage: 4,
+        blockchainTxHash: txHash
+      });
       
       return completionResult.data;
       
