@@ -114,10 +114,22 @@ const BatchProgressTracker = ({
   }, [isUploading, startTime]);
 
   // Calculate elapsed time
-  const elapsedTime = useMemo(() => {
-    if (!startTime) return null;
-    return Math.floor((Date.now() - startTime) / 1000);
-  }, [startTime]);
+  const [elapsedTime, setElapsedTime] = useState(null);
+  
+  useEffect(() => {
+    let interval;
+    if (startTime && isUploading) {
+      interval = setInterval(() => {
+        setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
+      }, 1000);
+    } else if (!isUploading) {
+      setElapsedTime(null);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [startTime, isUploading]);
 
   // Format time
   const formatTime = (seconds) => {
@@ -197,21 +209,32 @@ const BatchProgressTracker = ({
           <Typography variant="h6">
             Batch Upload Progress
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            {elapsedTime && (
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            {elapsedTime !== null && (
               <Chip 
                 icon={<Timer />} 
                 label={`${formatTime(elapsedTime)} elapsed`} 
                 size="small" 
                 variant="outlined"
+                sx={{ fontWeight: 500 }}
               />
             )}
             {estimatedTimeRemaining && (
               <Chip 
+                icon={<Timer />}
                 label={`~${formatTime(estimatedTimeRemaining)} remaining`} 
                 size="small" 
                 color="primary" 
                 variant="outlined"
+                sx={{ fontWeight: 500 }}
+              />
+            )}
+            {isUploading && (
+              <Chip 
+                label="In Progress" 
+                size="small" 
+                color="primary"
+                sx={{ fontWeight: 500 }}
               />
             )}
           </Box>
@@ -230,7 +253,15 @@ const BatchProgressTracker = ({
           <LinearProgress 
             variant="determinate" 
             value={overallProgress} 
-            sx={{ height: 8, borderRadius: 4 }}
+            sx={{ 
+              height: 8, 
+              borderRadius: 4,
+              bgcolor: 'grey.200',
+              '& .MuiLinearProgress-bar': {
+                borderRadius: 4,
+                transition: 'transform 0.4s ease'
+              }
+            }}
           />
         </Box>
 
@@ -257,6 +288,7 @@ const BatchProgressTracker = ({
                   label={`${assetStatusCounts.completed} completed`}
                   size="small"
                   color="success"
+                  sx={{ fontWeight: 500 }}
                 />
               )}
               {assetStatusCounts.processing > 0 && (
@@ -265,13 +297,16 @@ const BatchProgressTracker = ({
                   label={`${assetStatusCounts.processing} processing`}
                   size="small"
                   color="primary"
+                  sx={{ fontWeight: 500 }}
                 />
               )}
               {assetStatusCounts.pending > 0 && (
                 <Chip 
+                  icon={<Pending />}
                   label={`${assetStatusCounts.pending} pending`}
                   size="small"
                   variant="outlined"
+                  sx={{ fontWeight: 500 }}
                 />
               )}
               {assetStatusCounts.error > 0 && (
@@ -280,6 +315,7 @@ const BatchProgressTracker = ({
                   label={`${assetStatusCounts.error} errors`}
                   size="small"
                   color="error"
+                  sx={{ fontWeight: 500 }}
                 />
               )}
             </Box>
@@ -288,8 +324,16 @@ const BatchProgressTracker = ({
 
         {/* Detailed Asset Progress */}
         <Collapse in={showAssetDetails}>
-          <Card variant="outlined" sx={{ mb: 3 }}>
-            <CardContent sx={{ pt: 2 }}>
+          <Card 
+            variant="outlined" 
+            sx={{ 
+              mb: 3,
+              border: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'grey.50'
+            }}
+          >
+            <CardContent sx={{ pt: 2, pb: 2 }}>
               <Typography variant="subtitle2" gutterBottom>
                 Individual Asset Progress
               </Typography>
@@ -335,7 +379,16 @@ const BatchProgressTracker = ({
                           variant="determinate" 
                           value={progress} 
                           size="small"
-                          sx={{ height: 4, mb: 0.5 }}
+                          sx={{ 
+                            height: 4, 
+                            mb: 0.5, 
+                            borderRadius: 2,
+                            bgcolor: 'grey.200',
+                            '& .MuiLinearProgress-bar': {
+                              borderRadius: 2,
+                              transition: 'transform 0.3s ease'
+                            }
+                          }}
                           color={error ? 'error' : warning ? 'warning' : 'primary'}
                         />
                         {(error || warning) && (
@@ -356,18 +409,34 @@ const BatchProgressTracker = ({
         {blockchainTxHash && (
           <Alert 
             severity="info" 
-            sx={{ mb: 3 }}
+            sx={{ 
+              mb: 3,
+              '& .MuiAlert-message': {
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%'
+              }
+            }}
             action={
               <Button
                 size="small"
                 onClick={() => setTxDetailsDialog(true)}
                 endIcon={<Launch />}
+                sx={{ fontWeight: 500 }}
               >
                 View Transaction
               </Button>
             }
           >
-            Blockchain transaction submitted: {blockchainTxHash.slice(0, 10)}...{blockchainTxHash.slice(-8)}
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                Blockchain Transaction Submitted
+              </Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                {blockchainTxHash.slice(0, 10)}...{blockchainTxHash.slice(-8)}
+              </Typography>
+            </Box>
           </Alert>
         )}
 
@@ -379,7 +448,23 @@ const BatchProgressTracker = ({
         )}
 
         {/* Stage Progress */}
-        <Stepper activeStep={currentStage} orientation="vertical">
+        <Stepper 
+          activeStep={currentStage} 
+          orientation="vertical"
+          sx={{
+            '& .MuiStepLabel-root': {
+              cursor: 'pointer',
+              '&:hover': {
+                bgcolor: 'action.hover',
+                borderRadius: 1
+              }
+            },
+            '& .MuiStepContent-root': {
+              borderLeft: '2px solid',
+              borderColor: 'divider'
+            }
+          }}
+        >
           {stageList.map((stage, index) => {
             const status = getStageStatus(index);
             const isExpanded = expandedStages.has(index);
@@ -413,14 +498,22 @@ const BatchProgressTracker = ({
                       
                       {/* Stage-specific progress */}
                       {status === 'active' && (
-                        <Box sx={{ mt: 1 }}>
+                        <Box sx={{ mt: 2 }}>
                           <LinearProgress 
                             variant={uploadProgress > 0 ? 'determinate' : 'indeterminate'}
                             value={uploadProgress}
-                            sx={{ mb: 1 }}
+                            sx={{ 
+                              mb: 1, 
+                              height: 6,
+                              borderRadius: 3,
+                              bgcolor: 'grey.200',
+                              '& .MuiLinearProgress-bar': {
+                                borderRadius: 3
+                              }
+                            }}
                           />
-                          <Typography variant="caption" color="text.secondary">
-                            {stage.label} in progress...
+                          <Typography variant="caption" color="primary.main" sx={{ fontWeight: 500 }}>
+                            {stage.label} in progress... {uploadProgress > 0 ? `${Math.round(uploadProgress)}%` : ''}
                           </Typography>
                         </Box>
                       )}

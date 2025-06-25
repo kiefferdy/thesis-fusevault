@@ -389,10 +389,7 @@ const TemplateSelector = ({
                     sx={{
                       height: '100%',
                       display: 'flex',
-                      flexDirection: 'column',
-                      '&:hover': {
-                        boxShadow: 2
-                      }
+                      flexDirection: 'column'
                     }}
                   >
                     <CardContent sx={{ flexGrow: 1 }}>
@@ -525,7 +522,7 @@ const TemplateSelector = ({
         </DialogTitle>
         <DialogContent>
           {previewDialog.template && (
-            <Box sx={{ pt: 1 }}>
+            <Box>
               <Typography variant="body2" color="text.secondary" paragraph>
                 {previewDialog.template.description}
               </Typography>

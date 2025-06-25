@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, forwardRef } from 'react';
 import {
   Box,
   Paper,
@@ -34,12 +34,13 @@ import {
 import Papa from 'papaparse';
 import { toast } from 'react-hot-toast';
 
-const CSVParser = ({
+const CSVParser = forwardRef(({
+  file, // Add file prop
   onParsedData,
   maxRows = 50,
-  onError,
+  onError = () => {},
   showPreview = true
-}) => {
+}, ref) => {
   const [parseStatus, setParseStatus] = useState('idle'); // idle, parsing, success, error
   const [csvData, setCsvData] = useState(null);
   const [parseResults, setParseResults] = useState(null);
@@ -85,6 +86,13 @@ const CSVParser = ({
 
     Papa.parse(file, parseConfig);
   }, [hasHeader, selectedDelimiter, customDelimiter, encoding]);
+
+  // Parse file when it changes
+  useEffect(() => {
+    if (file) {
+      parseCSV(file);
+    }
+  }, [file, parseCSV]);
 
   // Validate and process parse results
   const validateAndProcessResults = useCallback((results, file) => {
@@ -220,11 +228,12 @@ const CSVParser = ({
 
   return (
     <Box>
-      {/* Configuration Section */}
-      <Paper variant="outlined" sx={{ p: 3, mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          CSV Parser Configuration
-        </Typography>
+      {/* Configuration Section - only show when no file is provided */}
+      {!file && (
+        <Paper variant="outlined" sx={{ p: 3, mb: 2 }}>
+          <Typography variant="h6" gutterBottom>
+            CSV Parser Configuration
+          </Typography>
         
         <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
           <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -282,6 +291,7 @@ const CSVParser = ({
           component="label"
           startIcon={<FileUpload />}
           disabled={parseStatus === 'parsing'}
+          sx={{ mb: 1 }}
         >
           {parseStatus === 'parsing' ? 'Parsing...' : 'Select CSV File'}
           <input
@@ -291,7 +301,21 @@ const CSVParser = ({
             style={{ display: 'none' }}
           />
         </Button>
-      </Paper>
+        
+        <Typography variant="caption" display="block" color="text.secondary">
+          Maximum file size: 5MB • Maximum {maxRows} rows
+        </Typography>
+        </Paper>
+      )}
+
+      {/* File Info Display */}
+      {file && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            <strong>Selected File:</strong> {file.name} ({(file.size / 1024).toFixed(2)} KB)
+          </Typography>
+        </Alert>
+      )}
 
       {/* Status Display */}
       {parseStatus !== 'idle' && (
@@ -423,6 +447,8 @@ const CSVParser = ({
       )}
     </Box>
   );
-};
+});
+
+CSVParser.displayName = 'CSVParser';
 
 export default CSVParser;

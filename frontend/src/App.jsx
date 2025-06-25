@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider, createTheme, alpha } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 import { Toaster } from 'react-hot-toast';
 import { useEffect } from 'react';
@@ -45,7 +45,7 @@ const queryClient = new QueryClient({
   },
 });
 
-// Create a theme
+// Create a theme with minimal fix for primary.lighter issue
 const theme = createTheme({
   palette: {
     primary: {
@@ -53,6 +53,10 @@ const theme = createTheme({
     },
     secondary: {
       main: '#7cb342', // Green
+    },
+    // Add minimal action colors to fix primary.lighter reference
+    action: {
+      hover: alpha('#1565c0', 0.04),
     },
   },
   typography: {

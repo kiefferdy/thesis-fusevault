@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, forwardRef } from 'react';
 import {
   Box,
   Paper,
@@ -57,10 +57,11 @@ const BatchUploadZone = ({
   const [expandedFiles, setExpandedFiles] = useState(new Set());
   const [fileValidation, setFileValidation] = useState({});
   const fileInputRef = useRef(null);
+  const csvParserRef = useRef(null);
 
   // CSV-specific state
   const [csvWorkflow, setCsvWorkflow] = useState({
-    step: 0, // 0: upload, 1: parse, 2: map, 3: preview
+    step: 0, // 0: upload, 1: parse, 2: map
     file: null,
     parsedData: null,
     mappedAssets: null
@@ -234,14 +235,25 @@ const BatchUploadZone = ({
 
   // CSV workflow handlers
   const handleCSVFileSelect = useCallback((file) => {
+    if (!file) {
+      toast.error('No file selected');
+      return;
+    }
+
     if (!file.name.toLowerCase().endsWith('.csv')) {
       toast.error('Please select a CSV file');
       return;
     }
 
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      toast.error('CSV file is too large. Maximum size is 5MB');
+      return;
+    }
+
     setCsvWorkflow({
       step: 1,
-      file,
+      file: file,
       parsedData: null,
       mappedAssets: null
     });
@@ -253,15 +265,11 @@ const BatchUploadZone = ({
       step: 2,
       parsedData
     }));
+    
+    toast.success(`CSV parsed successfully: ${parsedData.rowCount} rows, ${parsedData.columnCount} columns`);
   }, []);
 
   const handleCSVMapped = useCallback((mappedAssets, validation) => {
-    setCsvWorkflow(prev => ({
-      ...prev,
-      step: 3,
-      mappedAssets
-    }));
-
     // Add mapped assets to the existing assets
     onAssetsChange([...currentAssets, ...mappedAssets]);
     toast.success(`Added ${mappedAssets.length} assets from CSV`);
@@ -357,11 +365,11 @@ const BatchUploadZone = ({
             borderStyle: 'dashed',
             borderWidth: 2,
             borderColor: isDragOver ? 'primary.main' : 'divider',
-            bgcolor: isDragOver ? 'primary.lighter' : 'background.paper',
+            bgcolor: isDragOver ? 'action.hover' : 'background.paper',
             transition: 'all 0.2s ease',
             '&:hover': {
               borderColor: 'primary.main',
-              bgcolor: 'primary.lighter'
+              bgcolor: 'action.hover'
             }
           }}
           onClick={() => fileInputRef.current?.click()}
@@ -440,9 +448,6 @@ const BatchUploadZone = ({
               <Step>
                 <StepLabel>Map Columns</StepLabel>
               </Step>
-              <Step>
-                <StepLabel>Complete</StepLabel>
-              </Step>
             </Stepper>
           </Box>
 
@@ -457,10 +462,12 @@ const BatchUploadZone = ({
                 cursor: 'pointer',
                 borderStyle: 'dashed',
                 borderWidth: 2,
-                borderColor: 'primary.light',
-                bgcolor: 'primary.lighter',
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
+                transition: 'all 0.2s ease',
                 '&:hover': {
-                  borderColor: 'primary.main'
+                  borderColor: 'primary.main',
+                  bgcolor: 'action.hover'
                 }
               }}
             >
@@ -508,6 +515,8 @@ const BatchUploadZone = ({
               </Box>
               
               <CSVParser
+                ref={csvParserRef}
+                file={csvWorkflow.file}
                 onParsedData={handleCSVParsed}
                 maxRows={maxFiles}
                 showPreview={true}

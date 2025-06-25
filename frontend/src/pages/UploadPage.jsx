@@ -265,20 +265,35 @@ function UploadPage() {
               <Alert severity="info" sx={{ mb: 3 }}>
                 You are editing an existing asset. Make your changes and click "Update Asset" to save.
               </Alert>
-            ) : (
-              <Alert severity="info" sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
-                <Info sx={{ mr: 1 }} />
-                <div>
-                  <Typography variant="body2" fontWeight="bold">Creating an asset involves five phases:</Typography>
-                  <Typography variant="body2">1. The metadata is parsed and validated.</Typography>
-                  <Typography variant="body2">2. Critical metadata is stored on decentralized storage (IPFS).</Typography>
-                  <Typography variant="body2">3. The asset is logged on the blockchain.</Typography>
-                  <Typography variant="body2">4. The asset is stored on the database.</Typography>
-                  <Typography variant="body2">5. The transaction is recorded.</Typography>
-                  <Typography variant="body2" sx={{ mt: 0.5 }}>This process can take 1-3 minutes. Please wait for the confirmation.</Typography>
-                </div>
+            ) : tabValue === 0 ? (
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <Box>
+                  <Typography variant="body2" fontWeight="bold" gutterBottom>
+                    Creating an asset involves five phases:
+                  </Typography>
+                  <Box component="ol" sx={{ pl: 2, m: 0 }}>
+                    <li>
+                      <Typography variant="body2">The metadata is parsed and validated.</Typography>
+                    </li>
+                    <li>
+                      <Typography variant="body2">Critical metadata is stored on decentralized storage (IPFS).</Typography>
+                    </li>
+                    <li>
+                      <Typography variant="body2">The asset is logged on the blockchain.</Typography>
+                    </li>
+                    <li>
+                      <Typography variant="body2">The asset is stored on the database.</Typography>
+                    </li>
+                    <li>
+                      <Typography variant="body2">The transaction is recorded.</Typography>
+                    </li>
+                  </Box>
+                  <Typography variant="body2" sx={{ mt: 1.5, fontStyle: 'italic' }}>
+                    This process can take 1-3 minutes. Please wait for the confirmation.
+                  </Typography>
+                </Box>
               </Alert>
-            )}
+            ) : null}
             <Box data-navigate onClick={() => navigate('/dashboard')} style={{ display: 'none' }} />
             <UploadFormWithSigning 
               existingAsset={isEditMode ? existingAsset : null}
@@ -304,11 +319,10 @@ function UploadPage() {
           </Box>
         )}
 
-        {/* Enhanced Batch Upload - only show when not in edit mode */}
+        {/* Enhanced Batch Upload - only show when not in edit mode and on batch tab */}
         {!isEditMode && tabValue === 1 && (
           <Box sx={{ p: 3 }}>
-            <Alert severity="info" sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
-              <Info sx={{ mr: 1 }} />
+            <Alert severity="info" sx={{ mb: 3 }}>
               <div>
                 <Typography variant="body2" fontWeight="bold">
                   Enhanced batch upload supports templates, JSON files, CSV imports, and direct JSON input.

@@ -324,26 +324,34 @@ const CSVColumnMapper = ({
 
       {/* Validation Results */}
       {validationResults && (
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ mb: 3 }}>
           {validationResults.errors.length > 0 && (
-            <Alert severity="error" sx={{ mb: 1 }}>
-              <Typography variant="body2" fontWeight="bold">Errors:</Typography>
-              <ul style={{ margin: 0, paddingLeft: 16 }}>
+            <Alert severity="error" sx={{ mb: 2 }}>
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                Errors:
+              </Typography>
+              <Box component="ul" sx={{ m: 0, pl: 2 }}>
                 {validationResults.errors.map((error, index) => (
-                  <li key={index}>{error}</li>
+                  <li key={index}>
+                    <Typography variant="body2">{error}</Typography>
+                  </li>
                 ))}
-              </ul>
+              </Box>
             </Alert>
           )}
           
           {validationResults.warnings.length > 0 && (
-            <Alert severity="warning" sx={{ mb: 1 }}>
-              <Typography variant="body2" fontWeight="bold">Warnings:</Typography>
-              <ul style={{ margin: 0, paddingLeft: 16 }}>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              <Typography variant="body2" fontWeight="bold" gutterBottom>
+                Warnings:
+              </Typography>
+              <Box component="ul" sx={{ m: 0, pl: 2 }}>
                 {validationResults.warnings.map((warning, index) => (
-                  <li key={index}>{warning}</li>
+                  <li key={index}>
+                    <Typography variant="body2">{warning}</Typography>
+                  </li>
                 ))}
-              </ul>
+              </Box>
             </Alert>
           )}
         </Box>
@@ -353,13 +361,25 @@ const CSVColumnMapper = ({
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {csvHeaders.map((header, index) => (
           <Grid item xs={12} sm={6} md={4} key={index}>
-            <Card variant="outlined">
-              <CardContent sx={{ pb: 2 }}>
+            <Card 
+              variant="outlined" 
+              sx={{ 
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  boxShadow: 1,
+                  transform: 'translateY(-1px)'
+                }
+              }}
+            >
+              <CardContent sx={{ pb: 2, flexGrow: 1 }}>
                 <Typography variant="subtitle2" gutterBottom>
                   CSV Column: <strong>{header}</strong>
                 </Typography>
                 
-                <FormControl fullWidth size="small">
+                <FormControl fullWidth size="small" sx={{ mb: 1 }}>
                   <InputLabel>Map to Asset Field</InputLabel>
                   <Select
                     value={columnMappings[header] || ''}
@@ -423,9 +443,14 @@ const CSVColumnMapper = ({
 
                 {/* Show sample value */}
                 {csvData && csvData.length > 0 && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                    Sample: {(Array.isArray(csvData[0]) ? csvData[0][index] : csvData[0][header]) || '(empty)'}
-                  </Typography>
+                  <Box sx={{ mt: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                      Sample value:
+                    </Typography>
+                    <Typography variant="caption" color="text.primary" sx={{ display: 'block', fontFamily: 'monospace' }}>
+                      {(Array.isArray(csvData[0]) ? csvData[0][index] : csvData[0][header]) || '(empty)'}
+                    </Typography>
+                  </Box>
                 )}
               </CardContent>
             </Card>
