@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Container,
   Typography,
@@ -24,7 +24,7 @@ import {
   AccordionDetails,
   Tooltip
 } from '@mui/material';
-import { CloudUpload, Description, Info, Palette, ExpandMore, CheckCircle, Storage, Cloud } from '@mui/icons-material';
+import { CloudUpload, Description, Info, Palette, ExpandMore, CheckCircle, Storage, Cloud, Add } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import UploadFormWithSigning from '../components/UploadFormWithSigning';
 import BatchUploadZone from '../components/BatchUploadZone';
@@ -65,6 +65,9 @@ function UploadPage() {
   const [existingAsset, setExistingAsset] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Template creation ref
+  const createTemplateRef = useRef(null);
 
   const { currentAccount } = useAuth();
   const { uploadBatch, isBatchUploading } = useAssets();
@@ -332,7 +335,7 @@ function UploadPage() {
                   Batch upload supports templates, JSON files, CSV imports, and direct JSON input.
                 </Typography>
                 <Typography variant="body2">
-                  Use templates for quick asset creation, upload JSON/CSV files, or paste JSON content directly.
+                  Use templates for quick asset creation, upload JSON files, import CSV files, or paste JSON content directly.
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 0.5 }}>
                   Maximum 50 assets per batch. Preview and edit assets before uploading.
@@ -541,12 +544,12 @@ image-002,Company Logo,Updated brand logo,Jane Smith,"logo,brand",500KB`}
               <Grid item xs={12}>
                 <Paper variant="outlined" sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom>
-                    Upload Files, Import CSV, or Paste JSON
+                    Upload JSON, Import CSV, or Paste JSON
                   </Typography>
                   <BatchUploadZone
                     onFilesChange={handleBatchFilesChange}
                     onAssetsChange={handleBatchAssetsChange}
-                    acceptedFormats={['.json', '.csv']}
+                    acceptedFormats={['.json']}
                     maxFiles={50}
                     currentFiles={batchFiles}
                     currentAssets={batchAssets}
@@ -614,18 +617,30 @@ image-002,Company Logo,Updated brand logo,Jane Smith,"logo,brand",500KB`}
               {/* Template Selector - Moved to Bottom */}
               <Grid item xs={12}>
                 <Paper variant="outlined" sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Palette />
-                    Asset Templates
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                    Use pre-built templates to quickly create assets with consistent structure and sample data.
-                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                    <Box>
+                      <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                        <Palette />
+                        Asset Templates
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Use pre-built templates to quickly create assets with consistent structure and sample data.
+                      </Typography>
+                    </Box>
+                    <Button
+                      variant="outlined"
+                      startIcon={<Add />}
+                      onClick={() => createTemplateRef.current?.()}
+                    >
+                      Create Template
+                    </Button>
+                  </Box>
                   <TemplateSelector
                     onCreateAssets={handleCreateAssetsFromTemplate}
                     currentAccount={currentAccount}
                     maxAssets={50}
                     currentAssetCount={batchAssets.length}
+                    onCreateTemplateClick={(fn) => { createTemplateRef.current = fn; }}
                   />
                 </Paper>
               </Grid>

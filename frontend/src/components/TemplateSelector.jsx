@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -58,7 +58,8 @@ const TemplateSelector = ({
   onCreateAssets,
   currentAccount,
   maxAssets = 50,
-  currentAssetCount = 0
+  currentAssetCount = 0,
+  onCreateTemplateClick
 }) => {
   const [createDialog, setCreateDialog] = useState({ open: false, template: null, quantity: 1 });
   const [templateDialog, setTemplateDialog] = useState({ open: false, mode: 'create', template: null });
@@ -356,21 +357,20 @@ const TemplateSelector = ({
     setPreviewDialog({ open: true, template });
   }, []);
 
+  // Handle create template click
+  const handleCreateTemplateClick = useCallback(() => {
+    setTemplateDialog({ open: true, mode: 'create', template: null });
+  }, []);
+
+  // Expose create template function to parent
+  useEffect(() => {
+    if (onCreateTemplateClick) {
+      onCreateTemplateClick(handleCreateTemplateClick);
+    }
+  }, [onCreateTemplateClick, handleCreateTemplateClick]);
+
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h6">
-          Asset Templates
-        </Typography>
-        <Button
-          variant="outlined"
-          startIcon={<Add />}
-          onClick={() => setTemplateDialog({ open: true, mode: 'create', template: null })}
-        >
-          Create Template
-        </Button>
-      </Box>
-
       {/* Templates by Category */}
       {Object.entries(templatesByCategory).map(([category, templates]) => (
         <Accordion key={category} defaultExpanded={category !== 'Custom'}>

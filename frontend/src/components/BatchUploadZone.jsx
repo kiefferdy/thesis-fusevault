@@ -44,7 +44,7 @@ import CSVColumnMapper from './CSVColumnMapper';
 const BatchUploadZone = ({
   onFilesChange,
   onAssetsChange,
-  acceptedFormats = ['.json', '.csv'],
+  acceptedFormats = ['.json'],
   maxFiles = 50,
   currentFiles = [],
   currentAssets = [],
@@ -345,7 +345,7 @@ const BatchUploadZone = ({
       {/* Upload Method Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
         <Tabs value={uploadMethod} onChange={(e, value) => setUploadMethod(value)}>
-          <Tab icon={<FileUpload />} label="Upload Files" />
+          <Tab icon={<FileUpload />} label="Upload JSON" />
           <Tab icon={<ContentPaste />} label="Paste JSON" />
           <Tab icon={<TableChart />} label="CSV Import" />
         </Tabs>
@@ -392,7 +392,7 @@ const BatchUploadZone = ({
           />
           
           <Typography variant="h6" gutterBottom>
-            {isDragOver ? 'Drop files here' : 'Drag and drop JSON or CSV files here'}
+            {isDragOver ? 'Drop files here' : 'Drag and drop JSON files here'}
           </Typography>
           
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -404,7 +404,7 @@ const BatchUploadZone = ({
           </Button>
 
           <Typography variant="caption" display="block" sx={{ mt: 2 }}>
-            Accepted formats: {acceptedFormats.join(', ')} • Max {maxFiles} files
+            Accepted formats: .json • Max {maxFiles} files
           </Typography>
         </Paper>
       )}
@@ -455,29 +455,16 @@ const BatchUploadZone = ({
           {csvWorkflow.step === 0 && (
             <Paper
               variant="outlined"
-              component="label"
               sx={{
                 p: 4,
                 textAlign: 'center',
-                cursor: 'pointer',
                 borderStyle: 'dashed',
                 borderWidth: 2,
                 borderColor: 'divider',
                 bgcolor: 'background.paper',
-                transition: 'all 0.2s ease',
-                '&:hover': {
-                  borderColor: 'primary.main',
-                  bgcolor: 'action.hover'
-                }
+                transition: 'all 0.2s ease'
               }}
             >
-              <input
-                type="file"
-                accept=".csv"
-                onChange={(e) => handleCSVFileSelect(e.target.files[0])}
-                style={{ display: 'none' }}
-              />
-
               <TableChart sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
               
               <Typography variant="h6" gutterBottom>
@@ -488,8 +475,23 @@ const BatchUploadZone = ({
                 Upload a CSV file with asset data to import multiple assets at once
               </Typography>
 
-              <Button variant="outlined" component="span">
+              <Button 
+                variant="outlined" 
+                component="label"
+                sx={{
+                  cursor: 'pointer',
+                  '&:hover': {
+                    bgcolor: 'action.hover'
+                  }
+                }}
+              >
                 Choose CSV File
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => handleCSVFileSelect(e.target.files[0])}
+                  style={{ display: 'none' }}
+                />
               </Button>
 
               <Typography variant="caption" display="block" sx={{ mt: 2 }}>
