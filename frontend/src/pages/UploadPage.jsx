@@ -18,9 +18,13 @@ import {
   StepLabel,
   Card,
   CardContent,
-  Backdrop
+  Backdrop,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Tooltip
 } from '@mui/material';
-import { CloudUpload, Description, Info } from '@mui/icons-material';
+import { CloudUpload, Description, Info, Palette, ExpandMore, CheckCircle, Storage, Cloud } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import UploadFormWithSigning from '../components/UploadFormWithSigning';
 import BatchUploadZone from '../components/BatchUploadZone';
@@ -325,7 +329,7 @@ function UploadPage() {
             <Alert severity="info" sx={{ mb: 3 }}>
               <div>
                 <Typography variant="body2" fontWeight="bold">
-                  Enhanced batch upload supports templates, JSON files, CSV imports, and direct JSON input.
+                  Batch upload supports templates, JSON files, CSV imports, and direct JSON input.
                 </Typography>
                 <Typography variant="body2">
                   Use templates for quick asset creation, upload JSON/CSV files, or paste JSON content directly.
@@ -337,16 +341,200 @@ function UploadPage() {
             </Alert>
 
             <Grid container spacing={3}>
-              {/* Template Selector */}
+              {/* Data Structure Requirements - Expandable */}
               <Grid item xs={12}>
-                <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
-                  <TemplateSelector
-                    onCreateAssets={handleCreateAssetsFromTemplate}
-                    currentAccount={currentAccount}
-                    maxAssets={50}
-                    currentAssetCount={batchAssets.length}
-                  />
-                </Paper>
+                <Accordion sx={{ mb: 3, border: '1px solid', borderColor: 'grey.300', borderRadius: 2, boxShadow: 1 }}>
+                  <AccordionSummary 
+                    expandIcon={<ExpandMore />}
+                    sx={{ 
+                      bgcolor: 'blue.50', 
+                      color: 'primary.main',
+                      '&:hover': { bgcolor: 'blue.100' },
+                      borderRadius: '8px 8px 0 0'
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <Info />
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                        Data Structure & Formatting Requirements
+                      </Typography>
+                      <Tooltip title="Click to expand/collapse this section">
+                        <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                          (Important - Read Before Uploading)
+                        </Typography>
+                      </Tooltip>
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ p: 4, bgcolor: 'background.paper' }}>
+                    
+                    {/* Overview */}
+                    <Alert severity="info" sx={{ mb: 3 }}>
+                      <Typography variant="body2" fontWeight="bold" gutterBottom>
+                        🎯 Quick Overview: Every asset needs an <code>assetId</code>, <code>criticalMetadata</code>, and <code>nonCriticalMetadata</code> field.
+                      </Typography>
+                      <Typography variant="body2">
+                        Critical metadata is stored on blockchain/IPFS for extra security. Updating these fields take longer and require signing.
+                      </Typography>
+                    </Alert>
+
+                    {/* Required Fields */}
+                    <Box sx={{ mb: 4 }}>
+                      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'error.main' }}>
+                        <CheckCircle />
+                        Required Fields
+                      </Typography>
+                      <Card variant="outlined" sx={{ p: 2, bgcolor: 'red.50', border: '1px solid', borderColor: 'red.200' }}>
+                        <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                          <li><Typography variant="body2"><code>assetId</code> - Unique identifier for your asset (must be unique across all your assets)</Typography></li>
+                          <li><Typography variant="body2"><code>criticalMetadata</code> - Object containing permanent asset data (required, can be empty <code>{'{'}{'}'}</code>)</Typography></li>
+                          <li><Typography variant="body2"><code>nonCriticalMetadata</code> - Object containing editable asset data (required, can be empty <code>{'{'}{'}'}</code>)</Typography></li>
+                        </Box>
+                      </Card>
+                    </Box>
+
+                    {/* Metadata Types */}
+                    <Box sx={{ mb: 4 }}>
+                      <Typography variant="h6" gutterBottom>
+                        🔐 Understanding Metadata Types
+                      </Typography>
+                      <Grid container spacing={3}>
+                        <Grid item xs={12} md={6}>
+                          <Card variant="outlined" sx={{ p: 3, height: '100%', bgcolor: 'orange.50', border: '1px solid', borderColor: 'orange.200' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                              <Cloud color="primary" />
+                              <Typography variant="h6" color="primary">Critical Metadata</Typography>
+                            </Box>
+                            <Typography variant="body2" paragraph>
+                              <strong>Stored on:</strong> Blockchain + IPFS (decentralized)
+                            </Typography>
+                            <Typography variant="body2" paragraph>
+                              <strong>Characteristics:</strong> Permanent, immutable, publicly verifiable
+                            </Typography>
+                            <Typography variant="body2" paragraph>
+                              <strong>Use for:</strong> Asset name, crucial ownership details, information requiring tamper protection
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                              💡 Once uploaded, this data can be changed but will require re-upload and MetaMask signing
+                            </Typography>
+                          </Card>
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Card variant="outlined" sx={{ p: 3, height: '100%', bgcolor: 'green.50', border: '1px solid', borderColor: 'green.200' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                              <Storage color="primary" />
+                              <Typography variant="h6" color="primary">Non-Critical Metadata</Typography>
+                            </Box>
+                            <Typography variant="body2" paragraph>
+                              <strong>Stored on:</strong> Database (centralized)
+                            </Typography>
+                            <Typography variant="body2" paragraph>
+                              <strong>Characteristics:</strong> Instantly editable, private, faster access
+                            </Typography>
+                            <Typography variant="body2" paragraph>
+                              <strong>Use for:</strong> Internal notes, file sizes, processing status, temporary flags, comments
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
+                              💡 This data can be instantly edited anytime after upload
+                            </Typography>
+                          </Card>
+                        </Grid>
+                      </Grid>
+                    </Box>
+
+                    {/* Format Examples */}
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="h6" gutterBottom>
+                        📝 Format Examples
+                      </Typography>
+                      <Grid container spacing={3}>
+                        <Grid item xs={12} md={6}>
+                          <Typography variant="subtitle1" gutterBottom color="primary" sx={{ fontWeight: 600 }}>
+                            JSON Format (Array of Objects):
+                          </Typography>
+                          <Box sx={{ 
+                            bgcolor: 'grey.100', 
+                            color: 'grey.800', 
+                            p: 2, 
+                            borderRadius: 2, 
+                            border: '1px solid',
+                            borderColor: 'grey.300',
+                            fontFamily: 'monospace', 
+                            fontSize: '0.8rem',
+                            overflow: 'auto'
+                          }}>
+                            <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+{`[
+  {
+    "assetId": "document-001",
+    "criticalMetadata": {
+      "name": "Project Proposal",
+      "description": "Q4 marketing proposal",
+      "author": "John Doe",
+      "created_date": "2024-01-15",
+      "tags": ["proposal", "marketing", "q4"]
+    },
+    "nonCriticalMetadata": {
+      "file_size": "2.5MB",
+      "department": "Marketing",
+      "status": "draft",
+      "internal_notes": "Needs review"
+    }
+  }
+]`}
+                            </pre>
+                          </Box>
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Typography variant="subtitle1" gutterBottom color="primary" sx={{ fontWeight: 600 }}>
+                            CSV Format Example:
+                          </Typography>
+                          <Box sx={{ 
+                            bgcolor: 'grey.100', 
+                            color: 'grey.800', 
+                            p: 2, 
+                            borderRadius: 2, 
+                            border: '1px solid',
+                            borderColor: 'grey.300',
+                            fontFamily: 'monospace', 
+                            fontSize: '0.8rem',
+                            overflow: 'auto'
+                          }}>
+                            <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+{`assetId,name,description,author,tags,file_size
+document-001,Project Proposal,Q4 marketing proposal,John Doe,"proposal,marketing",2.5MB
+image-002,Company Logo,Updated brand logo,Jane Smith,"logo,brand",500KB`}
+                            </pre>
+                          </Box>
+                          <Alert severity="warning" sx={{ mt: 2 }}>
+                            <Typography variant="body2">
+                              <strong>CSV Note:</strong> Use the column mapping tool after upload to assign CSV columns to critical/non-critical metadata fields.
+                            </Typography>
+                          </Alert>
+                        </Grid>
+                      </Grid>
+                    </Box>
+
+                    {/* Common Mistakes */}
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                      <Typography variant="body2" fontWeight="bold" gutterBottom>
+                        ⚠️ Common Mistakes to Avoid:
+                      </Typography>
+                      <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                        <li><Typography variant="body2">Missing <code>assetId</code> field</Typography></li>
+                        <li><Typography variant="body2">Forgetting to include empty <code>criticalMetadata: {'{'}{'}'}</code> or <code>nonCriticalMetadata: {'{'}{'}'}</code> objects</Typography></li>
+                        <li><Typography variant="body2">Using duplicate <code>assetId</code> values within the same batch</Typography></li>
+                        <li><Typography variant="body2">Putting sensitive data in critical metadata (it's publicly visible)</Typography></li>
+                      </Box>
+                    </Alert>
+
+                    <Alert severity="success">
+                      <Typography variant="body2" fontWeight="bold">
+                        💡 Pro Tip: Start with templates below if you're unsure about the structure!
+                      </Typography>
+                    </Alert>
+
+                  </AccordionDetails>
+                </Accordion>
               </Grid>
 
               {/* File Upload Zone */}
@@ -422,6 +610,25 @@ function UploadPage() {
                   </Box>
                 </Grid>
               )}
+
+              {/* Template Selector - Moved to Bottom */}
+              <Grid item xs={12}>
+                <Paper variant="outlined" sx={{ p: 3 }}>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Palette />
+                    Asset Templates
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    Use pre-built templates to quickly create assets with consistent structure and sample data.
+                  </Typography>
+                  <TemplateSelector
+                    onCreateAssets={handleCreateAssetsFromTemplate}
+                    currentAccount={currentAccount}
+                    maxAssets={50}
+                    currentAssetCount={batchAssets.length}
+                  />
+                </Paper>
+              </Grid>
             </Grid>
 
             {/* Enhanced Progress Tracking */}
