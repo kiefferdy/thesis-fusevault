@@ -289,6 +289,166 @@ const TemplateSelector = ({
         jurisdiction: 'United States',
         tags: ['contract', 'services', 'legal']
       }
+    },
+    {
+      id: 'inventory',
+      name: 'Inventory Item',
+      description: 'Template for tracking physical or digital inventory items',
+      icon: <Business color="info" />,
+      category: 'General',
+      color: 'info',
+      template: {
+        assetId: '',
+        criticalMetadata: {
+          name: '',
+          description: '',
+          item_code: '',
+          category: '',
+          manufacturer: '',
+          model: '',
+          serial_number: '',
+          purchase_date: new Date().toISOString().split('T')[0],
+          tags: []
+        },
+        nonCriticalMetadata: {
+          quantity: '',
+          unit_price: '',
+          supplier: '',
+          location: '',
+          warranty_period: '',
+          condition: 'new',
+          notes: ''
+        }
+      },
+      sampleData: {
+        name: 'Laptop Computer',
+        description: 'High-performance laptop for development work',
+        item_code: 'LAP-001',
+        category: 'Electronics',
+        manufacturer: 'TechCorp',
+        model: 'DevBook Pro',
+        tags: ['laptop', 'electronics', 'hardware']
+      }
+    },
+    {
+      id: 'photography',
+      name: 'Photography',
+      description: 'Template for photography collections and photo shoots',
+      icon: <Image color="warning" />,
+      category: 'Creative',
+      color: 'warning',
+      template: {
+        assetId: '',
+        criticalMetadata: {
+          name: '',
+          description: '',
+          photographer: '',
+          shoot_date: new Date().toISOString().split('T')[0],
+          location: '',
+          subject: '',
+          style: '',
+          equipment_used: '',
+          tags: []
+        },
+        nonCriticalMetadata: {
+          image_count: '',
+          resolution: '',
+          file_format: '',
+          editing_software: '',
+          client: '',
+          usage_rights: '',
+          post_processing: ''
+        }
+      },
+      sampleData: {
+        name: 'Corporate Headshots',
+        description: 'Professional headshot session for company executives',
+        photographer: 'Sarah Johnson',
+        location: 'Studio Downtown',
+        subject: 'Executive Team',
+        style: 'Corporate Professional',
+        tags: ['photography', 'corporate', 'headshots']
+      }
+    },
+    {
+      id: 'video',
+      name: 'Video Content',
+      description: 'Template for video productions and multimedia content',
+      icon: <VideoLibrary color="error" />,
+      category: 'Media',
+      color: 'error',
+      template: {
+        assetId: '',
+        criticalMetadata: {
+          name: '',
+          description: '',
+          director: '',
+          production_date: new Date().toISOString().split('T')[0],
+          duration: '',
+          genre: '',
+          format: '',
+          resolution: '',
+          tags: []
+        },
+        nonCriticalMetadata: {
+          cast: '',
+          crew: '',
+          budget: '',
+          location: '',
+          equipment: '',
+          post_production: '',
+          distribution_rights: ''
+        }
+      },
+      sampleData: {
+        name: 'Product Demo Video',
+        description: 'Demonstration video showcasing new product features',
+        director: 'Mike Producer',
+        duration: '3:45',
+        genre: 'Commercial',
+        format: 'MP4',
+        resolution: '4K',
+        tags: ['video', 'demo', 'product']
+      }
+    },
+    {
+      id: 'license',
+      name: 'License Agreement',
+      description: 'Template for software licenses and usage agreements',
+      icon: <Description color="primary" />,
+      category: 'Legal',
+      color: 'primary',
+      template: {
+        assetId: '',
+        criticalMetadata: {
+          name: '',
+          description: '',
+          license_type: '',
+          licensor: '',
+          licensee: '',
+          effective_date: new Date().toISOString().split('T')[0],
+          expiration_date: '',
+          territory: '',
+          tags: []
+        },
+        nonCriticalMetadata: {
+          license_fee: '',
+          payment_terms: '',
+          restrictions: '',
+          permitted_uses: '',
+          renewal_terms: '',
+          termination_clause: ''
+        }
+      },
+      sampleData: {
+        name: 'Software License Agreement',
+        description: 'Standard software usage license for enterprise customers',
+        license_type: 'Commercial',
+        licensor: 'Software Corp',
+        licensee: 'Client Company',
+        territory: 'Worldwide',
+        tags: ['license', 'software', 'agreement']
+      }
     }
   ], []);
 
@@ -375,12 +535,12 @@ const TemplateSelector = ({
       {Object.entries(templatesByCategory).map(([category, templates]) => (
         <Accordion key={category} defaultExpanded={category !== 'Custom'}>
           <AccordionSummary expandIcon={<ExpandMore />}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Typography variant="h6">{category}</Typography>
               <Badge badgeContent={templates.length} color="primary" />
             </Box>
           </AccordionSummary>
-          <AccordionDetails>
+          <AccordionDetails sx={{ pt: 0 }}>
             <Grid container spacing={2}>
               {templates.map((template) => (
                 <Grid item xs={12} sm={6} md={4} key={template.id}>
