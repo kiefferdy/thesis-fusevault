@@ -59,19 +59,12 @@ const CSVColumnMapper = ({
     },
     optional: {
       description: { label: 'Description', description: 'Asset description' },
-      tags: { label: 'Tags', description: 'Comma-separated tags' },
-      author: { label: 'Author', description: 'Asset creator' },
-      category: { label: 'Category', description: 'Asset category' },
-      version: { label: 'Version', description: 'Asset version' },
-      created_date: { label: 'Created Date', description: 'Creation date' },
-      modified_date: { label: 'Modified Date', description: 'Last modification date' },
-      status: { label: 'Status', description: 'Asset status' },
-      priority: { label: 'Priority', description: 'Asset priority' },
-      owner: { label: 'Owner', description: 'Asset owner' }
+      tags: { label: 'Tags', description: 'Comma-separated tags' }
     },
     special: {
       walletAddress: { label: 'Wallet Address', description: 'Wallet address (will use current account if not mapped)' },
       skip: { label: '(Skip Column)', description: 'Do not import this column' },
+      criticalMeta: { label: '(Add to Critical Metadata)', description: 'Add to critical metadata with original column name' },
       nonCritical: { label: '(Add to Non-Critical Metadata)', description: 'Add to non-critical metadata with original column name' }
     }
   };
@@ -94,24 +87,15 @@ const CSVColumnMapper = ({
         newMappings[header] = 'description';
       } else if (lowerHeader.includes('tag')) {
         newMappings[header] = 'tags';
-      } else if (lowerHeader.includes('author') || lowerHeader.includes('creator')) {
-        newMappings[header] = 'author';
-      } else if (lowerHeader.includes('category') || lowerHeader.includes('type')) {
-        newMappings[header] = 'category';
-      } else if (lowerHeader.includes('version')) {
-        newMappings[header] = 'version';
-      } else if (lowerHeader.includes('date') && lowerHeader.includes('creat')) {
-        newMappings[header] = 'created_date';
-      } else if (lowerHeader.includes('date') && lowerHeader.includes('modif')) {
-        newMappings[header] = 'modified_date';
-      } else if (lowerHeader.includes('status')) {
-        newMappings[header] = 'status';
-      } else if (lowerHeader.includes('priority')) {
-        newMappings[header] = 'priority';
-      } else if (lowerHeader.includes('owner')) {
-        newMappings[header] = 'owner';
       } else if (lowerHeader.includes('wallet') || lowerHeader.includes('address')) {
         newMappings[header] = 'walletAddress';
+      } else if (lowerHeader.includes('author') || lowerHeader.includes('creator') || 
+                 lowerHeader.includes('category') || lowerHeader.includes('type') || 
+                 lowerHeader.includes('version') || lowerHeader.includes('status') || 
+                 lowerHeader.includes('priority') || lowerHeader.includes('owner') ||
+                 lowerHeader.includes('date')) {
+        // Map common asset fields to critical metadata
+        newMappings[header] = 'criticalMeta';
       } else {
         // Default to adding to non-critical metadata
         newMappings[header] = 'nonCritical';
@@ -146,10 +130,10 @@ const CSVColumnMapper = ({
       warnings.push('Asset Name is recommended but not mapped');
     }
 
-    // Check for duplicate mappings (except skip and nonCritical)
+    // Check for duplicate mappings (except skip, criticalMeta, and nonCritical)
     const duplicates = {};
     Object.entries(columnMappings).forEach(([csvCol, assetField]) => {
-      if (assetField !== 'skip' && assetField !== 'nonCritical') {
+      if (assetField !== 'skip' && assetField !== 'criticalMeta' && assetField !== 'nonCritical') {
         if (!duplicates[assetField]) {
           duplicates[assetField] = [];
         }
@@ -209,6 +193,9 @@ const CSVColumnMapper = ({
             // Split comma-separated tags
             asset.criticalMetadata.tags = value.toString().split(',').map(tag => tag.trim()).filter(Boolean);
             break;
+          case 'criticalMeta':
+            asset.criticalMetadata[csvColumn] = value;
+            break;
           case 'nonCritical':
             asset.nonCriticalMetadata[csvColumn] = value;
             break;
@@ -265,6 +252,9 @@ const CSVColumnMapper = ({
             break;
           case 'tags':
             asset.criticalMetadata.tags = value.toString().split(',').map(tag => tag.trim()).filter(Boolean);
+            break;
+          case 'criticalMeta':
+            asset.criticalMetadata[csvColumn] = value;
             break;
           case 'nonCritical':
             asset.nonCriticalMetadata[csvColumn] = value;
@@ -375,7 +365,7 @@ const CSVColumnMapper = ({
               }}
             >
               <CardContent sx={{ pb: 2, flexGrow: 1 }}>
-                <Typography variant="subtitle2" gutterBottom>
+                <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
                   CSV Column: <strong>{header}</strong>
                 </Typography>
                 
@@ -385,6 +375,13 @@ const CSVColumnMapper = ({
                     value={columnMappings[header] || ''}
                     onChange={(e) => handleMappingChange(header, e.target.value)}
                     label="Map to Asset Field"
+                    renderValue={(selected) => {
+                      if (!selected) return <em>Select field...</em>;
+                      const allFields = { ...assetFields.required, ...assetFields.optional, ...assetFields.special };
+                      const field = allFields[selected];
+                      if (!field) return selected;
+                      return field.label;
+                    }}
                   >
                     <MenuItem value="">
                       <em>Select field...</em>
@@ -448,7 +445,8 @@ const CSVColumnMapper = ({
                       Sample value:
                     </Typography>
                     <Typography variant="caption" color="text.primary" sx={{ display: 'block', fontFamily: 'monospace' }}>
-                      {(Array.isArray(csvData[0]) ? csvData[0][index] : csvData[0][header]) || '(empty)'}
+                      {((Array.isArray(csvData[0]) ? csvData[0][index] : csvData[0][header]) || '(empty)').toString().substring(0, 35)}
+                      {((Array.isArray(csvData[0]) ? csvData[0][index] : csvData[0][header]) || '').toString().length > 35 && '…'}
                     </Typography>
                   </Box>
                 )}
