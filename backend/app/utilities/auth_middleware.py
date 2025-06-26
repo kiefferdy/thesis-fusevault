@@ -64,6 +64,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method
         logger.info(f"Received {method} request for path: {path}")
+        
+        # Special logging for batch upload completion calls
+        if path == "/upload/batch/complete":
+            logger.warning(f"🔥 BATCH COMPLETION CALL DETECTED - Method: {method}")
+        if "/upload/" in path and method == "POST":
+            logger.warning(f"🔥 UPLOAD POST CALL - Path: {path}, Method: {method}")
 
         # Skip authentication for OPTIONS requests (CORS preflight)
         if method == "OPTIONS":

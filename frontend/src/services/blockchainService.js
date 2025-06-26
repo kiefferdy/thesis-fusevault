@@ -268,6 +268,270 @@ export const metamaskUtils = {
 
 // Main transaction flow orchestrator
 export const transactionFlow = {
+  // Complete batch upload flow with user signing
+  batchUploadWithSigning: async (batchData, onProgress = () => {}) => {
+    try {
+      // Stage 0: Validation
+      onProgress('Validating assets and preparing batch upload...', 10, { 
+        stage: 0
+      });
+      
+      // Validate input data
+      if (!batchData?.assets || !Array.isArray(batchData.assets)) {
+        throw new Error('Assets array is required');
+      }
+      
+      if (!batchData?.walletAddress) {
+        throw new Error('Wallet address is required');
+      }
+      
+      if (batchData.assets.length === 0) {
+        throw new Error('Must provide at least one asset');
+      }
+      
+      if (batchData.assets.length > 50) {
+        throw new Error('Batch size cannot exceed 50 assets');
+      }
+      
+      // Check network before starting
+      if (metamaskUtils.isMetaMaskAvailable()) {
+        const networkCheck = await metamaskUtils.checkNetwork();
+        if (!networkCheck.isCorrectNetwork) {
+          throw new Error(
+            `Wrong network detected. Please switch to Sepolia Testnet. ` +
+            `Currently on: ${networkCheck.networkName}`
+          );
+        }
+        // Network verified successfully
+      }
+      
+      // Stage 1: IPFS Upload with real-time progress polling
+      onProgress('Starting IPFS upload for individual assets...', 25, { 
+        stage: 1
+      });
+      
+      // Start the backend upload
+      const prepareResult = await apiClient.post('/upload/batch/prepare', {
+        assets: batchData.assets,
+        walletAddress: batchData.walletAddress
+      });
+      
+      // Variables to store data (needs to be in function scope)
+      let blockchainData = null;
+      let batchId = null;
+      
+      // If batch_id is returned, poll for real progress during Stage 1
+      if (prepareResult.data.batchId) {
+        batchId = prepareResult.data.batchId;
+        // Starting progress polling
+        
+        // Wait for IPFS uploads to complete with real-time progress
+        await new Promise((resolve) => {
+          let pollCount = 0;
+          const maxPollAttempts = 60; // 30 seconds of polling
+          
+          const pollProgress = async () => {
+            try {
+              const progressResponse = await apiClient.get(`/upload/batch/${batchId}/progress`);
+              const progressData = progressResponse.data;
+              
+              if (progressData && progressData.assets) {
+                // Calculate overall IPFS progress
+                const completedCount = progressData.completed_count || 0;
+                const totalCount = progressData.total_assets || batchData.assets.length;
+                const ipfsProgress = Math.round((completedCount / totalCount) * 20); // 20% for IPFS stage
+                
+                
+                onProgress(`Uploading assets to IPFS: ${completedCount}/${totalCount} completed`, 25 + ipfsProgress, { 
+                  stage: 1,
+                  assetProgress: progressData.assets
+                });
+                
+                // Check if all assets are complete
+                if (completedCount >= totalCount) {
+                  onProgress(`All ${totalCount} assets uploaded to IPFS successfully`, 45, { 
+                    stage: 1,
+                    assetProgress: progressData.assets
+                  });
+                  resolve(); // IPFS stage complete
+                  return;
+                }
+                
+                // Continue polling if not all assets are complete
+                if (pollCount < maxPollAttempts) {
+                  pollCount++;
+                  setTimeout(pollProgress, 500); // Poll every 500ms
+                } else {
+                  // Timeout - continue anyway
+                  resolve();
+                }
+              } else {
+                // No progress data - continue anyway
+                setTimeout(pollProgress, 500);
+              }
+            } catch (error) {
+              console.log('Progress polling failed:', error.message);
+              // Continue with next stage even if polling fails
+              resolve();
+            }
+          };
+          
+          // Start polling immediately
+          pollProgress();
+        });
+        
+        // After IPFS completion, wait for blockchain transaction preparation
+        onProgress(`IPFS uploads complete. Preparing blockchain transaction...`, 50, { 
+          stage: 2,
+          assetProgress: {}
+        });
+        
+        // Poll for blockchain transaction preparation
+        await new Promise((resolve) => {
+          let blockchainPollCount = 0;
+          const maxBlockchainPollAttempts = 20; // 10 seconds of polling
+          
+          const pollBlockchain = async () => {
+            try {
+              const progressResponse = await apiClient.get(`/upload/batch/${batchId}/progress`);
+              const progressData = progressResponse.data;
+              
+              if (progressData && progressData.blockchain_prepared) {
+                blockchainData = progressData.transaction_data;
+                resolve();
+                return;
+              }
+              
+              // Continue polling if blockchain not ready
+              if (blockchainPollCount < maxBlockchainPollAttempts) {
+                blockchainPollCount++;
+                setTimeout(pollBlockchain, 500); // Poll every 500ms
+              } else {
+                // Timeout - throw error
+                throw new Error('Blockchain preparation timeout');
+              }
+            } catch (error) {
+              console.error('Blockchain preparation polling failed:', error.message);
+              throw error;
+            }
+          };
+          
+          // Start blockchain polling
+          pollBlockchain();
+        });
+        
+        if (!blockchainData || !blockchainData.transaction) {
+          console.error('Blockchain data validation failed');
+          throw new Error('Failed to prepare blockchain transaction');
+        }
+        
+        // Blockchain data validated successfully
+        
+      } else {
+        // No batch_id - fallback to original flow (shouldn't happen with new implementation)
+        console.error('No batch_id returned from backend');
+        throw new Error('Batch ID not returned - backend error');
+      }
+      
+      // Stage 2: Blockchain Transaction - Now we have the transaction data
+      onProgress(`Blockchain transaction prepared. Waiting for signature...`, 55, { 
+        stage: 2
+      });
+      
+      // Step 2: Sign transaction with MetaMask using the blockchain data from polling
+      if (!blockchainData || !blockchainData.transaction) {
+        console.error('Final validation failed - no blockchain data available for signing');
+        throw new Error('Blockchain transaction data not available for signing');
+      }
+      
+      // Preparing transaction for MetaMask signing
+      
+      const formattedTx = metamaskUtils.formatTransactionForMetaMask(
+        blockchainData.transaction
+      );
+      const txHash = await metamaskUtils.signTransaction(formattedTx);
+      
+      if (!txHash) {
+        throw new Error('Transaction was not signed');
+      }
+      
+      // Transaction sent successfully
+      // Stage 3: Confirmation
+      onProgress('Transaction sent, waiting for blockchain confirmation...', 70, { 
+        stage: 3,
+        blockchainTxHash: txHash
+      });
+      
+      // Step 3: Wait for blockchain confirmation
+      const confirmationResult = await transactionFlow.waitForConfirmation(txHash, (message, progress) => {
+        // Scale progress from 70-90 while staying in stage 3
+        const scaledProgress = 70 + (progress * 0.2);
+        onProgress(message, scaledProgress, { 
+          stage: 3,
+          blockchainTxHash: txHash
+        });
+      });
+      
+      // Check if auto-completion occurred
+      if (confirmationResult && confirmationResult.auto_completed) {
+        // Batch upload auto-completed
+        // Stage 4: Completion (auto-completed)
+        onProgress('Batch upload completed!', 100, { 
+          stage: 4,
+          blockchainTxHash: txHash
+        });
+        return confirmationResult.completion_result;
+      }
+      
+      // Stage 4: Completion
+      onProgress('Finalizing batch upload...', 90, { 
+        stage: 4,
+        blockchainTxHash: txHash
+      });
+      
+      // Step 4: Complete batch upload (only if not auto-completed)
+      // Validate we have batchId for completion
+      if (!batchId) {
+        console.error('Missing batchId for completion step');
+        throw new Error('Batch ID not available for completion');
+      }
+      
+      // Getting pending transaction ID for completion
+      
+      // Get the pending_tx_id from the progress data since it's not in the initial response
+      const progressResponse = await apiClient.get(`/upload/batch/${batchId}/progress`);
+      const pendingTxId = progressResponse.data.pending_tx_id;
+      
+      if (!pendingTxId) {
+        console.error('No pending transaction ID found in progress data');
+        throw new Error('Unable to get pending transaction ID for completion');
+      }
+      
+      // Completing batch upload
+      
+      const completionResult = await apiClient.post('/upload/batch/complete', {
+        pendingTxId: pendingTxId,
+        blockchainTxHash: txHash
+      });
+      
+      if (completionResult.data.status !== 'success') {
+        throw new Error(completionResult.data.message || 'Batch completion failed');
+      }
+      
+      onProgress('Batch upload completed!', 100, { 
+        stage: 4,
+        blockchainTxHash: txHash
+      });
+      
+      return completionResult.data;
+      
+    } catch (error) {
+      const friendlyError = transactionFlow.handleTransactionError(error);
+      console.error('Error in batch upload:', friendlyError);
+      throw friendlyError;
+    }
+  },
+
   // Complete upload flow with user signing
   uploadWithSigning: async (assetData, onProgress = () => {}) => {
     try {
@@ -287,7 +551,7 @@ export const transactionFlow = {
             `Currently on: ${networkCheck.networkName}`
           );
         }
-        console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
+        // Network verified successfully
       }
       
       // Step 1: Initial upload request (will return pending_signature status for wallet users)
@@ -319,7 +583,7 @@ export const transactionFlow = {
           );
         }
         
-        console.log(`✅ Transaction sent to Sepolia: ${txHash}`);
+        // Transaction sent successfully
         onProgress('Transaction sent, waiting for confirmation...', 60);
         
         // Step 3: Wait for transaction confirmation
@@ -377,7 +641,7 @@ export const transactionFlow = {
             `Currently on: ${networkCheck.networkName}`
           );
         }
-        console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
+        // Network verified successfully
       }
       
       // Step 1: Initial delete request
@@ -409,7 +673,7 @@ export const transactionFlow = {
           );
         }
         
-        console.log(`✅ Transaction sent to Sepolia: ${txHash}`);
+        // Transaction sent successfully
         onProgress('Transaction sent, waiting for confirmation...', 60);
         
         // Step 3: Wait for transaction confirmation
@@ -474,7 +738,7 @@ export const transactionFlow = {
               `Currently on: ${networkCheck.networkName}`
             );
           }
-          console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
+          // Network verified successfully
         }
         if (!editResult.transaction) {
           throw new Error('No transaction data received from server');
@@ -499,7 +763,7 @@ export const transactionFlow = {
           );
         }
         
-        console.log(`✅ Transaction sent to Sepolia: ${txHash}`);
+        // Transaction sent successfully
         onProgress('Transaction sent, waiting for confirmation...', 60);
         
         // Step 3: Wait for transaction confirmation
@@ -528,7 +792,7 @@ export const transactionFlow = {
         // Only non-critical metadata changed - no blockchain interaction needed
         onProgress('Only non-critical metadata changed, updating database...', 50);
         onProgress('Edit completed!', 100);
-        console.log('✅ Edit completed without blockchain interaction (only non-critical metadata changed)');
+        // Edit completed without blockchain interaction
         return editResult;
       }
     } catch (error) {
@@ -577,7 +841,7 @@ export const transactionFlow = {
             `Currently on: ${networkCheck.networkName}`
           );
         }
-        console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
+        // Network verified successfully
       }
       
       onProgress('Waiting for transaction signature...', 30);
@@ -599,7 +863,7 @@ export const transactionFlow = {
         );
       }
       
-      console.log(`✅ Transaction sent to Sepolia: ${txHash}`);
+      // Transaction sent successfully
       onProgress('Transaction sent, waiting for confirmation...', 60);
       
       // Step 2: Wait for transaction confirmation
@@ -646,7 +910,19 @@ export const transactionFlow = {
         const status = await blockchainService.getTransactionStatus(txHash);
         
         if (status.status === 'confirmed') {
-          if (status.details && status.details.success) {
+          // Check for success at top level (auto-completion) or in details
+          const success = status.success || (status.details && status.details.success);
+          
+          if (success) {
+            // Handle auto-completion response
+            if (status.auto_completed) {
+              // Auto-completion detected
+              return {
+                auto_completed: true,
+                completion_result: status.completion_result,
+                ...status.details
+              };
+            }
             return status.details;
           } else {
             throw new Error(

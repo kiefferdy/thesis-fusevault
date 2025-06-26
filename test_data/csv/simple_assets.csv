@@ -1,0 +1,6 @@
+asset_id,name,description,category,priority,status,owner
+test-doc-001,Test Document 1,First test document for batch upload,documents,high,active,Alice
+test-image-002,Test Image 2,Sample image for testing,images,medium,draft,Bob  
+test-video-003,Test Video 3,Video content for testing,videos,low,active,Carol
+test-contract-004,Legal Contract Test,Sample legal document,contracts,high,review,David
+test-data-005,Research Dataset,Sample research data,datasets,medium,active,Eve

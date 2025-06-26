@@ -1,3 +1,0 @@
-asset_id,wallet_address,title,document_type,category,creation_date,document_id,description,tags,file_size,file_type,department,status,retention_period
-DOC001,0xa87a09e1c8E5F2256CDCAF96B2c3Dbff231D7D7f,Personal Tax Return 2024,tax_return,financial,2024-01-31,TAX-2024-001,Annual tax return document for fiscal year 2024,"tax,finance,2024,personal",2.4MB,pdf,Personal Finance,final,7 years
-DOC002,0xa87a09e1c8E5F2256CDCAF96B2c3Dbff231D7D7f,Company Invoice,invoice,financial,2024-02-15,INV-2024-002,Invoice for February transaction,"invoice,finance,2024,business",1.1MB,pdf,Business,final,5 years

@@ -1,0 +1,23 @@
+{
+  "assetId": "company-logo-2024",
+  "walletAddress": "0xa87a09e1c8E5F2256CDCAF96B2c3Dbff231D7D7f",
+  "criticalMetadata": {
+    "name": "FuseVault Company Logo",
+    "description": "Official company logo for FuseVault platform",
+    "assetType": "image",
+    "format": "svg",
+    "category": "branding",
+    "tags": ["logo", "branding", "official"],
+    "version": "1.0",
+    "createdDate": "2024-01-15"
+  },
+  "nonCriticalMetadata": {
+    "fileSize": "12.5KB",
+    "dimensions": "512x512",
+    "colorScheme": "blue-gradient",
+    "designer": "Jane Smith",
+    "department": "Marketing",
+    "usage": "web-and-print",
+    "lastModified": "2024-01-20T10:30:00Z"
+  }
+}

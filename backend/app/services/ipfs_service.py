@@ -1,7 +1,8 @@
 import httpx
 import json
 import logging
-from typing import Dict, Any, List
+import asyncio
+from typing import Dict, Any, List, Callable, Optional
 from fastapi import UploadFile, HTTPException
 from app.utilities.format import format_json, get_ipfs_metadata
 from app.config import settings
@@ -281,3 +282,80 @@ class IPFSService:
         except Exception as e:
             logger.error(f"Error verifying CID: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
+
+    async def store_metadata_batch_concurrent(
+        self, 
+        assets_metadata: List[Dict[str, Any]], 
+        progress_callback: Optional[Callable[[str, int, str], None]] = None,
+        max_concurrent: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Store multiple metadata objects on IPFS concurrently with progress tracking.
+        
+        Args:
+            assets_metadata: List of metadata dictionaries to store
+            progress_callback: Callback function(asset_id, progress, status) for progress updates
+            max_concurrent: Maximum number of concurrent uploads (default: 3)
+            
+        Returns:
+            List of dicts with asset_id, cid, status, and optional error
+        """
+        try:
+            results = []
+            semaphore = asyncio.Semaphore(max_concurrent)
+            
+            async def upload_single_asset(asset_data: Dict[str, Any], index: int) -> Dict[str, Any]:
+                async with semaphore:
+                    asset_id = asset_data.get("asset_id", f"asset_{index}")
+                    
+                    try:
+                        # Progress: Starting upload
+                        if progress_callback:
+                            progress_callback(asset_id, 0, "uploading")
+                        
+                        # Store metadata
+                        cid = await self.store_metadata(asset_data)
+                        
+                        # Progress: Upload completed
+                        if progress_callback:
+                            progress_callback(asset_id, 100, "completed")
+                        
+                        return {
+                            "asset_id": asset_id,
+                            "cid": cid,
+                            "status": "completed",
+                            "error": None
+                        }
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to upload asset {asset_id} to IPFS: {str(e)}")
+                        
+                        # Progress: Upload failed
+                        if progress_callback:
+                            progress_callback(asset_id, 0, "error")
+                        
+                        return {
+                            "asset_id": asset_id,
+                            "cid": None,
+                            "status": "error",
+                            "error": str(e)
+                        }
+            
+            # Create tasks for all uploads
+            tasks = [
+                upload_single_asset(asset_data, idx) 
+                for idx, asset_data in enumerate(assets_metadata)
+            ]
+            
+            # Execute all uploads concurrently and collect results
+            results = await asyncio.gather(*tasks, return_exceptions=False)
+            
+            # Log summary
+            successful_count = sum(1 for r in results if r["status"] == "completed")
+            logger.info(f"Batch IPFS upload completed: {successful_count}/{len(assets_metadata)} successful")
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error in concurrent batch IPFS upload: {str(e)}")
+            raise

@@ -2,8 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Dict, Any, Optional
 from pydantic import BaseModel
 import logging
+from web3 import Web3
 
 from app.services.blockchain_service import BlockchainService
+from app.services.transaction_state_service import TransactionStateService
+from app.services.asset_service import AssetService
+from app.services.ipfs_service import IPFSService
+from app.services.transaction_service import TransactionService
+from app.repositories.asset_repo import AssetRepository
+from app.repositories.transaction_repo import TransactionRepository
+from app.handlers.upload_handler import UploadHandler
 from app.utilities.auth_middleware import get_current_user, get_wallet_address
 from app.database import get_db_client
 
@@ -63,12 +71,35 @@ def get_blockchain_service() -> BlockchainService:
     """Dependency to get the blockchain service."""
     return BlockchainService()
 
+def get_transaction_state_service() -> TransactionStateService:
+    """Dependency to get the transaction state service."""
+    return TransactionStateService()
+
+def get_upload_handler_for_blockchain(db_client=Depends(get_db_client)) -> UploadHandler:
+    """Dependency to get the upload handler with all required dependencies."""
+    asset_repo = AssetRepository(db_client)
+    transaction_repo = TransactionRepository(db_client)
+    
+    asset_service = AssetService(asset_repo)
+    ipfs_service = IPFSService()
+    blockchain_service = BlockchainService()
+    transaction_service = TransactionService(transaction_repo)
+    transaction_state_service = TransactionStateService()
+    
+    return UploadHandler(
+        asset_service=asset_service,
+        ipfs_service=ipfs_service,
+        blockchain_service=blockchain_service,
+        transaction_service=transaction_service,
+        transaction_state_service=transaction_state_service
+    )
+
 @router.post("/prepare-transaction", response_model=TransactionResponse)
 async def prepare_transaction(
     request: TransactionPrepareRequest,
     req: Request,
     blockchain_service: BlockchainService = Depends(get_blockchain_service),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    _current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> TransactionResponse:
     """
     Prepare an unsigned transaction for frontend signing.
@@ -147,7 +178,7 @@ async def prepare_transaction(
 async def broadcast_transaction(
     request: SignedTransactionRequest,
     blockchain_service: BlockchainService = Depends(get_blockchain_service),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    _current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> BroadcastResponse:
     """
     Broadcast a signed transaction to the blockchain.
@@ -219,7 +250,7 @@ async def estimate_gas(
 async def verify_transaction(
     tx_hash: str,
     blockchain_service: BlockchainService = Depends(get_blockchain_service),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    _current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Verify that a transaction was successful on the blockchain.
@@ -241,42 +272,131 @@ async def verify_transaction(
 async def get_transaction_status(
     tx_hash: str,
     blockchain_service: BlockchainService = Depends(get_blockchain_service),
+    transaction_state_service: TransactionStateService = Depends(get_transaction_state_service),
+    upload_handler: UploadHandler = Depends(get_upload_handler_for_blockchain),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
     Get the current status of a transaction (pending, confirmed, failed).
     """
     try:
-        # Try to get transaction receipt
+        # Convert hex string to bytes if necessary
+        if isinstance(tx_hash, str) and tx_hash.startswith('0x'):
+            tx_hash_bytes = Web3.to_bytes(hexstr=tx_hash)
+        else:
+            tx_hash_bytes = Web3.to_bytes(hexstr=f"0x{tx_hash}")
+        
+        # Try to get transaction receipt (indicates transaction is mined)
         try:
-            result = await blockchain_service.verify_transaction_success(tx_hash)
-            return {
-                "status": "confirmed",
-                "success": result.get("success"),
-                "details": result
-            }
-        except Exception:
-            # If no receipt yet, check if transaction exists in mempool
-            try:
-                tx_data = blockchain_service.web3.eth.get_transaction(tx_hash)
-                if tx_data:
-                    return {
-                        "status": "pending",
-                        "details": {
-                            "tx_hash": tx_hash,
-                            "from": tx_data.get("from"),
-                            "to": tx_data.get("to"),
-                            "gas": tx_data.get("gas"),
-                            "gas_price": tx_data.get("gasPrice")
-                        }
+            receipt = blockchain_service.web3.eth.get_transaction_receipt(tx_hash_bytes)
+            if receipt:
+                # Transaction is mined
+                success = receipt.status == 1
+                
+                # If transaction failed, get detailed error info
+                error_info = None
+                if not success:
+                    try:
+                        # Get revert reason
+                        verification_result = await blockchain_service.verify_transaction_success(tx_hash)
+                        error_info = verification_result.get("revert_reason", "Transaction reverted without reason")
+                    except Exception as e:
+                        error_info = f"Failed to get revert reason: {str(e)}"
+                
+                logger.info(f"Transaction {tx_hash} status: {'success' if success else 'failed'}. Gas used: {receipt.gasUsed}. Error: {error_info if error_info else 'None'}")
+                
+                # AUTO-COMPLETION: If transaction succeeded, check for pending batch uploads
+                if success:
+                    try:
+                        user_wallet = current_user.get("walletAddress")
+                        if user_wallet:
+                            # Check for pending transactions for this user
+                            pending_transactions = await transaction_state_service.get_user_pending_transactions(user_wallet)
+                            
+                            for pending_tx in pending_transactions:
+                                # Check if this is a batch upload that matches this specific transaction
+                                if (pending_tx.get("operation_type") == "BATCH_CREATE" and 
+                                    "metadata" in pending_tx and 
+                                    "ipfs_results" in pending_tx["metadata"] and
+                                    pending_tx.get("blockchain_tx_hash") == tx_hash):
+                                    
+                                    logger.info(f"AUTO-COMPLETING BATCH UPLOAD - pending_tx_id: {pending_tx.get('tx_id')}, tx_hash: {tx_hash}")
+                                    
+                                    # Auto-trigger batch completion
+                                    try:
+                                        completion_result = await upload_handler.complete_batch_blockchain_upload(
+                                            pending_tx_id=pending_tx.get("tx_id"),
+                                            blockchain_tx_hash=tx_hash,
+                                            initiator_address=user_wallet
+                                        )
+                                        logger.info(f"AUTO-COMPLETION SUCCESS: {completion_result}")
+                                        
+                                        # Add completion info to response with frontend-compatible format
+                                        result = {
+                                            "status": "confirmed",
+                                            "success": success,
+                                            "auto_completed": True,
+                                            "completion_result": completion_result,
+                                            "details": {
+                                                "tx_hash": tx_hash,
+                                                "block_number": receipt.blockNumber,
+                                                "gas_used": receipt.gasUsed,
+                                                "status": receipt.status,
+                                                "message": f"Auto-completed batch upload: {completion_result.get('successful_count', 0)} assets created"
+                                            }
+                                        }
+                                        return result
+                                        
+                                    except Exception as completion_error:
+                                        logger.error(f"AUTO-COMPLETION FAILED: {str(completion_error)}")
+                                        # Continue with normal response even if auto-completion fails
+                                        break
+                    except Exception as auto_complete_error:
+                        logger.error(f"Error in auto-completion logic: {str(auto_complete_error)}")
+                        # Continue with normal response even if auto-completion check fails
+                
+                result = {
+                    "status": "confirmed",
+                    "success": success,
+                    "details": {
+                        "tx_hash": tx_hash,
+                        "block_number": receipt.blockNumber,
+                        "gas_used": receipt.gasUsed,
+                        "status": receipt.status
                     }
-            except Exception:
-                pass
+                }
+                
+                if error_info:
+                    result["details"]["error"] = error_info
+                
+                return result
+        except Exception:
+            # No receipt means transaction might be pending
+            pass
             
-            return {
-                "status": "not_found",
-                "details": {"tx_hash": tx_hash}
-            }
+        # Check if transaction exists in mempool (pending)
+        try:
+            tx_data = blockchain_service.web3.eth.get_transaction(tx_hash_bytes)
+            if tx_data:
+                return {
+                    "status": "pending",
+                    "details": {
+                        "tx_hash": tx_hash,
+                        "from": tx_data.get("from"),
+                        "to": tx_data.get("to"),
+                        "gas": tx_data.get("gas"),
+                        "gas_price": tx_data.get("gasPrice")
+                    }
+                }
+        except Exception:
+            # Transaction not found in mempool either
+            pass
+        
+        # Transaction not found anywhere
+        return {
+            "status": "not_found",
+            "details": {"tx_hash": tx_hash}
+        }
         
     except Exception as e:
         logger.error(f"Error getting transaction status: {str(e)}")

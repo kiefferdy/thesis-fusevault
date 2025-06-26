@@ -1,0 +1,24 @@
+{
+  "assetId": "delegation-test-asset",
+  "walletAddress": "0x999999999999999999999999999999999999999a",
+  "criticalMetadata": {
+    "name": "Two-Step Delegation Test Asset",
+    "description": "This asset should fail unless both delegations are set up",
+    "category": "test",
+    "testScenario": "two-step-delegation-validation"
+  },
+  "nonCriticalMetadata": {
+    "note": "This file tests the two-step delegation model for API key users",
+    "expectedResult": "Should fail unless 0x999999999999999999999999999999999999999a delegates BOTH the API key user AND the server wallet",
+    "requirements": [
+      "setDelegate('API_KEY_USER_WALLET', true)",
+      "setDelegate('SERVER_WALLET_ADDRESS', true)"
+    ],
+    "testScenarios": {
+      "neither": "Should fail with error mentioning both delegations needed",
+      "userOnly": "Should fail asking for server wallet delegation",
+      "serverOnly": "Should fail asking for user delegation",
+      "both": "Should succeed"
+    }
+  }
+}

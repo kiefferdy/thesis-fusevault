@@ -1,7 +1,7 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-  const ContractFactory = await ethers.getContractFactory("IPFSVersionRegistry");
+  const ContractFactory = await ethers.getContractFactory("FuseVaultRegistry");
   const contract = await ContractFactory.deploy(); // Start deployment
 
   // Wait for full deployment
@@ -9,7 +9,7 @@ async function main() {
 
   // Get the actual deployed address
   const address = await deployedContract.getAddress();
-  console.log("IPFSVersionRegistry deployed to:", address);
+  console.log("FuseVaultRegistry deployed to:", address);
 }
 
 main().catch((error) => {

@@ -49,7 +49,7 @@ FuseVault is a secure digital asset management platform combining blockchain, IP
 
 ### Smart Contracts
 - `CIDstorage.sol` - Main contract for IPFS CID storage
-- `IPFSVersionRegistry.sol` - Version tracking for assets
+- `FuseVaultRegistry.sol` - Comprehensive asset management (ownership, versioning, delegation, transfers, batch operations)
 
 ## Testing Strategy
 - **Backend**: pytest with async support, fixtures in conftest.py

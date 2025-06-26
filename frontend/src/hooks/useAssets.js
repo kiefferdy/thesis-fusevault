@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { assetService } from '../services/assetService';
+import { transactionFlow } from '../services/blockchainService';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 
@@ -80,6 +81,48 @@ export const useAssets = () => {
     }
   });
 
+  // Mutation for batch uploads with single MetaMask signature
+  const uploadBatchMutation = useMutation({
+    mutationFn: ({ assets, onProgress }) => 
+      transactionFlow.batchUploadWithSigning({ assets, walletAddress: currentAccount }, onProgress),
+    onSuccess: (data, variables, context) => {
+      // Invalidate and refetch asset data
+      queryClient.invalidateQueries(['assets', currentAccount]);
+      queryClient.refetchQueries(['assets', currentAccount]);
+      
+      // Invalidate transaction data to reflect the new transactions
+      queryClient.invalidateQueries(['transactions', 'all', currentAccount]);
+      queryClient.invalidateQueries(['transactions', 'recent', currentAccount]);
+      queryClient.invalidateQueries(['transactions', 'summary', currentAccount]);
+      
+      // Show detailed success message with counts
+      const successCount = data.successfulCount || data.results?.filter(r => r.status === 'success').length || 0;
+      const totalCount = data.assetCount || data.results?.length || 0;
+      
+      if (successCount === totalCount) {
+        toast.success(`Batch upload completed! ${successCount} assets created successfully.`);
+      } else {
+        toast.success(`Batch upload completed! ${successCount}/${totalCount} assets created successfully.`);
+        if (totalCount - successCount > 0) {
+          toast.error(`${totalCount - successCount} assets failed to upload. Check the results for details.`);
+        }
+      }
+      
+      // Call onSuccess callback if provided
+      if (context?.onSuccess) {
+        context.onSuccess(data);
+      }
+    },
+    onError: (error, variables, context) => {
+      toast.error(`Error in batch upload: ${error.message}`);
+      
+      // Call onError callback if provided
+      if (context?.onError) {
+        context.onError(error);
+      }
+    }
+  });
+
   // Mutation for deleting an asset
   const deleteAssetMutation = useMutation({
     mutationFn: ({ assetId, reason }) => 
@@ -100,8 +143,11 @@ export const useAssets = () => {
     error: userAssetsQuery.error,
     uploadMetadata: uploadMetadataMutation.mutate,
     uploadJson: uploadJsonMutation.mutate,
+    uploadBatch: uploadBatchMutation.mutate,
     deleteAsset: deleteAssetMutation.mutate,
-    isUploading: uploadMetadataMutation.isPending || uploadJsonMutation.isPending,
-    isDeleting: deleteAssetMutation.isPending
+    isUploading: uploadMetadataMutation.isPending || uploadJsonMutation.isPending || uploadBatchMutation.isPending,
+    isBatchUploading: uploadBatchMutation.isPending,
+    isDeleting: deleteAssetMutation.isPending,
+    batchUploadError: uploadBatchMutation.error
   };
 };
