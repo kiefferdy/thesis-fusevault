@@ -33,30 +33,10 @@ API_KEY=your_fusevault_api_key
 WALLET_ADDRESS=your_wallet_address
 ```
 
-## 3. Run Benchmarks
-
-### Quick Test (2-3 minutes)
-
-```powershell
-.\fusevault_benchmark.ps1 quick
-```
-
-### Industry Comparison (10-15 minutes)
-
-```powershell
-.\fusevault_benchmark.ps1 compare
-```
-
-### Full Suite (30-60 minutes)
-
-```powershell
-.\fusevault_benchmark.ps1 full
-```
-
 ### YCSB Standard Tests
 
 ```powershell
-python fusevault_ycsb_adapter.py
+python ycsb_adapter.py
 ```
 
 ## 4. Check Results
