@@ -393,14 +393,14 @@ function UploadPage() {
                     {/* Overview */}
                     <Alert severity="info" sx={{ mb: 3 }}>
                       <Typography variant="body2" fontWeight="bold" gutterBottom>
-                        🎯 Quick Overview: Every asset needs an <code>assetId</code>, <code>criticalMetadata</code>, and <code>nonCriticalMetadata</code> field.
+                        Overview: Every asset needs an <code>assetId</code>. <code>criticalMetadata</code>, and <code>nonCriticalMetadata</code> objects must also be present but can be left empty.
                       </Typography>
                       <Typography variant="body2">
                         Critical metadata is stored on blockchain/IPFS for extra security. Updating these fields take longer and require signing.
                       </Typography>
                     </Alert>
 
-                    {/* Required Fields */}
+                    {/* Required vs Recommended Fields */}
                     <Box sx={{ mb: 4 }}>
                       <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'error.main' }}>
                         <CheckCircle />
@@ -409,10 +409,28 @@ function UploadPage() {
                       <Card variant="outlined" sx={{ p: 2, bgcolor: 'red.50', border: '1px solid', borderColor: 'red.200' }}>
                         <Box component="ul" sx={{ m: 0, pl: 2 }}>
                           <li><Typography variant="body2"><code>assetId</code> - Unique identifier for your asset (must be unique across all your assets)</Typography></li>
-                          <li><Typography variant="body2"><code>criticalMetadata</code> - Object containing permanent asset data (required, can be empty <code>{'{'}{'}'}</code>)</Typography></li>
-                          <li><Typography variant="body2"><code>nonCriticalMetadata</code> - Object containing editable asset data (required, can be empty <code>{'{'}{'}'}</code>)</Typography></li>
+                          <li><Typography variant="body2"><code>criticalMetadata</code> - Object for blockchain-secured data (can be empty <code>{'{'}{'}'}</code>)</Typography></li>
+                          <li><Typography variant="body2"><code>nonCriticalMetadata</code> - Object for readily-editable data (can be empty <code>{'{'}{'}'}</code>)</Typography></li>
                         </Box>
                       </Card>
+                      
+                      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'warning.main', mt: 3 }}>
+                        <Info />
+                        Highly Recommended Fields
+                      </Typography>
+                      <Card variant="outlined" sx={{ p: 2, bgcolor: 'orange.50', border: '1px solid', borderColor: 'orange.200' }}>
+                        <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                          <li><Typography variant="body2"><code>criticalMetadata.name</code> - Asset name displayed in dashboard and asset cards</Typography></li>
+                          <li><Typography variant="body2"><code>criticalMetadata.description</code> - Helps users understand what the asset represents</Typography></li>
+                          <li><Typography variant="body2"><code>criticalMetadata.tags</code> - Array of tags for filtering and organizing assets</Typography></li>
+                        </Box>
+                      </Card>
+                      
+                      <Alert severity="warning" sx={{ mt: 2 }}>
+                        <Typography variant="body2">
+                          <strong>Note:</strong> While technically optional, <code>name</code>, <code>description</code>, and <code>tags</code> are strongly recommended as they greatly improve asset discoverability and management in the dashboard.
+                        </Typography>
+                      </Alert>
                     </Box>
 
                     {/* Metadata Types */}
@@ -434,7 +452,7 @@ function UploadPage() {
                               <strong>Characteristics:</strong> Permanent, immutable, publicly verifiable
                             </Typography>
                             <Typography variant="body2" paragraph>
-                              <strong>Use for:</strong> Asset name, crucial ownership details, information requiring tamper protection
+                              <strong>Use for:</strong> Asset name, description, tags, crucial ownership details, information requiring tamper protection
                             </Typography>
                             <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
                               💡 Once uploaded, this data can be changed but will require re-upload and MetaMask signing
@@ -489,12 +507,14 @@ function UploadPage() {
 {`[
   {
     "assetId": "document-001",
+    "walletAddress": "0x1234...abcd",
     "criticalMetadata": {
       "name": "Project Proposal",
-      "description": "Q4 marketing proposal",
+      "description": "Q4 marketing proposal", 
+      "tags": ["proposal", "marketing", "q4"],
       "author": "John Doe",
       "created_date": "2024-01-15",
-      "tags": ["proposal", "marketing", "q4"]
+      "document_type": "proposal"
     },
     "nonCriticalMetadata": {
       "file_size": "2.5MB",
@@ -543,10 +563,11 @@ image-002,Company Logo,Updated brand logo,Jane Smith,"logo,brand",500KB`}
                         ⚠️ Common Mistakes to Avoid:
                       </Typography>
                       <Box component="ul" sx={{ m: 0, pl: 2 }}>
-                        <li><Typography variant="body2">Missing <code>assetId</code> field</Typography></li>
-                        <li><Typography variant="body2">Forgetting to include empty <code>criticalMetadata: {'{'}{'}'}</code> or <code>nonCriticalMetadata: {'{'}{'}'}</code> objects</Typography></li>
+                        <li><Typography variant="body2">Missing <code>assetId</code> field (the only truly required field)</Typography></li>
+                        <li><Typography variant="body2">Not including <code>name</code>, <code>description</code>, or <code>tags</code> (makes assets hard to find in dashboard)</Typography></li>
                         <li><Typography variant="body2">Using duplicate <code>assetId</code> values within the same batch</Typography></li>
-                        <li><Typography variant="body2">Putting sensitive data in critical metadata (it's publicly visible)</Typography></li>
+                        <li><Typography variant="body2">Putting sensitive data in critical metadata (it's publicly visible on blockchain and IPFS)</Typography></li>
+                        <li><Typography variant="body2">Forgetting to include empty <code>criticalMetadata: {'{'}{'}'}</code> or <code>nonCriticalMetadata: {'{'}{'}'}</code> objects if you have no custom fields</Typography></li>
                       </Box>
                     </Alert>
 

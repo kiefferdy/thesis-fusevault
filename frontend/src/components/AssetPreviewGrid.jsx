@@ -41,7 +41,11 @@ import {
   ExpandMore,
   SelectAll,
   Clear,
-  FilterList
+  FilterList,
+  Add,
+  Close,
+  HelpOutline,
+  Info
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 
@@ -58,6 +62,10 @@ const AssetPreviewGrid = ({
   const [filterBy, setFilterBy] = useState('all');
   const [bulkMenu, setBulkMenu] = useState(null);
   const [editDialog, setEditDialog] = useState({ open: false, asset: null, index: -1 });
+  const [newCriticalFieldName, setNewCriticalFieldName] = useState('');
+  const [newCriticalFieldValue, setNewCriticalFieldValue] = useState('');
+  const [newNonCriticalFieldName, setNewNonCriticalFieldName] = useState('');
+  const [newNonCriticalFieldValue, setNewNonCriticalFieldValue] = useState('');
   const [viewDialog, setViewDialog] = useState({ open: false, asset: null });
 
   // Validate individual asset
@@ -159,7 +167,18 @@ const AssetPreviewGrid = ({
 
   // Edit asset
   const openEditDialog = useCallback((asset, index) => {
-    setEditDialog({ open: true, asset: { ...asset }, index });
+    // Ensure both metadata sections exist
+    const editableAsset = {
+      ...asset,
+      criticalMetadata: asset.criticalMetadata || {},
+      nonCriticalMetadata: asset.nonCriticalMetadata || {}
+    };
+    setEditDialog({ open: true, asset: editableAsset, index });
+    // Clear any pending field additions
+    setNewCriticalFieldName('');
+    setNewCriticalFieldValue('');
+    setNewNonCriticalFieldName('');
+    setNewNonCriticalFieldValue('');
   }, []);
 
   const saveAssetEdit = useCallback(() => {
@@ -192,6 +211,98 @@ const AssetPreviewGrid = ({
     setBulkMenu(null);
     toast.success(`Duplicated ${selectedAssets.size} assets`);
   }, [assets, selectedAssets, onAssetsChange]);
+
+  // Dynamic metadata field management
+  const addMetadataField = useCallback((type) => {
+    if (type === 'critical') {
+      if (!newCriticalFieldName.trim()) return;
+      
+      const fieldName = newCriticalFieldName.trim();
+      // Prevent adding reserved field names
+      if (['name', 'description', 'tags'].includes(fieldName)) {
+        toast.error(`"${fieldName}" is reserved and managed in the Basic Information section`);
+        return;
+      }
+      
+      setEditDialog(prev => ({
+        ...prev,
+        asset: {
+          ...prev.asset,
+          criticalMetadata: {
+            ...prev.asset.criticalMetadata,
+            [fieldName]: newCriticalFieldValue
+          }
+        }
+      }));
+      setNewCriticalFieldName('');
+      setNewCriticalFieldValue('');
+    } else {
+      if (!newNonCriticalFieldName.trim()) return;
+      setEditDialog(prev => ({
+        ...prev,
+        asset: {
+          ...prev.asset,
+          nonCriticalMetadata: {
+            ...prev.asset.nonCriticalMetadata,
+            [newNonCriticalFieldName.trim()]: newNonCriticalFieldValue
+          }
+        }
+      }));
+      setNewNonCriticalFieldName('');
+      setNewNonCriticalFieldValue('');
+    }
+  }, [newCriticalFieldName, newCriticalFieldValue, newNonCriticalFieldName, newNonCriticalFieldValue]);
+
+  const removeMetadataField = useCallback((type, fieldName) => {
+    setEditDialog(prev => {
+      const asset = { ...prev.asset };
+      if (type === 'critical') {
+        const { [fieldName]: _, ...remaining } = asset.criticalMetadata;
+        asset.criticalMetadata = remaining;
+      } else {
+        const { [fieldName]: _, ...remaining } = asset.nonCriticalMetadata;
+        asset.nonCriticalMetadata = remaining;
+      }
+      return { ...prev, asset };
+    });
+  }, []);
+
+  const updateMetadataFieldKey = useCallback((type, oldKey, newKey) => {
+    if (!newKey.trim() || oldKey === newKey.trim()) return;
+    
+    // Prevent renaming to reserved field names in critical metadata
+    if (type === 'critical' && ['name', 'description', 'tags'].includes(newKey.trim())) {
+      toast.error(`"${newKey.trim()}" is reserved and managed in the Basic Information section`);
+      return;
+    }
+    
+    setEditDialog(prev => {
+      const asset = { ...prev.asset };
+      if (type === 'critical') {
+        const value = asset.criticalMetadata[oldKey];
+        const { [oldKey]: _, ...remaining } = asset.criticalMetadata;
+        asset.criticalMetadata = { ...remaining, [newKey.trim()]: value };
+      } else {
+        const value = asset.nonCriticalMetadata[oldKey];
+        const { [oldKey]: _, ...remaining } = asset.nonCriticalMetadata;
+        asset.nonCriticalMetadata = { ...remaining, [newKey.trim()]: value };
+      }
+      return { ...prev, asset };
+    });
+  }, []);
+
+  const updateMetadataFieldValue = useCallback((type, key, value) => {
+    setEditDialog(prev => ({
+      ...prev,
+      asset: {
+        ...prev.asset,
+        [type === 'critical' ? 'criticalMetadata' : 'nonCriticalMetadata']: {
+          ...prev.asset[type === 'critical' ? 'criticalMetadata' : 'nonCriticalMetadata'],
+          [key]: value
+        }
+      }
+    }));
+  }, []);
 
   // Get validation status icon
   const getValidationIcon = (validation) => {
@@ -514,78 +625,284 @@ const AssetPreviewGrid = ({
       <Dialog 
         open={editDialog.open} 
         onClose={() => setEditDialog({ open: false, asset: null, index: -1 })}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
+        PaperProps={{
+          sx: { height: '90vh', maxHeight: '90vh' }
+        }}
       >
         <DialogTitle>Edit Asset</DialogTitle>
         <DialogContent>
           {editDialog.asset && (
             <Box sx={{ pt: 1 }}>
-              <TextField
-                fullWidth
-                label="Asset ID"
-                value={editDialog.asset.assetId || ''}
-                onChange={(e) => setEditDialog(prev => ({
-                  ...prev,
-                  asset: { ...prev.asset, assetId: e.target.value }
-                }))}
-                margin="normal"
-              />
-              <TextField
-                fullWidth
-                label="Name"
-                value={editDialog.asset.criticalMetadata?.name || ''}
-                onChange={(e) => setEditDialog(prev => ({
-                  ...prev,
-                  asset: {
-                    ...prev.asset,
-                    criticalMetadata: {
-                      ...prev.asset.criticalMetadata,
-                      name: e.target.value
+              {/* Top Level Fields */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" sx={{ mb: 2 }}>
+                  Basic Information
+                </Typography>
+                
+                <TextField
+                  fullWidth
+                  label="Asset ID"
+                  value={editDialog.asset.assetId || ''}
+                  onChange={(e) => setEditDialog(prev => ({
+                    ...prev,
+                    asset: { ...prev.asset, assetId: e.target.value }
+                  }))}
+                  margin="normal"
+                  required
+                  helperText="Unique identifier for your asset"
+                />
+                
+                <TextField
+                  fullWidth
+                  label="Wallet Address"
+                  value={editDialog.asset.walletAddress || ''}
+                  onChange={(e) => setEditDialog(prev => ({
+                    ...prev,
+                    asset: { ...prev.asset, walletAddress: e.target.value }
+                  }))}
+                  margin="normal"
+                  helperText="Optional. If left blank, defaults to your connected wallet"
+                  placeholder="0x..."
+                />
+                
+                <TextField
+                  fullWidth
+                  label="Name"
+                  value={editDialog.asset.criticalMetadata?.name || ''}
+                  onChange={(e) => setEditDialog(prev => ({
+                    ...prev,
+                    asset: {
+                      ...prev.asset,
+                      criticalMetadata: {
+                        ...prev.asset.criticalMetadata,
+                        name: e.target.value
+                      }
                     }
-                  }
-                }))}
-                margin="normal"
-              />
-              <TextField
-                fullWidth
-                label="Description"
-                multiline
-                rows={3}
-                value={editDialog.asset.criticalMetadata?.description || ''}
-                onChange={(e) => setEditDialog(prev => ({
-                  ...prev,
-                  asset: {
-                    ...prev.asset,
-                    criticalMetadata: {
-                      ...prev.asset.criticalMetadata,
-                      description: e.target.value
+                  }))}
+                  margin="normal"
+                  helperText="Highly recommended - displayed in dashboard and asset cards for easy identification"
+                />
+                
+                <TextField
+                  fullWidth
+                  label="Description"
+                  multiline
+                  rows={3}
+                  value={editDialog.asset.criticalMetadata?.description || ''}
+                  onChange={(e) => setEditDialog(prev => ({
+                    ...prev,
+                    asset: {
+                      ...prev.asset,
+                      criticalMetadata: {
+                        ...prev.asset.criticalMetadata,
+                        description: e.target.value
+                      }
                     }
-                  }
-                }))}
-                margin="normal"
-              />
-              <TextField
-                fullWidth
-                label="Tags (comma-separated)"
-                value={editDialog.asset.criticalMetadata?.tags?.join(', ') || ''}
-                onChange={(e) => setEditDialog(prev => ({
-                  ...prev,
-                  asset: {
-                    ...prev.asset,
-                    criticalMetadata: {
-                      ...prev.asset.criticalMetadata,
-                      tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)
+                  }))}
+                  margin="normal"
+                  helperText="Highly recommended - helps users understand what this asset represents"
+                />
+                
+                <TextField
+                  fullWidth
+                  label="Tags (comma-separated)"
+                  value={editDialog.asset.criticalMetadata?.tags?.join(', ') || ''}
+                  onChange={(e) => setEditDialog(prev => ({
+                    ...prev,
+                    asset: {
+                      ...prev.asset,
+                      criticalMetadata: {
+                        ...prev.asset.criticalMetadata,
+                        tags: e.target.value.split(',').map(tag => tag.trim()).filter(Boolean)
+                      }
                     }
-                  }
-                }))}
-                margin="normal"
-              />
+                  }))}
+                  margin="normal"
+                  helperText="Highly recommended - used for filtering and organizing assets in the dashboard"
+                />
+              </Box>
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Critical Metadata Section */}
+              <Box sx={{ mb: 3, p: 2, border: '1px solid', borderColor: 'primary.main', borderRadius: 1, bgcolor: 'primary.50' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                    Additional Critical Metadata
+                  </Typography>
+                  <Tooltip title="Critical metadata is stored on blockchain and IPFS with high security verification">
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <HelpOutline fontSize="small" color="primary" sx={{ mr: 1 }} />
+                      <Typography variant="caption" color="text.secondary">
+                        High Security
+                      </Typography>
+                    </Box>
+                  </Tooltip>
+                </Box>
+
+                {(!editDialog.asset.criticalMetadata || 
+                  Object.keys(editDialog.asset.criticalMetadata).filter(key => !['name', 'description', 'tags'].includes(key)).length === 0) && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontStyle: 'italic' }}>
+                    No additional critical metadata fields yet. Add your first custom field below.
+                  </Typography>
+                )}
+
+                {/* Dynamic Critical Metadata Fields */}
+                {editDialog.asset.criticalMetadata && Object.entries(editDialog.asset.criticalMetadata)
+                  .filter(([key]) => !['name', 'description', 'tags'].includes(key))
+                  .map(([key, value]) => (
+                  <Box key={key} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <TextField
+                      label="Field Name"
+                      value={key}
+                      onChange={(e) => updateMetadataFieldKey('critical', key, e.target.value)}
+                      sx={{ mr: 2, minWidth: 150 }}
+                      size="small"
+                    />
+                    <TextField
+                      label="Value"
+                      value={Array.isArray(value) ? value.join(', ') : (value || '')}
+                      onChange={(e) => {
+                        const newValue = key === 'tags' ? 
+                          e.target.value.split(',').map(tag => tag.trim()).filter(Boolean) : 
+                          e.target.value;
+                        updateMetadataFieldValue('critical', key, newValue);
+                      }}
+                      sx={{ flexGrow: 1, mr: 1 }}
+                      size="small"
+                      multiline={key === 'description'}
+                      rows={key === 'description' ? 2 : 1}
+                      helperText={key === 'tags' ? 'Comma-separated values' : ''}
+                    />
+                    <IconButton 
+                      onClick={() => removeMetadataField('critical', key)}
+                      color="error"
+                      size="small"
+                    >
+                      <Close />
+                    </IconButton>
+                  </Box>
+                ))}
+
+                {/* Add New Critical Field */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
+                  <TextField
+                    label="New Field Name"
+                    value={newCriticalFieldName}
+                    onChange={(e) => setNewCriticalFieldName(e.target.value)}
+                    size="small"
+                    sx={{ minWidth: 150 }}
+                  />
+                  <TextField
+                    label="Value"
+                    value={newCriticalFieldValue}
+                    onChange={(e) => setNewCriticalFieldValue(e.target.value)}
+                    size="small"
+                    sx={{ flexGrow: 1 }}
+                  />
+                  <Button
+                    startIcon={<Add />}
+                    onClick={() => addMetadataField('critical')}
+                    variant="outlined"
+                    size="small"
+                    disabled={!newCriticalFieldName.trim()}
+                  >
+                    Add
+                  </Button>
+                </Box>
+              </Box>
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Non-Critical Metadata Section */}
+              <Box sx={{ mb: 2, p: 2, border: '1px solid', borderColor: 'info.main', borderRadius: 1, bgcolor: 'info.50' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                    Non-Critical Metadata
+                  </Typography>
+                  <Tooltip title="Non-critical metadata is stored in database with standard security">
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Info fontSize="small" color="info" sx={{ mr: 1 }} />
+                      <Typography variant="caption" color="text.secondary">
+                        Standard Security
+                      </Typography>
+                    </Box>
+                  </Tooltip>
+                </Box>
+
+                {(!editDialog.asset.nonCriticalMetadata || Object.keys(editDialog.asset.nonCriticalMetadata).length === 0) && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontStyle: 'italic' }}>
+                    No non-critical metadata fields yet. Add your first field below.
+                  </Typography>
+                )}
+
+                {/* Dynamic Non-Critical Metadata Fields */}
+                {editDialog.asset.nonCriticalMetadata && Object.entries(editDialog.asset.nonCriticalMetadata).map(([key, value]) => (
+                  <Box key={key} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <TextField
+                      label="Field Name"
+                      value={key}
+                      onChange={(e) => updateMetadataFieldKey('nonCritical', key, e.target.value)}
+                      sx={{ mr: 2, minWidth: 150 }}
+                      size="small"
+                    />
+                    <TextField
+                      label="Value"
+                      value={Array.isArray(value) ? value.join(', ') : (value || '')}
+                      onChange={(e) => updateMetadataFieldValue('nonCritical', key, e.target.value)}
+                      sx={{ flexGrow: 1, mr: 1 }}
+                      size="small"
+                    />
+                    <IconButton 
+                      onClick={() => removeMetadataField('nonCritical', key)}
+                      color="error"
+                      size="small"
+                    >
+                      <Close />
+                    </IconButton>
+                  </Box>
+                ))}
+
+                {/* Add New Non-Critical Field */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
+                  <TextField
+                    label="New Field Name"
+                    value={newNonCriticalFieldName}
+                    onChange={(e) => setNewNonCriticalFieldName(e.target.value)}
+                    size="small"
+                    sx={{ minWidth: 150 }}
+                  />
+                  <TextField
+                    label="Value"
+                    value={newNonCriticalFieldValue}
+                    onChange={(e) => setNewNonCriticalFieldValue(e.target.value)}
+                    size="small"
+                    sx={{ flexGrow: 1 }}
+                  />
+                  <Button
+                    startIcon={<Add />}
+                    onClick={() => addMetadataField('nonCritical')}
+                    variant="outlined"
+                    size="small"
+                    disabled={!newNonCriticalFieldName.trim()}
+                  >
+                    Add
+                  </Button>
+                </Box>
+              </Box>
             </Box>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditDialog({ open: false, asset: null, index: -1 })}>
+          <Button onClick={() => {
+            setEditDialog({ open: false, asset: null, index: -1 });
+            setNewCriticalFieldName('');
+            setNewCriticalFieldValue('');
+            setNewNonCriticalFieldName('');
+            setNewNonCriticalFieldValue('');
+          }}>
             Cancel
           </Button>
           <Button onClick={saveAssetEdit} variant="contained">
