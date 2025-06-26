@@ -1054,7 +1054,7 @@ class UploadHandler:
                         "status": "error",
                         "message": f"IPFS upload failed for {len(failed_uploads)} assets: {error_details}",
                         "asset_count": len(assets),
-                        "batch_id": pending_tx
+                        "batch_id": batch_id
                     }
                 
                 # Combine upload results with original asset data
@@ -1077,7 +1077,7 @@ class UploadHandler:
                     "status": "error",
                     "message": f"Concurrent IPFS upload failed: {str(e)}",
                     "asset_count": len(assets),
-                    "batch_id": pending_tx
+                    "batch_id": batch_id
                 }
             
             # Step 3: Handle blockchain interaction based on authentication method
@@ -1120,7 +1120,7 @@ class UploadHandler:
                     "estimated_gas": blockchain_result.get("estimated_gas"),
                     "gas_price": blockchain_result.get("gas_price"),
                     "function_name": blockchain_result.get("function_name"),
-                    "batch_id": pending_tx
+                    "batch_id": batch_id
                 }
             
             else:
@@ -1191,7 +1191,7 @@ class UploadHandler:
                     "blockchain_tx_hash": blockchain_tx_hash,
                     "successful_count": success_count,
                     "failed_count": len(results) - success_count,
-                    "batch_id": pending_tx
+                    "batch_id": batch_id
                 }
                 
         except Exception as e:
@@ -1678,7 +1678,7 @@ class UploadHandler:
                         "status": "error",
                         "message": f"IPFS upload failed for {len(failed_uploads)} assets: {error_details}",
                         "asset_count": len(assets),
-                        "batch_id": pending_tx
+                        "batch_id": batch_id
                     }
                 
                 # Combine upload results with original asset data
@@ -1701,7 +1701,7 @@ class UploadHandler:
                     "status": "error",
                     "message": f"Concurrent IPFS upload failed: {str(e)}",
                     "asset_count": len(assets),
-                    "batch_id": pending_tx
+                    "batch_id": batch_id
                 }
             
             # Step 3: Handle blockchain interaction based on authentication method
@@ -1744,7 +1744,7 @@ class UploadHandler:
                     "estimated_gas": blockchain_result.get("estimated_gas"),
                     "gas_price": blockchain_result.get("gas_price"),
                     "function_name": blockchain_result.get("function_name"),
-                    "batch_id": pending_tx
+                    "batch_id": batch_id
                 }
             
             else:
@@ -1815,7 +1815,7 @@ class UploadHandler:
                     "blockchain_tx_hash": blockchain_tx_hash,
                     "successful_count": success_count,
                     "failed_count": len(results) - success_count,
-                    "batch_id": pending_tx
+                    "batch_id": batch_id
                 }
                 
         except Exception as e:

@@ -51,7 +51,7 @@ function UploadPage() {
   const [batchAssets, setBatchAssets] = useState([]);
   const [batchProgress, setBatchProgress] = useState({
     uploadProgress: 0,
-    currentStage: 0,
+    currentStage: -1,
     assetProgress: {},
     errors: {},
     warnings: {},
@@ -165,15 +165,10 @@ function UploadPage() {
       networkStatus: null
     });
 
-    // Auto-scroll to progress tracker
-    if (progressTrackerRef.current) {
-      progressTrackerRef.current.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'start' 
-      });
-    }
-
     try {
+      // Auto-scroll will happen on first progress update
+      let hasScrolled = false;
+      
       // Use enhanced batch upload with detailed progress tracking
       uploadBatch({
         assets: batchAssets,
@@ -189,6 +184,18 @@ function UploadPage() {
             blockchainTxHash: additionalData.blockchainTxHash || prev.blockchainTxHash,
             networkStatus: additionalData.networkStatus || prev.networkStatus
           }));
+          
+          // Auto-scroll to progress tracker on first progress update
+          if (!hasScrolled && progressTrackerRef.current) {
+            hasScrolled = true;
+            // Small delay to ensure component is rendered
+            setTimeout(() => {
+              progressTrackerRef.current?.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start' 
+              });
+            }, 100);
+          }
         }
       }, {
         onSuccess: (result) => {
@@ -354,10 +361,10 @@ function UploadPage() {
               </div>
             </Alert>
 
-            <Grid container spacing={3}>
+            <Grid container spacing={2}>
               {/* Data Structure Requirements - Expandable */}
               <Grid item xs={12}>
-                <Accordion sx={{ mb: 3, border: '1px solid', borderColor: 'grey.300', borderRadius: 2, boxShadow: 1 }}>
+                <Accordion sx={{ mb: 0, border: '1px solid', borderColor: 'grey.300', borderRadius: 2, boxShadow: 1 }}>
                   <AccordionSummary 
                     expandIcon={<ExpandMore />}
                     sx={{ 

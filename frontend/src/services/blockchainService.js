@@ -273,8 +273,7 @@ export const transactionFlow = {
     try {
       // Stage 0: Validation
       onProgress('Validating assets and preparing batch upload...', 10, { 
-        stage: 0,
-        networkStatus: 'checking'
+        stage: 0
       });
       
       // Validate input data
@@ -308,8 +307,7 @@ export const transactionFlow = {
       
       // Stage 1: IPFS Upload with real-time progress polling
       onProgress('Starting IPFS upload for individual assets...', 25, { 
-        stage: 1,
-        networkStatus: 'connected'
+        stage: 1
       });
       
       // Start the backend upload
@@ -340,7 +338,6 @@ export const transactionFlow = {
                 
                 onProgress(`Uploading assets to IPFS: ${completedCount}/${totalCount} completed`, 25 + ipfsProgress, { 
                   stage: 1,
-                  networkStatus: 'connected',
                   assetProgress: progressData.assets
                 });
                 
@@ -348,7 +345,6 @@ export const transactionFlow = {
                 if (completedCount >= totalCount) {
                   onProgress(`All ${totalCount} assets uploaded to IPFS successfully`, 45, { 
                     stage: 1,
-                    networkStatus: 'connected',
                     assetProgress: progressData.assets
                   });
                   resolve(); // IPFS stage complete
@@ -381,8 +377,7 @@ export const transactionFlow = {
       } else {
         // No batch_id - fallback to simple progress update
         onProgress('Assets uploaded to IPFS', 45, { 
-          stage: 1,
-          networkStatus: 'connected'
+          stage: 1
         });
       }
       

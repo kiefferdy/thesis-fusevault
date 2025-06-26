@@ -321,6 +321,7 @@ const BatchProgressTracker = ({
                 📁 IPFS Upload Progress
               </Typography>
               
+              
               {/* Compact grid layout for assets */}
               <Box sx={{ 
                 display: 'grid', 
@@ -432,7 +433,7 @@ const BatchProgressTracker = ({
         )}
 
         {/* Network Status */}
-        {networkStatus && (
+        {networkStatus && networkStatus.message && (
           <Alert severity={networkStatus.type} sx={{ mb: 3 }}>
             {networkStatus.message}
           </Alert>
