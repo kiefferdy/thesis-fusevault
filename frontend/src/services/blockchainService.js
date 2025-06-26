@@ -970,6 +970,188 @@ export const transactionFlow = {
     throw new Error('Transaction confirmation timeout - check your wallet and try again');
   },
 
+  // Complete batch delete flow with user signing
+  batchDeleteWithSigning: async (assetIds, walletAddress, reason = null, onProgress = () => {}) => {
+    try {
+      // Stage 0: Validation
+      onProgress('Validating assets and preparing batch deletion...', 10, { 
+        stage: 0
+      });
+      
+      // Validate input data
+      if (!Array.isArray(assetIds) || assetIds.length === 0) {
+        throw new Error('Asset IDs array is required and must not be empty');
+      }
+      
+      if (assetIds.length > 50) {
+        throw new Error('Batch size cannot exceed 50 assets');
+      }
+      
+      if (!walletAddress) {
+        throw new Error('Wallet address is required');
+      }
+      
+      // Check network before starting
+      if (metamaskUtils.isMetaMaskAvailable()) {
+        const networkCheck = await metamaskUtils.checkNetwork();
+        if (!networkCheck.isCorrectNetwork) {
+          throw new Error(`Wrong network. Please switch to ${networkCheck.expectedNetwork}`);
+        }
+      }
+      
+      // Stage 1: Prepare batch deletion
+      onProgress('Preparing batch deletion transaction...', 20, { 
+        stage: 1
+      });
+      
+      const { assetService } = await import('./assetService');
+      const prepareResult = await assetService.prepareBatchDelete(assetIds, walletAddress, reason);
+      
+      if (prepareResult.status === 'error') {
+        throw new Error(prepareResult.message);
+      }
+      
+      // For API key users, deletion is completed directly
+      if (prepareResult.status === 'success' || prepareResult.status === 'partial') {
+        onProgress('Batch deletion completed!', 100, { 
+          stage: 4,
+          completion_result: prepareResult
+        });
+        return {
+          success: true,
+          message: prepareResult.message,
+          results: prepareResult.results,
+          success_count: prepareResult.success_count,
+          failure_count: prepareResult.failure_count,
+          completion_result: prepareResult
+        };
+      }
+      
+      // For wallet users, we need MetaMask signing
+      if (prepareResult.status === 'pending_signature') {
+        onProgress('Please sign the transaction in MetaMask...', 40, { 
+          stage: 2
+        });
+        
+        if (!prepareResult.transaction) {
+          throw new Error('No transaction data received for signing');
+        }
+        
+        // Format transaction for MetaMask
+        const formattedTransaction = metamaskUtils.formatTransactionForMetaMask(prepareResult.transaction);
+        
+        // Request user signature
+        const signedTxHash = await window.ethereum.request({
+          method: 'eth_sendTransaction',
+          params: [formattedTransaction],
+        });
+        
+        onProgress('Transaction signed! Waiting for blockchain confirmation...', 60, { 
+          stage: 3,
+          txHash: signedTxHash
+        });
+        
+        // Stage 3: Wait for blockchain confirmation and complete
+        const confirmationResult = await transactionFlow.waitForConfirmationAndComplete(
+          signedTxHash,
+          prepareResult.pending_tx_id,
+          'batchDelete',
+          onProgress
+        );
+        
+        onProgress('Batch deletion completed!', 100, { 
+          stage: 4,
+          completion_result: confirmationResult
+        });
+        
+        return {
+          success: true,
+          txHash: signedTxHash,
+          ...confirmationResult
+        };
+      }
+      
+      throw new Error('Unexpected response from batch delete preparation');
+      
+    } catch (error) {
+      const handledError = transactionFlow.handleTransactionError(error);
+      throw handledError;
+    }
+  },
+
+  // Wait for confirmation and complete batch delete operation
+  waitForConfirmationAndComplete: async (txHash, pendingTxId, operationType, onProgress = () => {}) => {
+    const maxAttempts = 30; // 5 minutes maximum wait time
+    let attempts = 0;
+    let lastError = null;
+    
+    while (attempts < maxAttempts) {
+      try {
+        // Check transaction status
+        const status = await blockchainService.getTransactionStatus(txHash);
+        
+        if (status.status === 'confirmed') {
+          onProgress('Transaction confirmed! Completing operation...', 85);
+          
+          // Complete the operation based on type
+          if (operationType === 'batchDelete') {
+            const { assetService } = await import('./assetService');
+            const completion_result = await assetService.completeBatchDelete(pendingTxId, txHash);
+            
+            return {
+              completion_result: completion_result,
+              ...completion_result
+            };
+          }
+          
+          // For other operation types, return the status details
+          if (status.details) {
+            return {
+              completion_result: status.completion_result,
+              ...status.details
+            };
+          }
+          return status.details;
+        } else if (status.status === 'failed') {
+          throw new Error(
+            status.details?.error || 
+            'Transaction failed on blockchain - insufficient gas or other error'
+          );
+        } else if (status.status === 'not_found' && attempts > 5) {
+          // Only throw not_found after several attempts to account for network delays
+          throw new Error('Transaction not found on blockchain - it may have been dropped');
+        }
+        
+        // Transaction is still pending, wait and retry
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+        attempts++;
+        
+        const progress = 60 + (attempts / maxAttempts) * 20; // Progress from 60% to 80%
+        onProgress(`Waiting for blockchain confirmation... (${attempts}/${maxAttempts})`, progress);
+      } catch (error) {
+        lastError = error;
+        
+        // If it's a non-network error, throw immediately
+        if (error.message.includes('failed') || error.message.includes('not found')) {
+          throw error;
+        }
+        
+        // For network errors, retry up to max attempts
+        if (attempts === maxAttempts - 1) {
+          throw new Error(
+            `Transaction confirmation timeout after ${maxAttempts} attempts. ` +
+            `Last error: ${lastError?.message || 'Unknown error'}`
+          );
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        attempts++;
+      }
+    }
+    
+    throw new Error('Transaction confirmation timeout - check your wallet and try again');
+  },
+
   // Handle and categorize transaction errors
   handleTransactionError: (error) => {
     const errorMessage = error?.message || error?.toString() || 'Unknown error';

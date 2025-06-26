@@ -32,6 +32,14 @@ export const useTransactionSigner = () => {
     setIsVisible(true);
   }, []);
 
+  const showBatchDeleteSigner = useCallback((assetIds, walletAddress, reason, successCallback, errorCallback) => {
+    setOperation('batchDelete');
+    setOperationData({ assetIds, walletAddress, reason });
+    setOnSuccess(() => successCallback || (() => {}));
+    setOnError(() => errorCallback || (() => {}));
+    setIsVisible(true);
+  }, []);
+
   const hideSigner = useCallback(() => {
     setIsVisible(false);
     setOperation(null);
@@ -55,6 +63,10 @@ export const useTransactionSigner = () => {
     return await transactionFlow.checkEditRequiresSignature(assetData);
   }, []);
 
+  const batchDeleteWithSigning = useCallback(async (assetIds, walletAddress, reason, onProgress) => {
+    return await transactionFlow.batchDeleteWithSigning(assetIds, walletAddress, reason, onProgress);
+  }, []);
+
   return {
     // UI-based signing
     isVisible,
@@ -63,6 +75,7 @@ export const useTransactionSigner = () => {
     showUploadSigner,
     showDeleteSigner,
     showEditSigner,
+    showBatchDeleteSigner,
     hideSigner,
     onSuccess,
     onError,
@@ -71,6 +84,7 @@ export const useTransactionSigner = () => {
     uploadWithSigning,
     deleteWithSigning,
     editWithSigning,
-    checkEditRequiresSignature
+    checkEditRequiresSignature,
+    batchDeleteWithSigning
   };
 };

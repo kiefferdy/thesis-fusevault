@@ -5,7 +5,8 @@ import logging
 from app.handlers.delete_handler import DeleteHandler
 from app.schemas.delete_schema import (
     DeleteRequest, DeleteResponse, 
-    BatchDeleteRequest, BatchDeleteResponse
+    BatchDeleteRequest, BatchDeleteResponse,
+    BatchDeletePrepareRequest, BatchDeleteCompletionRequest
 )
 from app.services.asset_service import AssetService
 from app.services.transaction_service import TransactionService
@@ -127,6 +128,90 @@ async def batch_delete_assets(
         reason=batch_request.reason
     )
     return result
+
+@router.post("/batch/prepare", response_model=BatchDeleteResponse)
+async def prepare_batch_delete(
+    request: BatchDeletePrepareRequest,
+    delete_handler: DeleteHandler = Depends(get_delete_handler),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> BatchDeleteResponse:
+    """
+    Prepare a batch delete operation requiring blockchain signature.
+    
+    This endpoint:
+    1. Validates all assets in the batch
+    2. Checks ownership and delegation permissions  
+    3. Returns transaction data for MetaMask signing (wallet users)
+    4. OR executes deletion directly (API key users)
+    """
+    # Verify that the authenticated user is the one initiating the deletion
+    authenticated_wallet = current_user.get("walletAddress")
+    if authenticated_wallet.lower() != request.wallet_address.lower():
+        logger.warning(f"Unauthorized batch delete attempt: {authenticated_wallet} tried to delete as {request.wallet_address}")
+        raise HTTPException(
+            status_code=403,
+            detail="You can only delete assets for your own wallet address"
+        )
+    
+    try:
+        result = await delete_handler.prepare_batch_deletion(
+            asset_ids=request.asset_ids,
+            initiator_address=request.wallet_address,
+            reason=request.reason
+        )
+        
+        return BatchDeleteResponse(**result)
+        
+    except Exception as e:
+        logger.error(f"Error in batch delete preparation: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to prepare batch delete: {str(e)}"
+        )
+
+@router.post("/batch/complete", response_model=BatchDeleteResponse)
+async def complete_batch_delete(
+    request: BatchDeleteCompletionRequest,
+    delete_handler: DeleteHandler = Depends(get_delete_handler),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+) -> BatchDeleteResponse:
+    """
+    Complete batch delete operation after blockchain transaction is confirmed.
+    Only available for wallet-authenticated users.
+    """
+    try:
+        # Get the authenticated user's wallet address
+        authenticated_wallet = current_user.get("walletAddress")
+        
+        if not authenticated_wallet:
+            raise HTTPException(status_code=401, detail="Unable to determine wallet address")
+        
+        logger.info(f"Completing batch delete for pending_tx_id: {request.pending_tx_id}, tx_hash: {request.blockchain_tx_hash}")
+        
+        # Complete the batch blockchain deletion
+        result = await delete_handler.complete_batch_blockchain_deletion(
+            pending_tx_id=request.pending_tx_id,
+            blockchain_tx_hash=request.blockchain_tx_hash,
+            initiator_address=authenticated_wallet
+        )
+        
+        logger.info(f"Batch delete completion result: {result}")
+        
+        if result.get("status") == "error":
+            logger.error(f"Batch delete completion error: {result.get('message', 'Unknown error')}")
+            raise HTTPException(
+                status_code=400,
+                detail=result.get("message", "Batch delete completion failed")
+            )
+        
+        return BatchDeleteResponse(**result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error completing batch delete: {str(e)}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/asset/{asset_id}", response_model=DeleteResponse)
 async def delete_asset_by_path(

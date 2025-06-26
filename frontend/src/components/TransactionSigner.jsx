@@ -121,6 +121,13 @@ const TransactionSigner = ({
       if (!operationData.assetId || !operationData.walletAddress) {
         throw new Error('Asset ID and wallet address are required for edit');
       }
+    } else if (operation === 'batchDelete') {
+      if (!operationData.assetIds || !Array.isArray(operationData.assetIds) || operationData.assetIds.length === 0) {
+        throw new Error('Asset IDs array is required for batch deletion');
+      }
+      if (!operationData.walletAddress) {
+        throw new Error('Wallet address is required for batch deletion');
+      }
     }
   };
 
@@ -207,6 +214,16 @@ const TransactionSigner = ({
             }
           );
         }
+      } else if (operation === 'batchDelete') {
+        result = await transactionFlow.batchDeleteWithSigning(
+          operationData.assetIds,
+          operationData.walletAddress,
+          operationData.reason,
+          (step, progressValue) => {
+            setCurrentStep(step);
+            setProgress(progressValue);
+          }
+        );
       } else {
         throw new Error(`Unsupported operation: ${operation}`);
       }
