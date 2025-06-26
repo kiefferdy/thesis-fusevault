@@ -112,6 +112,7 @@ const BatchProgressTracker = ({
     }
   }, [isUploading, startTime]);
 
+
   // Calculate elapsed time
   const [elapsedTime, setElapsedTime] = useState(null);
   
@@ -321,6 +322,11 @@ const BatchProgressTracker = ({
                 📁 IPFS Upload Progress
               </Typography>
               
+              {/* Live Progress Summary */}
+              <Typography variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
+                📊 Stage {currentStage + 1}: {assets.length} assets, {Object.keys(assetProgress).length} with progress data
+              </Typography>
+              
               
               {/* Compact grid layout for assets */}
               <Box sx={{ 
@@ -333,6 +339,12 @@ const BatchProgressTracker = ({
                   const assetProgressData = assetProgress[asset.assetId];
                   const status = assetProgressData?.status || 'pending';
                   const progress = assetProgressData?.progress || 0;
+                  
+                  // Debug: log the mismatch to console
+                  if (Object.keys(assetProgress).length > 0 && !assetProgressData) {
+                    console.log(`❌ Asset ${asset.assetId} not found in progress. Available keys:`, Object.keys(assetProgress));
+                    console.log(`Asset object:`, asset);
+                  }
                   
                   return (
                     <Box 

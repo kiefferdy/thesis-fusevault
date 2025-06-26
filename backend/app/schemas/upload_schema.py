@@ -125,6 +125,7 @@ class BatchUploadResponse(BaseModel):
     
     # For pending transactions (when status is 'pending_signature')
     pending_tx_id: Optional[str] = Field(None, description="Pending transaction ID for user signing", alias="pendingTxId")
+    batch_id: Optional[str] = Field(None, description="Batch ID for progress tracking", alias="batchId")
     transaction: Optional[Dict[str, Any]] = Field(None, description="Transaction data for MetaMask signing")
     estimated_gas: Optional[int] = Field(None, description="Estimated gas limit", alias="estimatedGas")
     gas_price: Optional[int] = Field(None, description="Gas price in wei", alias="gasPrice")

@@ -35,7 +35,10 @@ class BatchProgressTracker:
             "total_assets": total_assets,
             "completed_count": 0,
             "error_count": 0,
-            "created_at": time.time()
+            "created_at": time.time(),
+            "blockchain_prepared": False,
+            "transaction_data": None,
+            "pending_tx_id": None
         }
         
         # Initialize all assets as pending
@@ -76,6 +79,18 @@ class BatchProgressTracker:
             self._batch_metadata[batch_id]["error_count"] += 1
         
         logger.debug(f"Updated progress for {batch_id}/{asset_id}: {status} ({progress}%)")
+    
+    def set_blockchain_prepared(self, batch_id: str, transaction_data: Dict[str, Any], pending_tx_id: str) -> None:
+        """Mark blockchain transaction as prepared and store transaction data."""
+        if batch_id not in self._batch_metadata:
+            logger.warning(f"Batch {batch_id} not found when setting blockchain data")
+            return
+        
+        self._batch_metadata[batch_id]["blockchain_prepared"] = True
+        self._batch_metadata[batch_id]["transaction_data"] = transaction_data
+        self._batch_metadata[batch_id]["pending_tx_id"] = pending_tx_id
+        
+        logger.info(f"Blockchain transaction prepared for batch {batch_id}, pending_tx: {pending_tx_id}")
     
     def get_batch_progress(self, batch_id: str) -> Optional[Dict[str, Any]]:
         """Get current progress for a batch."""

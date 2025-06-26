@@ -302,7 +302,7 @@ export const transactionFlow = {
             `Currently on: ${networkCheck.networkName}`
           );
         }
-        console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
+        // Network verified successfully
       }
       
       // Stage 1: IPFS Upload with real-time progress polling
@@ -316,9 +316,14 @@ export const transactionFlow = {
         walletAddress: batchData.walletAddress
       });
       
+      // Variables to store data (needs to be in function scope)
+      let blockchainData = null;
+      let batchId = null;
+      
       // If batch_id is returned, poll for real progress during Stage 1
-      if (prepareResult.data.batch_id) {
-        const batchId = prepareResult.data.batch_id;
+      if (prepareResult.data.batchId) {
+        batchId = prepareResult.data.batchId;
+        // Starting progress polling
         
         // Wait for IPFS uploads to complete with real-time progress
         await new Promise((resolve) => {
@@ -335,6 +340,7 @@ export const transactionFlow = {
                 const completedCount = progressData.completed_count || 0;
                 const totalCount = progressData.total_assets || batchData.assets.length;
                 const ipfsProgress = Math.round((completedCount / totalCount) * 20); // 20% for IPFS stage
+                
                 
                 onProgress(`Uploading assets to IPFS: ${completedCount}/${totalCount} completed`, 25 + ipfsProgress, { 
                   stage: 1,
@@ -357,7 +363,6 @@ export const transactionFlow = {
                   setTimeout(pollProgress, 500); // Poll every 500ms
                 } else {
                   // Timeout - continue anyway
-                  console.log('IPFS progress polling timed out');
                   resolve();
                 }
               } else {
@@ -374,26 +379,75 @@ export const transactionFlow = {
           // Start polling immediately
           pollProgress();
         });
-      } else {
-        // No batch_id - fallback to simple progress update
-        onProgress('Assets uploaded to IPFS', 45, { 
-          stage: 1
+        
+        // After IPFS completion, wait for blockchain transaction preparation
+        onProgress(`IPFS uploads complete. Preparing blockchain transaction...`, 50, { 
+          stage: 2,
+          assetProgress: {}
         });
+        
+        // Poll for blockchain transaction preparation
+        await new Promise((resolve) => {
+          let blockchainPollCount = 0;
+          const maxBlockchainPollAttempts = 20; // 10 seconds of polling
+          
+          const pollBlockchain = async () => {
+            try {
+              const progressResponse = await apiClient.get(`/upload/batch/${batchId}/progress`);
+              const progressData = progressResponse.data;
+              
+              if (progressData && progressData.blockchain_prepared) {
+                blockchainData = progressData.transaction_data;
+                resolve();
+                return;
+              }
+              
+              // Continue polling if blockchain not ready
+              if (blockchainPollCount < maxBlockchainPollAttempts) {
+                blockchainPollCount++;
+                setTimeout(pollBlockchain, 500); // Poll every 500ms
+              } else {
+                // Timeout - throw error
+                throw new Error('Blockchain preparation timeout');
+              }
+            } catch (error) {
+              console.error('Blockchain preparation polling failed:', error.message);
+              throw error;
+            }
+          };
+          
+          // Start blockchain polling
+          pollBlockchain();
+        });
+        
+        if (!blockchainData || !blockchainData.transaction) {
+          console.error('Blockchain data validation failed');
+          throw new Error('Failed to prepare blockchain transaction');
+        }
+        
+        // Blockchain data validated successfully
+        
+      } else {
+        // No batch_id - fallback to original flow (shouldn't happen with new implementation)
+        console.error('No batch_id returned from backend');
+        throw new Error('Batch ID not returned - backend error');
       }
       
-      if (prepareResult.data.status !== 'pending_signature') {
-        throw new Error(prepareResult.data.message || 'Batch preparation failed');
-      }
-      
-      // Stage 2: Blockchain Transaction
-      onProgress(`Assets uploaded to IPFS. Preparing blockchain transaction...`, 50, { 
-        stage: 2,
-        assetProgress: prepareResult.data.assetResults || {}
+      // Stage 2: Blockchain Transaction - Now we have the transaction data
+      onProgress(`Blockchain transaction prepared. Waiting for signature...`, 55, { 
+        stage: 2
       });
       
-      // Step 2: Sign transaction with MetaMask
+      // Step 2: Sign transaction with MetaMask using the blockchain data from polling
+      if (!blockchainData || !blockchainData.transaction) {
+        console.error('Final validation failed - no blockchain data available for signing');
+        throw new Error('Blockchain transaction data not available for signing');
+      }
+      
+      // Preparing transaction for MetaMask signing
+      
       const formattedTx = metamaskUtils.formatTransactionForMetaMask(
-        prepareResult.data.transaction
+        blockchainData.transaction
       );
       const txHash = await metamaskUtils.signTransaction(formattedTx);
       
@@ -401,7 +455,7 @@ export const transactionFlow = {
         throw new Error('Transaction was not signed');
       }
       
-      console.log(`✅ Batch transaction sent to Sepolia: ${txHash}`);
+      // Transaction sent successfully
       // Stage 3: Confirmation
       onProgress('Transaction sent, waiting for blockchain confirmation...', 70, { 
         stage: 3,
@@ -420,7 +474,7 @@ export const transactionFlow = {
       
       // Check if auto-completion occurred
       if (confirmationResult && confirmationResult.auto_completed) {
-        console.log('Batch upload auto-completed:', confirmationResult.completion_result);
+        // Batch upload auto-completed
         // Stage 4: Completion (auto-completed)
         onProgress('Batch upload completed!', 100, { 
           stage: 4,
@@ -436,8 +490,27 @@ export const transactionFlow = {
       });
       
       // Step 4: Complete batch upload (only if not auto-completed)
+      // Validate we have batchId for completion
+      if (!batchId) {
+        console.error('Missing batchId for completion step');
+        throw new Error('Batch ID not available for completion');
+      }
+      
+      // Getting pending transaction ID for completion
+      
+      // Get the pending_tx_id from the progress data since it's not in the initial response
+      const progressResponse = await apiClient.get(`/upload/batch/${batchId}/progress`);
+      const pendingTxId = progressResponse.data.pending_tx_id;
+      
+      if (!pendingTxId) {
+        console.error('No pending transaction ID found in progress data');
+        throw new Error('Unable to get pending transaction ID for completion');
+      }
+      
+      // Completing batch upload
+      
       const completionResult = await apiClient.post('/upload/batch/complete', {
-        pendingTxId: prepareResult.data.pendingTxId,
+        pendingTxId: pendingTxId,
         blockchainTxHash: txHash
       });
       
@@ -478,7 +551,7 @@ export const transactionFlow = {
             `Currently on: ${networkCheck.networkName}`
           );
         }
-        console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
+        // Network verified successfully
       }
       
       // Step 1: Initial upload request (will return pending_signature status for wallet users)
@@ -510,7 +583,7 @@ export const transactionFlow = {
           );
         }
         
-        console.log(`✅ Transaction sent to Sepolia: ${txHash}`);
+        // Transaction sent successfully
         onProgress('Transaction sent, waiting for confirmation...', 60);
         
         // Step 3: Wait for transaction confirmation
@@ -568,7 +641,7 @@ export const transactionFlow = {
             `Currently on: ${networkCheck.networkName}`
           );
         }
-        console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
+        // Network verified successfully
       }
       
       // Step 1: Initial delete request
@@ -600,7 +673,7 @@ export const transactionFlow = {
           );
         }
         
-        console.log(`✅ Transaction sent to Sepolia: ${txHash}`);
+        // Transaction sent successfully
         onProgress('Transaction sent, waiting for confirmation...', 60);
         
         // Step 3: Wait for transaction confirmation
@@ -665,7 +738,7 @@ export const transactionFlow = {
               `Currently on: ${networkCheck.networkName}`
             );
           }
-          console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
+          // Network verified successfully
         }
         if (!editResult.transaction) {
           throw new Error('No transaction data received from server');
@@ -690,7 +763,7 @@ export const transactionFlow = {
           );
         }
         
-        console.log(`✅ Transaction sent to Sepolia: ${txHash}`);
+        // Transaction sent successfully
         onProgress('Transaction sent, waiting for confirmation...', 60);
         
         // Step 3: Wait for transaction confirmation
@@ -719,7 +792,7 @@ export const transactionFlow = {
         // Only non-critical metadata changed - no blockchain interaction needed
         onProgress('Only non-critical metadata changed, updating database...', 50);
         onProgress('Edit completed!', 100);
-        console.log('✅ Edit completed without blockchain interaction (only non-critical metadata changed)');
+        // Edit completed without blockchain interaction
         return editResult;
       }
     } catch (error) {
@@ -768,7 +841,7 @@ export const transactionFlow = {
             `Currently on: ${networkCheck.networkName}`
           );
         }
-        console.log(`✅ Network verified: Connected to Sepolia (${networkCheck.currentChainId})`);
+        // Network verified successfully
       }
       
       onProgress('Waiting for transaction signature...', 30);
@@ -790,7 +863,7 @@ export const transactionFlow = {
         );
       }
       
-      console.log(`✅ Transaction sent to Sepolia: ${txHash}`);
+      // Transaction sent successfully
       onProgress('Transaction sent, waiting for confirmation...', 60);
       
       // Step 2: Wait for transaction confirmation
@@ -843,7 +916,7 @@ export const transactionFlow = {
           if (success) {
             // Handle auto-completion response
             if (status.auto_completed) {
-              console.log('Auto-completion detected:', status.completion_result);
+              // Auto-completion detected
               return {
                 auto_completed: true,
                 completion_result: status.completion_result,

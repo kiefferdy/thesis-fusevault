@@ -177,7 +177,9 @@ function UploadPage() {
             ...prev,
             uploadProgress: progress,
             currentStage: additionalData.stage || prev.currentStage,
-            assetProgress: additionalData.assetProgress || prev.assetProgress,
+            assetProgress: (additionalData.assetProgress && Object.keys(additionalData.assetProgress).length > 0) 
+              ? additionalData.assetProgress 
+              : prev.assetProgress,
             errors: additionalData.errors || prev.errors,
             warnings: additionalData.warnings || prev.warnings,
             estimatedTimeRemaining: additionalData.estimatedTimeRemaining || prev.estimatedTimeRemaining,
