@@ -58,7 +58,7 @@ const BatchProgressTracker = ({
   blockchainTxHash = null,
   networkStatus = null
 }) => {
-  const [expandedStages, setExpandedStages] = useState(new Set([0]));
+  const [expandedStages, setExpandedStages] = useState(new Set());
   const [txDetailsDialog, setTxDetailsDialog] = useState(false);
   const [startTime, setStartTime] = useState(null);
 
@@ -322,9 +322,9 @@ const BatchProgressTracker = ({
                 📁 IPFS Upload Progress
               </Typography>
               
-              {/* Live Progress Summary */}
+              {/* Upload Counter */}
               <Typography variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
-                📊 Stage {currentStage + 1}: {assets.length} assets, {Object.keys(assetProgress).length} with progress data
+                {Object.values(assetProgress).filter(p => p?.status === 'completed').length}/{assets.length} assets uploaded to IPFS
               </Typography>
               
               
@@ -409,6 +409,32 @@ const BatchProgressTracker = ({
           </Card>
         )}
 
+        {/* Blockchain Signing Prompt */}
+        {currentStage === 2 && isUploading && !blockchainTxHash && (
+          <Alert 
+            severity="warning" 
+            sx={{ 
+              mb: 3,
+              '& .MuiAlert-message': {
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%'
+              }
+            }}
+            icon={<Security />}
+          >
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                Please Sign Transaction in MetaMask
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Check for signing prompts and approve the batch transaction to continue
+              </Typography>
+            </Box>
+          </Alert>
+        )}
+
         {/* Blockchain Transaction Info */}
         {blockchainTxHash && (
           <Alert 
@@ -451,10 +477,55 @@ const BatchProgressTracker = ({
           </Alert>
         )}
 
+        {/* General Batch Error */}
+        {!isUploading && errors.general && (
+          <Alert 
+            severity="error" 
+            sx={{ mb: 3 }}
+            action={
+              onRetry && (
+                <Button size="small" onClick={onRetry} startIcon={<Refresh />}>
+                  Retry Upload
+                </Button>
+              )
+            }
+          >
+            <Typography variant="body2" fontWeight="bold">
+              Batch upload failed
+            </Typography>
+            <Typography variant="body2">
+              See the details of what went wrong below.
+            </Typography>
+          </Alert>
+        )}
+
+        {/* Asset-Specific Errors */}
+        {!isUploading && Object.keys(errors).filter(key => key !== 'general').length > 0 && (
+          <Alert 
+            severity="error" 
+            sx={{ mb: 3 }}
+            action={
+              onRetry && (
+                <Button size="small" onClick={onRetry} startIcon={<Refresh />}>
+                  Retry Upload
+                </Button>
+              )
+            }
+          >
+            <Typography variant="body2" fontWeight="bold">
+              Upload completed with errors
+            </Typography>
+            <Typography variant="body2">
+              {Object.keys(errors).filter(key => key !== 'general').length} asset(s) failed to upload. See the details of what went wrong below.
+            </Typography>
+          </Alert>
+        )}
+
         {/* Stage Progress */}
         <Stepper 
           activeStep={currentStage} 
           orientation="vertical"
+          nonLinear
           sx={{
             '& .MuiStepLabel-root': {
               cursor: 'pointer',
@@ -465,7 +536,9 @@ const BatchProgressTracker = ({
             },
             '& .MuiStepContent-root': {
               borderLeft: '2px solid',
-              borderColor: 'divider'
+              borderColor: 'divider',
+              marginLeft: '12px',
+              paddingLeft: '20px'
             }
           }}
         >
@@ -474,7 +547,7 @@ const BatchProgressTracker = ({
             const isExpanded = expandedStages.has(index);
             
             return (
-              <Step key={stage.id}>
+              <Step key={stage.id} expanded={isExpanded}>
                 <StepLabel
                   icon={getStageIcon(stage, status)}
                   onClick={() => toggleStageExpansion(index)}
@@ -493,12 +566,11 @@ const BatchProgressTracker = ({
                   </Box>
                 </StepLabel>
                 
-                <StepContent>
-                  <Collapse in={isExpanded}>
-                    <Box sx={{ pl: 2, pb: 2 }}>
-                      <Typography variant="body2" color="text.secondary" paragraph>
-                        {stage.details}
-                      </Typography>
+                <StepContent TransitionProps={{ unmountOnExit: false }}>
+                  <Box sx={{ py: 1 }}>
+                    <Typography variant="body2" color="text.secondary" paragraph>
+                      {stage.details}
+                    </Typography>
                       
                       {/* Stage-specific content */}
                       {index === 0 && ( // Validation stage
@@ -623,8 +695,7 @@ const BatchProgressTracker = ({
                           {errors.general}
                         </Alert>
                       )}
-                    </Box>
-                  </Collapse>
+                  </Box>
                 </StepContent>
               </Step>
             );
@@ -643,27 +714,6 @@ const BatchProgressTracker = ({
           </Alert>
         )}
 
-        {/* Error Summary */}
-        {!isUploading && Object.keys(errors).length > 0 && (
-          <Alert 
-            severity="error" 
-            sx={{ mt: 2 }}
-            action={
-              onRetry && (
-                <Button size="small" onClick={onRetry} startIcon={<Refresh />}>
-                  Retry Upload
-                </Button>
-              )
-            }
-          >
-            <Typography variant="body2" fontWeight="bold">
-              Upload completed with errors
-            </Typography>
-            <Typography variant="body2">
-              {Object.keys(errors).length} asset(s) failed to upload. Check individual asset details above.
-            </Typography>
-          </Alert>
-        )}
       </CardContent>
 
       {/* Transaction Details Dialog */}
