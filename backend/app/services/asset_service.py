@@ -441,6 +441,7 @@ class AssetService:
                 }}
             )
             
+            logger.info(f"Soft delete for asset {asset_id}: modified {result} documents")
             return result > 0
             
         except Exception as e:

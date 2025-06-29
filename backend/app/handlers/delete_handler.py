@@ -425,7 +425,8 @@ class DeleteHandler:
                 }
             
             # Step 1: Validate all assets and check ownership/permissions
-            validated_assets = []
+            validated_assets = []  # Assets that need blockchain deletion
+            already_deleted_assets = []  # Assets already deleted on blockchain (need DB sync)
             owner_address_to_assets = {}  # Group assets by owner for efficient blockchain operations
             
             for idx, asset_id in enumerate(asset_ids):
@@ -494,7 +495,8 @@ class DeleteHandler:
                                 else:
                                     raise ValueError(f"Unable to verify delegation for {owner_address}: {str(e)}")
                     
-                    # Verify asset exists on blockchain and is not deleted
+                    # Verify asset exists on blockchain and check if already deleted
+                    blockchain_already_deleted = False
                     if self.blockchain_service:
                         try:
                             asset_exists = await self.blockchain_service.check_asset_exists(
@@ -503,29 +505,41 @@ class DeleteHandler:
                             )
                             
                             if not asset_exists["exists"] or asset_exists["is_deleted"]:
-                                raise ValueError(f"Asset {asset_id} not found on blockchain or already deleted")
+                                # Asset is already deleted on blockchain - sync database state
+                                blockchain_already_deleted = True
+                                logger.info(f"Asset {asset_id} already deleted on blockchain, syncing database state")
                                 
                         except Exception as e:
                             logger.warning(f"Could not verify asset {asset_id} on blockchain: {str(e)}")
                             # Continue with deletion attempt - blockchain verification is not critical
                     
-                    # Group assets by owner for efficient batch operations
-                    if owner_address not in owner_address_to_assets:
-                        owner_address_to_assets[owner_address] = []
-                    
-                    owner_address_to_assets[owner_address].append({
-                        "asset_id": asset_id,
-                        "owner_address": owner_address,
-                        "document_id": asset.get("_id"),
-                        "index": idx
-                    })
-                    
-                    validated_assets.append({
-                        "asset_id": asset_id,
-                        "owner_address": owner_address,
-                        "document_id": asset.get("_id"),
-                        "index": idx
-                    })
+                    # Handle assets based on blockchain status
+                    if blockchain_already_deleted:
+                        # Asset already deleted on blockchain - add to sync list
+                        already_deleted_assets.append({
+                            "asset_id": asset_id,
+                            "owner_address": owner_address,
+                            "document_id": asset.get("_id"),
+                            "index": idx
+                        })
+                    else:
+                        # Asset needs blockchain deletion - group by owner for efficient batch operations
+                        if owner_address not in owner_address_to_assets:
+                            owner_address_to_assets[owner_address] = []
+                        
+                        owner_address_to_assets[owner_address].append({
+                            "asset_id": asset_id,
+                            "owner_address": owner_address,
+                            "document_id": asset.get("_id"),
+                            "index": idx
+                        })
+                        
+                        validated_assets.append({
+                            "asset_id": asset_id,
+                            "owner_address": owner_address,
+                            "document_id": asset.get("_id"),
+                            "index": idx
+                        })
                     
                 except Exception as e:
                     logger.error(f"Validation error for asset {asset_id}: {str(e)}")
@@ -534,6 +548,75 @@ class DeleteHandler:
                         "message": f"Validation failed for asset {asset_id}: {str(e)}",
                         "asset_count": len(asset_ids)
                     }
+            
+            # Handle assets that are already deleted on blockchain (sync database)
+            synced_results = {}
+            if already_deleted_assets:
+                logger.info(f"Syncing database state for {len(already_deleted_assets)} assets already deleted on blockchain")
+                
+                for asset_data in already_deleted_assets:
+                    try:
+                        asset_id = asset_data["asset_id"]
+                        
+                        # Sync database state - mark as deleted
+                        success = await self.asset_service.soft_delete(
+                            asset_id=asset_id,
+                            deleted_by=initiator_address
+                        )
+                        
+                        if success:
+                            # Record transaction for the sync operation
+                            if self.transaction_service:
+                                await self.transaction_service.record_transaction(
+                                    asset_id=asset_id,
+                                    action="DELETE",
+                                    wallet_address=initiator_address,
+                                    metadata={
+                                        "reason": reason or "Database sync - asset already deleted on blockchain",
+                                        "sync_operation": True,
+                                        "owner_address": asset_data["owner_address"]
+                                    }
+                                )
+                            
+                            synced_results[asset_id] = {
+                                "status": "synced",
+                                "message": "Database synced - asset was already deleted on blockchain",
+                                "document_id": asset_data.get("document_id")
+                            }
+                        else:
+                            synced_results[asset_id] = {
+                                "status": "error",
+                                "message": "Failed to sync database state"
+                            }
+                            
+                    except Exception as e:
+                        logger.error(f"Error syncing asset {asset_data.get('asset_id', 'unknown')}: {str(e)}")
+                        synced_results[asset_data.get("asset_id", "unknown")] = {
+                            "status": "error",
+                            "message": f"Database sync failed: {str(e)}"
+                        }
+            
+            # Check if we have any assets that need blockchain transactions
+            if not validated_assets:
+                # All assets were already deleted on blockchain - return sync results
+                sync_success_count = sum(1 for result in synced_results.values() if result["status"] == "synced")
+                sync_failure_count = len(synced_results) - sync_success_count
+                
+                if sync_success_count > 0:
+                    message = f"Database synced: {sync_success_count} assets were already deleted on blockchain"
+                    if sync_failure_count > 0:
+                        message += f" ({sync_failure_count} sync failures)"
+                else:
+                    message = f"All {len(already_deleted_assets)} assets were already deleted on blockchain, but database sync failed"
+                    
+                return {
+                    "status": "success" if sync_failure_count == 0 else "partial",
+                    "message": message,
+                    "asset_count": len(asset_ids),
+                    "results": synced_results,
+                    "success_count": sync_success_count,
+                    "failure_count": sync_failure_count
+                }
             
             # Step 2: Prepare blockchain transaction(s)
             if self.blockchain_service:
@@ -575,6 +658,7 @@ class DeleteHandler:
                         pending_data = {
                             "asset_ids": asset_ids,
                             "validated_assets": validated_assets,
+                            "synced_results": synced_results,  # Include synced assets results
                             "initiator_address": initiator_address,
                             "reason": reason,
                             "transaction": blockchain_result["transaction"],
@@ -586,11 +670,20 @@ class DeleteHandler:
                             transaction_data=pending_data
                         )
                         
+                        # Calculate synced assets for user feedback
+                        synced_count = len(already_deleted_assets)
+                        if synced_count > 0:
+                            message = f"Sign transaction to delete {len(validated_assets)} assets in batch ({synced_count} assets already deleted on blockchain, database synced)"
+                        else:
+                            message = f"Sign transaction to delete {len(validated_assets)} assets in batch"
+                        
                         # Return transaction for frontend to sign
                         return {
                             "status": "pending_signature",
-                            "message": f"Sign transaction to delete {len(asset_ids)} assets in batch",
+                            "message": message,
                             "asset_count": len(asset_ids),
+                            "validated_count": len(validated_assets),
+                            "synced_count": synced_count,
                             "pending_tx_id": pending_tx_id,
                             "transaction": blockchain_result["transaction"],
                             "estimated_gas": blockchain_result.get("estimated_gas"),
@@ -633,7 +726,7 @@ class DeleteHandler:
                                 for asset in assets_for_owner:
                                     success = await self.asset_service.soft_delete(
                                         asset_id=asset["asset_id"], 
-                                        wallet_address=initiator_address
+                                        deleted_by=initiator_address
                                     )
                                     
                                     if success:
@@ -718,7 +811,7 @@ class DeleteHandler:
                     try:
                         success = await self.asset_service.soft_delete(
                             asset_id=asset["asset_id"],
-                            wallet_address=initiator_address
+                            deleted_by=initiator_address
                         )
                         
                         if success:
@@ -792,6 +885,7 @@ class DeleteHandler:
             # Extract data from pending transaction
             asset_ids = pending_data.get("asset_ids", [])
             validated_assets = pending_data.get("validated_assets", [])
+            synced_results = pending_data.get("synced_results", {})  # Results from database sync
             reason = pending_data.get("reason")
             
             if not asset_ids or not validated_assets:
@@ -815,11 +909,17 @@ class DeleteHandler:
                     owner_address = asset_data["owner_address"]
                     document_id = asset_data.get("document_id")
                     
+                    # Check asset status before deleting
+                    asset_before_delete = await self.asset_service.get_asset(asset_id)
+                    logger.info(f"Asset {asset_id} before delete: isDeleted={asset_before_delete.get('isDeleted', False) if asset_before_delete else 'NOT_FOUND'}")
+                    
                     # Soft delete the asset in the database
                     success = await self.asset_service.soft_delete(
                         asset_id=asset_id,
-                        wallet_address=initiator_address
+                        deleted_by=initiator_address
                     )
+                    
+                    logger.info(f"Asset {asset_id} soft delete result: {success}")
                     
                     if success:
                         # Record transaction
@@ -869,19 +969,10 @@ class DeleteHandler:
             # Clean up pending transaction
             await self.transaction_state_service.remove_pending_transaction(pending_tx_id)
             
-            # Determine overall status
-            overall_status = "success" if failure_count == 0 else "partial" if success_count > 0 else "error"
-            
-            # Craft overall message
-            if overall_status == "success":
-                message = f"Batch deletion completed: all {success_count} assets deleted successfully"
-            elif overall_status == "partial":
-                message = f"Batch deletion completed: {success_count}/{len(results)} assets deleted successfully, {failure_count} failed"
-            else:
-                message = f"Batch deletion failed: could not delete any of the {failure_count} assets"
-            
-            # Prepare results dictionary
+            # Prepare results dictionary - combine blockchain deletion and sync results
             results_dict = {}
+            
+            # Add blockchain deletion results
             for result in results:
                 results_dict[result["asset_id"]] = {
                     "status": result["status"],
@@ -890,12 +981,39 @@ class DeleteHandler:
                     "transaction_id": result.get("transaction_id")
                 }
             
+            # Add synced results (assets already deleted on blockchain)
+            for asset_id, sync_result in synced_results.items():
+                results_dict[asset_id] = sync_result
+                if sync_result["status"] == "synced":
+                    success_count += 1
+                else:
+                    failure_count += 1
+            
+            # Determine overall status
+            total_processed = len(results_dict)
+            blockchain_deleted = len(results)
+            synced_count = len(synced_results)
+            overall_status = "success" if failure_count == 0 else "partial" if success_count > 0 else "error"
+            
+            # Craft overall message
+            if overall_status == "success":
+                if synced_count > 0 and blockchain_deleted > 0:
+                    message = f"Batch operation completed: {blockchain_deleted} assets deleted on blockchain, {synced_count} database records synced"
+                elif synced_count > 0:
+                    message = f"Database sync completed: {synced_count} assets were already deleted on blockchain"
+                else:
+                    message = f"Batch deletion completed: all {success_count} assets deleted successfully"
+            elif overall_status == "partial":
+                message = f"Batch operation completed: {success_count}/{total_processed} successful, {failure_count} failed"
+            else:
+                message = f"Batch operation failed: could not process any of the {failure_count} assets"
+            
             logger.info(f"Batch deletion completed: {success_count} successes, {failure_count} failures")
             
             return {
                 "status": overall_status,
                 "message": message,
-                "asset_count": len(results),
+                "asset_count": total_processed,
                 "results": results_dict,
                 "blockchain_tx_hash": blockchain_tx_hash,
                 "success_count": success_count,

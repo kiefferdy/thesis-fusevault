@@ -87,6 +87,18 @@ const TransactionSigner = ({
           gasPrice: 20000000000,
           estimatedCostEth: '0.003'
         });
+      } else if (operation === 'batchDelete' && operationData?.assetIds) {
+        // For batch deletes, estimate based on number of assets
+        const assetCount = operationData.assetIds.length;
+        const baseGas = 100000;
+        const perAssetGas = 50000;
+        const totalGas = baseGas + (assetCount * perAssetGas);
+        
+        setGasEstimate({
+          estimatedGas: totalGas,
+          gasPrice: 20000000000,
+          estimatedCostEth: ((totalGas * 20000000000) / 1e18).toFixed(4)
+        });
       } else if (operation === 'edit' && operationData) {
         // For edits, similar to uploads
         setGasEstimate({
@@ -132,6 +144,7 @@ const TransactionSigner = ({
   };
 
   const handleTransaction = async () => {
+    console.log('TransactionSigner: handleTransaction called with operation:', operation, 'data:', operationData); // Debug log
     setIsProcessing(true);
     setProgress(0);
     setError(null);
@@ -215,15 +228,23 @@ const TransactionSigner = ({
           );
         }
       } else if (operation === 'batchDelete') {
+        console.log('TransactionSigner: Starting batch delete with data:', operationData); // Debug log
+        console.log('TransactionSigner: Asset IDs:', operationData.assetIds);
+        console.log('TransactionSigner: Wallet address:', operationData.walletAddress);
+        console.log('TransactionSigner: Reason:', operationData.reason);
+        
         result = await transactionFlow.batchDeleteWithSigning(
           operationData.assetIds,
           operationData.walletAddress,
           operationData.reason,
           (step, progressValue) => {
+            console.log('TransactionSigner: Progress update:', step, progressValue); // Debug log
             setCurrentStep(step);
             setProgress(progressValue);
           }
         );
+        
+        console.log('TransactionSigner: Batch delete result:', result); // Debug log
       } else {
         throw new Error(`Unsupported operation: ${operation}`);
       }
@@ -282,10 +303,46 @@ const TransactionSigner = ({
   if (!isVisible) {
     return null;
   }
+  
+  console.log('TransactionSigner: Rendering with operation:', operation, 'isVisible:', isVisible, 'operationData:', operationData); // Debug log
+  
+  // Add visual debugging
+  setTimeout(() => {
+    console.log('TransactionSigner: Modal should be visible now! Look for a semi-transparent overlay and white modal box with RED BORDER.');
+    console.log('TransactionSigner: If you see this message but no modal, there may be a CSS z-index issue.');
+    alert('DEBUG: TransactionSigner modal should be visible with RED BORDER! Do you see it?');
+  }, 500);
 
   return (
-    <div className="transaction-signer-overlay">
-      <div className="transaction-signer-modal">
+    <div 
+      className="transaction-signer-overlay"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)', // More opaque for debugging
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 9999 // Higher z-index for debugging
+      }}
+    >
+      <div 
+        className="transaction-signer-modal"
+        style={{
+          background: 'white',
+          borderRadius: '12px',
+          padding: '28px',
+          maxWidth: '650px',
+          width: '95%',
+          maxHeight: '85vh',
+          overflowY: 'auto',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+          border: '3px solid #ff4444' // Red border for debugging
+        }}
+      >
         <div className="transaction-signer-header">
           <h3>Initiate Transaction</h3>
           {!isProcessing && (
@@ -323,6 +380,26 @@ const TransactionSigner = ({
                 <p><strong>Asset ID:</strong> {operationData.assetId}</p>
                 <p><strong>Wallet:</strong> {operationData.walletAddress}</p>
                 {operationData.criticalMetadata?.name && <p><strong>Asset Name:</strong> {operationData.criticalMetadata.name}</p>}
+              </div>
+            )}
+            
+            {operation === 'batchDelete' && operationData && (
+              <div className="operation-details">
+                <p><strong>Assets to Delete:</strong> {operationData.assetIds?.length || 0}</p>
+                <p><strong>Wallet:</strong> {operationData.walletAddress}</p>
+                {operationData.reason && <p><strong>Reason:</strong> {operationData.reason}</p>}
+                {operationData.assetIds && operationData.assetIds.length > 0 && (
+                  <details>
+                    <summary style={{ cursor: 'pointer', marginTop: '8px' }}>
+                      <strong>Asset IDs (click to expand)</strong>
+                    </summary>
+                    <div style={{ marginTop: '4px', fontSize: '12px', color: '#6c757d' }}>
+                      {operationData.assetIds.map((id, index) => (
+                        <div key={index}>{id}</div>
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
             )}
           </div>
@@ -383,6 +460,8 @@ const TransactionSigner = ({
                   let steps;
                   if (operation === 'delete') {
                     steps = ['Waiting for signature', 'Confirming transaction', 'Updating database'];
+                  } else if (operation === 'batchDelete') {
+                    steps = ['Preparing deletion', 'Waiting for signature', 'Confirming transaction', 'Completing deletions'];
                   } else if (operation === 'edit') {
                     steps = ['Uploading to IPFS', 'Waiting for signature', 'Confirming transaction', 'Updating database'];
                   } else {

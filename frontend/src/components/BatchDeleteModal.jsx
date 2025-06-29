@@ -21,7 +21,8 @@ import {
   Paper,
   Stepper,
   Step,
-  StepLabel
+  StepLabel,
+  Divider
 } from '@mui/material';
 import {
   Delete,
@@ -30,12 +31,13 @@ import {
   Error,
   ExpandMore,
   ExpandLess,
-  Info
+  Info,
+  AccountBalanceWallet,
+  LocalGasStation
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
-import TransactionSigner from './TransactionSigner';
-import { useTransactionSigner } from '../hooks/useTransactionSigner';
+import { transactionFlow, metamaskUtils } from '../services/blockchainService';
 
 const BatchDeleteModal = ({ 
   open, 
@@ -46,20 +48,15 @@ const BatchDeleteModal = ({
   const [deleteReason, setDeleteReason] = useState('');
   const [checkedAssets, setCheckedAssets] = useState(new Set());
   const [processing, setProcessing] = useState(false);
-  const [step, setStep] = useState(0); // 0: select, 1: confirm, 2: processing
+  const [step, setStep] = useState(0); // 0: select, 1: confirm, 2: sign, 3: processing
   const [expandedWarnings, setExpandedWarnings] = useState(false);
   const [deleteResults, setDeleteResults] = useState(null);
+  const [networkStatus, setNetworkStatus] = useState(null);
+  const [gasEstimate, setGasEstimate] = useState(null);
+  const [transactionProgress, setTransactionProgress] = useState(0);
+  const [currentTransactionStep, setCurrentTransactionStep] = useState('');
+  const [error, setError] = useState(null);
   const { currentAccount } = useAuth();
-  
-  const {
-    isVisible,
-    operation,
-    operationData,
-    showBatchDeleteSigner,
-    hideSigner,
-    onSuccess,
-    onError
-  } = useTransactionSigner();
 
   // Initialize checked assets when modal opens or assets change
   useEffect(() => {
@@ -68,6 +65,9 @@ const BatchDeleteModal = ({
       setStep(0);
       setDeleteResults(null);
       setProcessing(false);
+      setError(null);
+      setTransactionProgress(0);
+      setCurrentTransactionStep('');
     }
   }, [open, selectedAssets]);
 
@@ -80,8 +80,57 @@ const BatchDeleteModal = ({
       setDeleteResults(null);
       setProcessing(false);
       setExpandedWarnings(false);
+      setNetworkStatus(null);
+      setGasEstimate(null);
+      setTransactionProgress(0);
+      setCurrentTransactionStep('');
+      setError(null);
     }
   }, [open]);
+
+  // Check network and estimate gas when reaching step 2 (sign transaction)
+  useEffect(() => {
+    if (step === 2) {
+      checkNetwork();
+      estimateGas();
+    }
+  }, [step, checkedAssets]);
+
+  const checkNetwork = async () => {
+    try {
+      if (metamaskUtils.isMetaMaskAvailable()) {
+        const status = await metamaskUtils.checkNetwork();
+        setNetworkStatus(status);
+      }
+    } catch (error) {
+      console.error('Error checking network:', error);
+    }
+  };
+
+  const estimateGas = () => {
+    const assetCount = checkedAssets.size;
+    const baseGas = 100000;
+    const perAssetGas = 50000;
+    const totalGas = baseGas + (assetCount * perAssetGas);
+    
+    setGasEstimate({
+      estimatedGas: totalGas,
+      gasPrice: 20000000000, // 20 gwei
+      estimatedCostEth: ((totalGas * 20000000000) / 1e18).toFixed(4)
+    });
+  };
+
+  const handleNetworkSwitch = async () => {
+    try {
+      await metamaskUtils.switchToSepolia();
+      setTimeout(() => {
+        checkNetwork();
+      }, 1000);
+    } catch (error) {
+      console.error('Error switching network:', error);
+      setError('Failed to switch network: ' + (error.message || 'Unknown error'));
+    }
+  };
 
   const handleAssetToggle = (assetId) => {
     const newChecked = new Set(checkedAssets);
@@ -113,67 +162,100 @@ const BatchDeleteModal = ({
       }
       setStep(1);
     } else if (step === 1) {
-      handleDelete();
+      setStep(2); // Go to sign transaction step
     }
   };
 
   const handleBack = () => {
-    if (step > 0) {
+    if (step > 0 && !processing) {
       setStep(step - 1);
+      setError(null);
     }
   };
 
-  const handleDelete = () => {
+  const handleSignTransaction = async () => {
     const assetsToDelete = getCheckedAssets();
     const assetIds = assetsToDelete.map(asset => asset.assetId);
     
-    setProcessing(true);
-    setStep(2);
+    console.log('BatchDeleteModal: Starting transaction with assetIds:', assetIds);
     
-    // Show the transaction signer for batch delete
-    showBatchDeleteSigner(
-      assetIds,
-      currentAccount,
-      deleteReason || 'Batch deletion',
-      (result) => {
-        console.log('Batch delete successful:', result);
-        setDeleteResults(result);
-        setProcessing(false);
-        toast.success(`Successfully deleted ${result.success_count || result.successCount || 0} assets!`);
-        
-        // Call success callback
-        if (onDeleteSuccess) {
-          onDeleteSuccess(result);
+    setProcessing(true);
+    setStep(3); // Go to processing step
+    setError(null);
+    setTransactionProgress(0);
+    setCurrentTransactionStep('Starting batch deletion...');
+    
+    try {
+      const result = await transactionFlow.batchDeleteWithSigning(
+        assetIds,
+        currentAccount,
+        deleteReason || 'Batch deletion',
+        (stepMessage, progress, metadata) => {
+          setCurrentTransactionStep(stepMessage);
+          setTransactionProgress(progress);
         }
-        
-        // Auto-close after a delay
-        setTimeout(() => {
-          onClose();
-        }, 2000);
-      },
-      (error) => {
-        console.error('Batch delete failed:', error);
-        setProcessing(false);
-        
-        let friendlyMessage = 'Batch delete failed';
-        if (error?.message) {
-          friendlyMessage = error.message;
-        }
-        toast.error(friendlyMessage);
-        
-        // Go back to confirm step on error
-        setStep(1);
+      );
+      
+      console.log('Batch delete successful:', result);
+      
+      setDeleteResults(result);
+      setProcessing(false);
+      setTransactionProgress(100);
+      setCurrentTransactionStep('Batch deletion completed!');
+      
+      // Show more detailed success message
+      const successCount = result.success_count || result.successCount || 0;
+      const syncedCount = Object.values(result.results || {}).filter(r => r.status === 'synced').length;
+      
+      if (syncedCount > 0 && successCount === syncedCount) {
+        toast.success(`Database synced: ${syncedCount} assets were already deleted on blockchain`, {
+          duration: 6000,
+          position: 'top-center'
+        });
+      } else if (syncedCount > 0) {
+        toast.success(`Batch completed: ${successCount - syncedCount} deleted, ${syncedCount} synced`, {
+          duration: 6000,
+          position: 'top-center'
+        });
+      } else {
+        toast.success(`Successfully deleted ${successCount} assets!`, {
+          duration: 6000,
+          position: 'top-center'
+        });
       }
-    );
+      
+      // Call success callback
+      if (onDeleteSuccess) {
+        onDeleteSuccess(result);
+      }
+      
+      // Auto-close after longer delay to let users read the results
+      setTimeout(() => {
+        handleClose();
+      }, 8000);
+      
+    } catch (error) {
+      console.error('Batch delete failed:', error);
+      setProcessing(false);
+      setError(error.message || 'Transaction failed');
+      
+      // Don't go back if user cancelled
+      if (!error.message?.toLowerCase().includes('cancelled')) {
+        setStep(2); // Stay on sign transaction step
+        toast.error(`Batch deletion failed: ${error.message}`);
+      }
+    }
   };
 
   const handleClose = () => {
-    if (!processing && !isVisible) {
+    if (!processing) {
       onClose();
     }
   };
 
   const getStepContent = () => {
+    const assetsToDelete = getCheckedAssets();
+    
     switch (step) {
       case 0:
         return (
@@ -233,7 +315,6 @@ const BatchDeleteModal = ({
         );
 
       case 1:
-        const assetsToDelete = getCheckedAssets();
         return (
           <Box>
             <Alert severity="warning" sx={{ mb: 2 }}>
@@ -300,14 +381,115 @@ const BatchDeleteModal = ({
         return (
           <Box>
             <Typography variant="h6" gutterBottom>
+              <AccountBalanceWallet sx={{ mr: 1, verticalAlign: 'middle' }} />
+              Sign Transaction
+            </Typography>
+            
+            <Alert severity="info" sx={{ mb: 3 }}>
+              <Typography variant="body2">
+                Review the transaction details below and click "Sign Transaction" to proceed with MetaMask.
+              </Typography>
+            </Alert>
+
+            {/* Assets Summary */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle1" gutterBottom>
+                Assets to Delete: {checkedAssets.size}
+              </Typography>
+              <Box sx={{ mb: 2 }}>
+                {assetsToDelete.slice(0, 3).map((asset) => (
+                  <Typography key={asset.assetId} variant="body2" color="text.secondary">
+                    • {asset.criticalMetadata?.name || 'Untitled Asset'}
+                  </Typography>
+                ))}
+                {assetsToDelete.length > 3 && (
+                  <Typography variant="body2" color="text.secondary">
+                    ... and {assetsToDelete.length - 3} more
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+
+            <Divider sx={{ mb: 3 }} />
+
+            {/* Network Status */}
+            {networkStatus && (
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Network Status
+                </Typography>
+                {networkStatus.isCorrectNetwork ? (
+                  <Alert severity="success">
+                    <Typography variant="body2">
+                      ✅ Connected to Sepolia Testnet
+                    </Typography>
+                  </Alert>
+                ) : (
+                  <Alert severity="warning" action={
+                    <Button size="small" onClick={handleNetworkSwitch}>
+                      Switch Network
+                    </Button>
+                  }>
+                    <Typography variant="body2">
+                      ⚠️ Wrong Network: {networkStatus.networkName}
+                    </Typography>
+                    <Typography variant="body2">
+                      Please switch to Sepolia Testnet to continue.
+                    </Typography>
+                  </Alert>
+                )}
+              </Box>
+            )}
+
+            {/* Gas Estimate */}
+            {gasEstimate && (
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  <LocalGasStation sx={{ mr: 1, verticalAlign: 'middle' }} />
+                  Transaction Cost Estimate
+                </Typography>
+                <Alert severity="info">
+                  <Typography variant="body2">
+                    <strong>Estimated Cost:</strong> {gasEstimate.estimatedCostEth} ETH
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Gas Limit: {gasEstimate.estimatedGas.toLocaleString()} | 
+                    Gas Price: {(gasEstimate.gasPrice / 1e9).toFixed(1)} Gwei
+                  </Typography>
+                  <br />
+                  <Typography variant="caption" color="text.secondary">
+                    Note: Actual cost may vary based on network conditions.
+                  </Typography>
+                </Alert>
+              </Box>
+            )}
+
+            {/* Error Display */}
+            {error && (
+              <Alert severity="error" sx={{ mb: 3 }}>
+                <Typography variant="body2">
+                  {error}
+                </Typography>
+              </Alert>
+            )}
+          </Box>
+        );
+
+      case 3:
+        return (
+          <Box>
+            <Typography variant="h6" gutterBottom>
               {processing ? 'Processing Batch Deletion...' : 'Batch Deletion Complete'}
             </Typography>
             
             {processing && (
               <Box sx={{ mb: 2 }}>
-                <LinearProgress />
+                <LinearProgress variant="determinate" value={transactionProgress} />
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Please sign the transaction in MetaMask to proceed...
+                  {currentTransactionStep}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {Math.round(transactionProgress)}% complete
                 </Typography>
               </Box>
             )}
@@ -315,34 +497,73 @@ const BatchDeleteModal = ({
             {deleteResults && (
               <Box>
                 <Alert 
-                  severity={deleteResults.status === 'success' ? 'success' : 'warning'} 
+                  severity={deleteResults.status === 'success' ? 'success' : deleteResults.status === 'partial' ? 'warning' : 'error'} 
                   sx={{ mb: 2 }}
                 >
+                  <Typography variant="h6" gutterBottom>
+                    {deleteResults.status === 'success' ? '✅ Operation Completed Successfully!' : 
+                     deleteResults.status === 'partial' ? '⚠️ Operation Partially Completed' : 
+                     '❌ Operation Failed'}
+                  </Typography>
                   <Typography>
                     {deleteResults.message}
                   </Typography>
+                  
+                  {/* Summary Statistics */}
+                  <Box sx={{ mt: 1, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                    <Chip 
+                      label={`Total: ${deleteResults.asset_count || 0}`} 
+                      size="small" 
+                      color="primary" 
+                      variant="outlined"
+                    />
+                    <Chip 
+                      label={`Successful: ${deleteResults.success_count || 0}`} 
+                      size="small" 
+                      color="success" 
+                      variant="outlined"
+                    />
+                    {deleteResults.failure_count > 0 && (
+                      <Chip 
+                        label={`Failed: ${deleteResults.failure_count}`} 
+                        size="small" 
+                        color="error" 
+                        variant="outlined"
+                      />
+                    )}
+                  </Box>
                 </Alert>
                 
                 {deleteResults.results && (
                   <Box>
                     <Typography variant="subtitle2" gutterBottom>
-                      Results:
+                      Detailed Results ({Object.keys(deleteResults.results).length} assets):
                     </Typography>
                     {Object.entries(deleteResults.results).map(([assetId, result]) => (
                       <Box key={assetId} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                         {result.status === 'success' ? (
                           <CheckCircle color="success" sx={{ mr: 1 }} />
+                        ) : result.status === 'synced' ? (
+                          <Info color="info" sx={{ mr: 1 }} />
                         ) : (
                           <Error color="error" sx={{ mr: 1 }} />
                         )}
                         <Typography variant="body2">
-                          {assetId}: {result.message}
+                          <strong>{assetId}:</strong> {result.message}
                         </Typography>
                       </Box>
                     ))}
                   </Box>
                 )}
               </Box>
+            )}
+
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                <Typography variant="body2">
+                  {error}
+                </Typography>
+              </Alert>
             )}
           </Box>
         );
@@ -352,16 +573,15 @@ const BatchDeleteModal = ({
     }
   };
 
-  const steps = ['Select Assets', 'Confirm Deletion', 'Processing'];
+  const steps = ['Select Assets', 'Confirm Deletion', 'Sign Transaction', 'Processing'];
 
   return (
-    <>
-      <Dialog 
+    <Dialog 
         open={open} 
         onClose={handleClose}
         maxWidth="md"
         fullWidth
-        disableEscapeKeyDown={processing || isVisible}
+        disableEscapeKeyDown={processing}
       >
         <DialogTitle sx={{ pb: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -383,10 +603,10 @@ const BatchDeleteModal = ({
         </DialogContent>
 
         <DialogActions>
-          {step > 0 && step < 2 && (
+          {step > 0 && step < 3 && !processing && (
             <Button 
               onClick={handleBack}
-              disabled={processing || isVisible}
+              disabled={processing}
             >
               Back
             </Button>
@@ -394,9 +614,11 @@ const BatchDeleteModal = ({
           
           <Button 
             onClick={handleClose} 
-            disabled={processing || isVisible}
+            disabled={processing}
+            variant={step === 3 && deleteResults ? 'contained' : 'text'}
+            color={step === 3 && deleteResults?.status === 'success' ? 'success' : 'primary'}
           >
-            {step === 2 && deleteResults ? 'Close' : 'Cancel'}
+            {step === 3 && deleteResults ? 'Close' : 'Cancel'}
           </Button>
           
           {step < 2 && (
@@ -404,24 +626,25 @@ const BatchDeleteModal = ({
               onClick={handleNext}
               variant="contained"
               color={step === 1 ? 'error' : 'primary'}
-              disabled={processing || isVisible || (step === 0 && checkedAssets.size === 0)}
+              disabled={processing || (step === 0 && checkedAssets.size === 0)}
             >
               {step === 0 ? 'Next' : `Delete ${checkedAssets.size} Asset${checkedAssets.size !== 1 ? 's' : ''}`}
             </Button>
           )}
+          
+          {step === 2 && (
+            <Button 
+              onClick={handleSignTransaction}
+              variant="contained"
+              color="error"
+              disabled={processing || (networkStatus && !networkStatus.isCorrectNetwork)}
+              startIcon={<AccountBalanceWallet />}
+            >
+              {processing ? 'Processing...' : 'Sign Transaction'}
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
-
-      {/* Transaction Signer Modal */}
-      <TransactionSigner
-        operation={operation}
-        operationData={operationData}
-        onSuccess={onSuccess}
-        onError={onError}
-        onCancel={hideSigner}
-        isVisible={isVisible}
-      />
-    </>
   );
 };
 

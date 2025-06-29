@@ -75,7 +75,7 @@ function DashboardPage() {
   const [batchDeleteModalOpen, setBatchDeleteModalOpen] = useState(false);
   const { currentAccount, isAuthenticated } = useAuth();
   const { user, isLoading: userLoading, register, onboard, isRegistering, isOnboarding, error: userError } = useUser();
-  const { assets, isLoading: assetsLoading } = useAssets();
+  const { assets, isLoading: assetsLoading, refreshAssets } = useAssets();
   const {
     summary,
     recentTransactions,
@@ -199,8 +199,8 @@ function DashboardPage() {
     setSelectionMode(false);
     setBatchDeleteModalOpen(false);
     
-    // Refresh the assets list
-    window.location.reload();
+    // Refresh the assets list without page reload
+    refreshAssets();
   };
 
   const getSelectedAssetsData = () => {

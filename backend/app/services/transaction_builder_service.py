@@ -286,6 +286,28 @@ class TransactionBuilderService:
                     kwargs['asset_id']
                 ).estimate_gas({'from': from_address})
                 
+            elif function_name == "batchDeleteAssets":
+                asset_ids = kwargs['asset_ids']
+                if len(asset_ids) == 0:
+                    raise ValueError("Must provide at least one asset ID")
+                if len(asset_ids) > 50:
+                    raise ValueError("Batch size cannot exceed 50 assets")
+                gas_estimate = self.contract.functions.batchDeleteAssets(
+                    asset_ids
+                ).estimate_gas({'from': from_address})
+                
+            elif function_name == "batchDeleteAssetsFor":
+                owner_address = to_checksum_address(kwargs['owner_address'])
+                asset_ids = kwargs['asset_ids']
+                if len(asset_ids) == 0:
+                    raise ValueError("Must provide at least one asset ID")
+                if len(asset_ids) > 50:
+                    raise ValueError("Batch size cannot exceed 50 assets")
+                gas_estimate = self.contract.functions.batchDeleteAssetsFor(
+                    owner_address,
+                    asset_ids
+                ).estimate_gas({'from': from_address})
+                
             else:
                 raise ValueError(f"Unknown function: {function_name}")
             
@@ -379,6 +401,160 @@ class TransactionBuilderService:
             
         except Exception as e:
             logger.error(f"Error building setDelegate transaction: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def build_batch_delete_assets_transaction(
+        self,
+        asset_ids: list,
+        from_address: str,
+        gas_limit: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Build unsigned transaction for batchDeleteAssets.
+        
+        Args:
+            asset_ids: List of asset IDs to delete
+            from_address: The wallet address that will sign the transaction
+            gas_limit: Optional gas limit override
+            
+        Returns:
+            Dict containing transaction data or error information
+        """
+        try:
+            if len(asset_ids) == 0:
+                raise ValueError("Must provide at least one asset")
+            
+            if len(asset_ids) > 50:  # MAX_BATCH_SIZE from contract
+                raise ValueError("Batch size cannot exceed 50 assets")
+            
+            from_address = to_checksum_address(from_address)
+            nonce = self.web3.eth.get_transaction_count(from_address)
+            gas_price = self.web3.eth.gas_price
+            
+            # Build transaction
+            contract_function = self.contract.functions.batchDeleteAssets(asset_ids)
+            
+            # Estimate gas if not provided
+            if not gas_limit:
+                try:
+                    gas_limit = contract_function.estimate_gas({
+                        'from': from_address,
+                        'gasPrice': gas_price
+                    })
+                    # Add 20% buffer
+                    gas_limit = int(gas_limit * 1.2)
+                except Exception as e:
+                    logger.warning(f"Gas estimation failed, using default: {e}")
+                    gas_limit = 2000000
+            
+            tx = contract_function.build_transaction({
+                'from': from_address,
+                'nonce': nonce,
+                'gasPrice': gas_price,
+                'gas': gas_limit,
+                'chainId': self.web3.eth.chain_id
+            })
+            
+            # Remove fields that will be added during signing
+            tx.pop('maxFeePerGas', None)
+            tx.pop('maxPriorityFeePerGas', None)
+            
+            logger.info(f"Built batchDeleteAssets transaction for {len(asset_ids)} assets from {from_address}")
+            
+            return {
+                "success": True,
+                "transaction": tx,
+                "estimated_gas": gas_limit,
+                "gas_price": gas_price,
+                "function_name": "batchDeleteAssets",
+                "asset_count": len(asset_ids)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error building batchDeleteAssets transaction: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def build_batch_delete_assets_for_transaction(
+        self,
+        owner_address: str,
+        asset_ids: list,
+        from_address: str,
+        gas_limit: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Build unsigned transaction for batchDeleteAssetsFor (delegation).
+        
+        Args:
+            owner_address: The owner of the assets
+            asset_ids: List of asset IDs to delete
+            from_address: The delegate wallet address that will sign the transaction
+            gas_limit: Optional gas limit override
+            
+        Returns:
+            Dict containing transaction data or error information
+        """
+        try:
+            if len(asset_ids) == 0:
+                raise ValueError("Must provide at least one asset")
+            
+            if len(asset_ids) > 50:  # MAX_BATCH_SIZE from contract
+                raise ValueError("Batch size cannot exceed 50 assets")
+            
+            from_address = to_checksum_address(from_address)
+            owner_address = to_checksum_address(owner_address)
+            nonce = self.web3.eth.get_transaction_count(from_address)
+            gas_price = self.web3.eth.gas_price
+            
+            # Build transaction
+            contract_function = self.contract.functions.batchDeleteAssetsFor(
+                owner_address,
+                asset_ids
+            )
+            
+            # Estimate gas if not provided
+            if not gas_limit:
+                try:
+                    gas_limit = contract_function.estimate_gas({
+                        'from': from_address,
+                        'gasPrice': gas_price
+                    })
+                    # Add 20% buffer
+                    gas_limit = int(gas_limit * 1.2)
+                except Exception as e:
+                    logger.warning(f"Gas estimation failed, using default: {e}")
+                    gas_limit = 2000000
+            
+            tx = contract_function.build_transaction({
+                'from': from_address,
+                'nonce': nonce,
+                'gasPrice': gas_price,
+                'gas': gas_limit,
+                'chainId': self.web3.eth.chain_id
+            })
+            
+            # Remove fields that will be added during signing
+            tx.pop('maxFeePerGas', None)
+            tx.pop('maxPriorityFeePerGas', None)
+            
+            logger.info(f"Built batchDeleteAssetsFor transaction for {len(asset_ids)} assets from {from_address} for owner {owner_address}")
+            
+            return {
+                "success": True,
+                "transaction": tx,
+                "estimated_gas": gas_limit,
+                "gas_price": gas_price,
+                "function_name": "batchDeleteAssetsFor",
+                "asset_count": len(asset_ids)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error building batchDeleteAssetsFor transaction: {str(e)}")
             return {
                 "success": False,
                 "error": str(e)

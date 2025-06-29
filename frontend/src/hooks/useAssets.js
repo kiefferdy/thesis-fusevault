@@ -136,6 +136,16 @@ export const useAssets = () => {
     }
   });
 
+  // Function to refresh assets data
+  const refreshAssets = () => {
+    queryClient.invalidateQueries(['assets', currentAccount]);
+    queryClient.refetchQueries(['assets', currentAccount]);
+    // Also refresh transaction data since deletions affect transactions
+    queryClient.invalidateQueries(['transactions', 'all', currentAccount]);
+    queryClient.invalidateQueries(['transactions', 'recent', currentAccount]);
+    queryClient.invalidateQueries(['transactions', 'summary', currentAccount]);
+  };
+
   return {
     assets: userAssetsQuery.data?.assets || [],
     isLoading: userAssetsQuery.isLoading,
@@ -145,6 +155,7 @@ export const useAssets = () => {
     uploadJson: uploadJsonMutation.mutate,
     uploadBatch: uploadBatchMutation.mutate,
     deleteAsset: deleteAssetMutation.mutate,
+    refreshAssets,
     isUploading: uploadMetadataMutation.isPending || uploadJsonMutation.isPending || uploadBatchMutation.isPending,
     isBatchUploading: uploadBatchMutation.isPending,
     isDeleting: deleteAssetMutation.isPending,

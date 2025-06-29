@@ -254,15 +254,65 @@ export const metamaskUtils = {
 
   // Format transaction for MetaMask
   formatTransactionForMetaMask: (transaction) => {
-    return {
+    console.log('Formatting transaction for MetaMask:', transaction);
+    
+    // Validate required fields
+    if (!transaction) {
+      throw new Error('Transaction data is required');
+    }
+    
+    if (!transaction.to) {
+      throw new Error('Transaction "to" address is required');
+    }
+    
+    if (!transaction.data) {
+      throw new Error('Transaction "data" is required');
+    }
+    
+    // Helper function to convert values to hex
+    const toHex = (value, fieldName) => {
+      if (value === null || value === undefined) {
+        throw new Error(`Transaction field "${fieldName}" is required`);
+      }
+      
+      // If already a hex string, validate and return
+      if (typeof value === 'string' && value.startsWith('0x')) {
+        const hex = value.toLowerCase();
+        if (!/^0x[0-9a-f]+$/.test(hex)) {
+          throw new Error(`Invalid hex value for ${fieldName}: ${value}`);
+        }
+        return hex;
+      }
+      
+      // Convert number to hex
+      if (typeof value === 'number') {
+        return `0x${value.toString(16)}`;
+      }
+      
+      // Try to parse string as number
+      if (typeof value === 'string') {
+        const parsed = parseInt(value, 10);
+        if (isNaN(parsed)) {
+          throw new Error(`Cannot convert ${fieldName} to number: ${value}`);
+        }
+        return `0x${parsed.toString(16)}`;
+      }
+      
+      throw new Error(`Unsupported type for ${fieldName}: ${typeof value}`);
+    };
+    
+    const formatted = {
       from: transaction.from,
       to: transaction.to,
-      gas: `0x${transaction.gas.toString(16)}`,
-      gasPrice: `0x${transaction.gasPrice.toString(16)}`,
-      value: transaction.value || '0x0',
+      gas: toHex(transaction.gas, 'gas'),
+      gasPrice: toHex(transaction.gasPrice, 'gasPrice'),
+      value: transaction.value ? toHex(transaction.value, 'value') : '0x0',
       data: transaction.data,
-      nonce: `0x${transaction.nonce.toString(16)}`
+      nonce: toHex(transaction.nonce, 'nonce')
     };
+    
+    console.log('Formatted transaction:', formatted);
+    return formatted;
   }
 };
 
@@ -445,10 +495,11 @@ export const transactionFlow = {
       }
       
       // Preparing transaction for MetaMask signing
-      
+      console.log('Batch upload - formatting transaction:', blockchainData.transaction);
       const formattedTx = metamaskUtils.formatTransactionForMetaMask(
         blockchainData.transaction
       );
+      console.log('Batch upload - formatted transaction:', formattedTx);
       const txHash = await metamaskUtils.signTransaction(formattedTx);
       
       if (!txHash) {
@@ -567,7 +618,9 @@ export const transactionFlow = {
         onProgress('Waiting for transaction signature...', 30);
         
         // Step 2: Sign transaction with MetaMask
+        console.log('Upload - formatting transaction:', uploadResult.transaction);
         const formattedTx = metamaskUtils.formatTransactionForMetaMask(uploadResult.transaction);
+        console.log('Upload - formatted transaction:', formattedTx);
         const txHash = await metamaskUtils.signTransaction(formattedTx);
         
         if (!txHash) {
@@ -657,7 +710,9 @@ export const transactionFlow = {
         onProgress('Waiting for transaction signature...', 30);
         
         // Step 2: Sign transaction with MetaMask
+        console.log('Delete - formatting transaction:', deleteResult.transaction);
         const formattedTx = metamaskUtils.formatTransactionForMetaMask(deleteResult.transaction);
+        console.log('Delete - formatted transaction:', formattedTx);
         const txHash = await metamaskUtils.signTransaction(formattedTx);
         
         if (!txHash) {
@@ -747,7 +802,9 @@ export const transactionFlow = {
         onProgress('Waiting for transaction signature...', 30);
         
         // Step 2: Sign transaction with MetaMask
+        console.log('Edit - formatting transaction:', editResult.transaction);
         const formattedTx = metamaskUtils.formatTransactionForMetaMask(editResult.transaction);
+        console.log('Edit - formatted transaction:', formattedTx);
         const txHash = await metamaskUtils.signTransaction(formattedTx);
         
         if (!txHash) {
@@ -847,7 +904,9 @@ export const transactionFlow = {
       onProgress('Waiting for transaction signature...', 30);
       
       // Step 1: Sign transaction with MetaMask
+      console.log('CompleteEdit - formatting transaction:', editResult.transaction);
       const formattedTx = metamaskUtils.formatTransactionForMetaMask(editResult.transaction);
+      console.log('CompleteEdit - formatted transaction:', formattedTx);
       const txHash = await metamaskUtils.signTransaction(formattedTx);
       
       if (!txHash) {
@@ -1007,6 +1066,8 @@ export const transactionFlow = {
       const { assetService } = await import('./assetService');
       const prepareResult = await assetService.prepareBatchDelete(assetIds, walletAddress, reason);
       
+      console.log('Batch delete prepare result:', prepareResult); // Debug log
+      
       if (prepareResult.status === 'error') {
         throw new Error(prepareResult.message);
       }
@@ -1037,24 +1098,32 @@ export const transactionFlow = {
           throw new Error('No transaction data received for signing');
         }
         
-        // Format transaction for MetaMask
+        // Format transaction for MetaMask and sign using the same method as batch upload
+        console.log('Batch delete - formatting transaction:', prepareResult.transaction);
         const formattedTransaction = metamaskUtils.formatTransactionForMetaMask(prepareResult.transaction);
+        console.log('Batch delete - formatted transaction:', formattedTransaction);
         
-        // Request user signature
-        const signedTxHash = await window.ethereum.request({
-          method: 'eth_sendTransaction',
-          params: [formattedTransaction],
-        });
+        // Use the same signing method as batch upload for consistency
+        const signedTxHash = await metamaskUtils.signTransaction(formattedTransaction);
         
         onProgress('Transaction signed! Waiting for blockchain confirmation...', 60, { 
           stage: 3,
           txHash: signedTxHash
         });
         
+        // Get pending transaction ID - handle both camelCase and snake_case
+        const pendingTxId = prepareResult.pendingTxId || prepareResult.pending_tx_id;
+        if (!pendingTxId) {
+          console.error('No pending transaction ID in prepare result:', prepareResult);
+          throw new Error('No pending transaction ID received');
+        }
+        
+        console.log('Using pending transaction ID:', pendingTxId); // Debug log
+        
         // Stage 3: Wait for blockchain confirmation and complete
         const confirmationResult = await transactionFlow.waitForConfirmationAndComplete(
           signedTxHash,
-          prepareResult.pending_tx_id,
+          pendingTxId,
           'batchDelete',
           onProgress
         );
