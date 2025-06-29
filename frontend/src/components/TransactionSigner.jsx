@@ -144,7 +144,6 @@ const TransactionSigner = ({
   };
 
   const handleTransaction = async () => {
-    console.log('TransactionSigner: handleTransaction called with operation:', operation, 'data:', operationData); // Debug log
     setIsProcessing(true);
     setProgress(0);
     setError(null);
@@ -228,23 +227,17 @@ const TransactionSigner = ({
           );
         }
       } else if (operation === 'batchDelete') {
-        console.log('TransactionSigner: Starting batch delete with data:', operationData); // Debug log
-        console.log('TransactionSigner: Asset IDs:', operationData.assetIds);
-        console.log('TransactionSigner: Wallet address:', operationData.walletAddress);
-        console.log('TransactionSigner: Reason:', operationData.reason);
         
         result = await transactionFlow.batchDeleteWithSigning(
           operationData.assetIds,
           operationData.walletAddress,
           operationData.reason,
           (step, progressValue) => {
-            console.log('TransactionSigner: Progress update:', step, progressValue); // Debug log
             setCurrentStep(step);
             setProgress(progressValue);
           }
         );
         
-        console.log('TransactionSigner: Batch delete result:', result); // Debug log
       } else {
         throw new Error(`Unsupported operation: ${operation}`);
       }
@@ -273,7 +266,6 @@ const TransactionSigner = ({
           lowerErrorMessage.includes('transaction cancelled by user') ||
           lowerErrorMessage.includes('user denied transaction signature')) {
         // User cancelled - show friendly message and close modal WITHOUT calling onError
-        console.log('User cancelled MetaMask, closing modal without error callback');
         toast.error('Transaction was cancelled. Please try again if needed.');
         setTimeout(() => {
           onCancel(); // Close the modal
@@ -303,15 +295,6 @@ const TransactionSigner = ({
   if (!isVisible) {
     return null;
   }
-  
-  console.log('TransactionSigner: Rendering with operation:', operation, 'isVisible:', isVisible, 'operationData:', operationData); // Debug log
-  
-  // Add visual debugging
-  setTimeout(() => {
-    console.log('TransactionSigner: Modal should be visible now! Look for a semi-transparent overlay and white modal box with RED BORDER.');
-    console.log('TransactionSigner: If you see this message but no modal, there may be a CSS z-index issue.');
-    alert('DEBUG: TransactionSigner modal should be visible with RED BORDER! Do you see it?');
-  }, 500);
 
   return (
     <div 
@@ -322,11 +305,11 @@ const TransactionSigner = ({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)', // More opaque for debugging
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 9999 // Higher z-index for debugging
+        zIndex: 9999
       }}
     >
       <div 
@@ -340,7 +323,7 @@ const TransactionSigner = ({
           maxHeight: '85vh',
           overflowY: 'auto',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-          border: '3px solid #ff4444' // Red border for debugging
+          border: '1px solid #ddd'
         }}
       >
         <div className="transaction-signer-header">
@@ -409,11 +392,11 @@ const TransactionSigner = ({
               <h4>Network Status</h4>
               {networkStatus.isCorrectNetwork ? (
                 <div className="network-correct">
-                  <p>✅ Connected to Sepolia Testnet</p>
+                  <p>Connected to Sepolia Testnet</p>
                 </div>
               ) : (
                 <div className="network-incorrect">
-                  <p>⚠️ Wrong Network: {networkStatus.networkName}</p>
+                  <p>Wrong Network: {networkStatus.networkName}</p>
                   <p>Please switch to Sepolia Testnet to continue.</p>
                   <button 
                     className="btn btn-warning" 

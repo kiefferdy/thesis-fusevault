@@ -176,9 +176,6 @@ const BatchDeleteModal = ({
   const handleSignTransaction = async () => {
     const assetsToDelete = getCheckedAssets();
     const assetIds = assetsToDelete.map(asset => asset.assetId);
-    
-    console.log('BatchDeleteModal: Starting transaction with assetIds:', assetIds);
-    
     setProcessing(true);
     setStep(3); // Go to processing step
     setError(null);
@@ -196,43 +193,54 @@ const BatchDeleteModal = ({
         }
       );
       
-      console.log('Batch delete successful:', result);
-      
       setDeleteResults(result);
       setProcessing(false);
       setTransactionProgress(100);
       setCurrentTransactionStep('Batch deletion completed!');
       
-      // Show more detailed success message
-      const successCount = result.success_count || result.successCount || 0;
-      const syncedCount = Object.values(result.results || {}).filter(r => r.status === 'synced').length;
+      // Calculate counts from results only (ignore backend success_count to avoid conflicts)
+      const results = result.results || {};
+      const syncedCount = Object.values(results).filter(r => r.status === 'synced').length;
+      const deletedCount = Object.values(results).filter(r => r.status === 'success').length;
+      const errorCount = Object.values(results).filter(r => r.status === 'error').length;
+      const totalCount = Object.keys(results).length;
       
-      if (syncedCount > 0 && successCount === syncedCount) {
+      // Show appropriate success message based on what actually happened
+      if (syncedCount > 0 && deletedCount === 0 && errorCount === 0) {
+        // All assets were already deleted on blockchain
         toast.success(`Database synced: ${syncedCount} assets were already deleted on blockchain`, {
           duration: 6000,
           position: 'top-center'
         });
-      } else if (syncedCount > 0) {
-        toast.success(`Batch completed: ${successCount - syncedCount} deleted, ${syncedCount} synced`, {
+      } else if (syncedCount > 0 && deletedCount > 0) {
+        // Mixed operation - some deleted, some synced
+        toast.success(`Batch completed: ${deletedCount} deleted, ${syncedCount} synced`, {
+          duration: 6000,
+          position: 'top-center'
+        });
+      } else if (deletedCount > 0 && errorCount === 0) {
+        // Normal successful deletion
+        toast.success(`Successfully deleted ${deletedCount} assets!`, {
+          duration: 6000,
+          position: 'top-center'
+        });
+      } else if (deletedCount > 0 || syncedCount > 0) {
+        // Partial success
+        const successfulCount = deletedCount + syncedCount;
+        toast.success(`Batch completed: ${successfulCount} successful, ${errorCount} failed`, {
           duration: 6000,
           position: 'top-center'
         });
       } else {
-        toast.success(`Successfully deleted ${successCount} assets!`, {
+        // All failed
+        toast.error(`Batch failed: ${errorCount} assets could not be processed`, {
           duration: 6000,
           position: 'top-center'
         });
       }
       
-      // Call success callback
-      if (onDeleteSuccess) {
-        onDeleteSuccess(result);
-      }
-      
-      // Auto-close after longer delay to let users read the results
-      setTimeout(() => {
-        handleClose();
-      }, 8000);
+      // Keep modal open for users to read the detailed results
+      // Don't auto-close or call onDeleteSuccess until user manually closes modal
       
     } catch (error) {
       console.error('Batch delete failed:', error);
@@ -249,6 +257,12 @@ const BatchDeleteModal = ({
 
   const handleClose = () => {
     if (!processing) {
+      // If we have successful results and haven't called onDeleteSuccess yet, call it now
+      if (deleteResults && (deleteResults.status === 'success' || deleteResults.status === 'partial')) {
+        if (onDeleteSuccess) {
+          onDeleteSuccess(deleteResults);
+        }
+      }
       onClose();
     }
   };
@@ -421,7 +435,7 @@ const BatchDeleteModal = ({
                 {networkStatus.isCorrectNetwork ? (
                   <Alert severity="success">
                     <Typography variant="body2">
-                      ✅ Connected to Sepolia Testnet
+                      Connected to Sepolia Testnet
                     </Typography>
                   </Alert>
                 ) : (
@@ -431,7 +445,7 @@ const BatchDeleteModal = ({
                     </Button>
                   }>
                     <Typography variant="body2">
-                      ⚠️ Wrong Network: {networkStatus.networkName}
+                      Wrong Network: {networkStatus.networkName}
                     </Typography>
                     <Typography variant="body2">
                       Please switch to Sepolia Testnet to continue.
@@ -501,37 +515,70 @@ const BatchDeleteModal = ({
                   sx={{ mb: 2 }}
                 >
                   <Typography variant="h6" gutterBottom>
-                    {deleteResults.status === 'success' ? '✅ Operation Completed Successfully!' : 
-                     deleteResults.status === 'partial' ? '⚠️ Operation Partially Completed' : 
-                     '❌ Operation Failed'}
+                    {deleteResults.status === 'success' ? 'Operation Completed Successfully!' : 
+                     deleteResults.status === 'partial' ? 'Operation Partially Completed' : 
+                     'Operation Failed'}
                   </Typography>
                   <Typography>
                     {deleteResults.message}
                   </Typography>
                   
-                  {/* Summary Statistics */}
-                  <Box sx={{ mt: 1, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                    <Chip 
-                      label={`Total: ${deleteResults.asset_count || 0}`} 
-                      size="small" 
-                      color="primary" 
-                      variant="outlined"
-                    />
-                    <Chip 
-                      label={`Successful: ${deleteResults.success_count || 0}`} 
-                      size="small" 
-                      color="success" 
-                      variant="outlined"
-                    />
-                    {deleteResults.failure_count > 0 && (
-                      <Chip 
-                        label={`Failed: ${deleteResults.failure_count}`} 
-                        size="small" 
-                        color="error" 
-                        variant="outlined"
-                      />
-                    )}
-                  </Box>
+                  {(deleteResults.status === 'success' || deleteResults.status === 'partial') && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1, fontStyle: 'italic' }}>
+                      Review the results above. When ready, click "Close" to refresh your assets list.
+                    </Typography>
+                  )}
+                  
+                  {/* Summary Statistics - Use same calculation as toast */}
+                  {(() => {
+                    const results = deleteResults.results || {};
+                    const syncedCount = Object.values(results).filter(r => r.status === 'synced').length;
+                    const deletedCount = Object.values(results).filter(r => r.status === 'success').length;
+                    const errorCount = Object.values(results).filter(r => r.status === 'error').length;
+                    const totalCount = Object.keys(results).length;
+                    const successfulCount = deletedCount + syncedCount;
+                    
+                    return (
+                      <Box sx={{ mt: 1, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                        <Chip 
+                          label={`Total: ${totalCount}`} 
+                          size="small" 
+                          color="primary" 
+                          variant="outlined"
+                        />
+                        <Chip 
+                          label={`Successful: ${successfulCount}`} 
+                          size="small" 
+                          color="success" 
+                          variant="outlined"
+                        />
+                        {errorCount > 0 && (
+                          <Chip 
+                            label={`Failed: ${errorCount}`} 
+                            size="small" 
+                            color="error" 
+                            variant="outlined"
+                          />
+                        )}
+                        {syncedCount > 0 && (
+                          <Chip 
+                            label={`Synced: ${syncedCount}`} 
+                            size="small" 
+                            color="info" 
+                            variant="outlined"
+                          />
+                        )}
+                        {deletedCount > 0 && (
+                          <Chip 
+                            label={`Deleted: ${deletedCount}`} 
+                            size="small" 
+                            color="success" 
+                            variant="filled"
+                          />
+                        )}
+                      </Box>
+                    );
+                  })()}
                 </Alert>
                 
                 {deleteResults.results && (

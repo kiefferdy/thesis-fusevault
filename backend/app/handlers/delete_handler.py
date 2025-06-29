@@ -909,17 +909,11 @@ class DeleteHandler:
                     owner_address = asset_data["owner_address"]
                     document_id = asset_data.get("document_id")
                     
-                    # Check asset status before deleting
-                    asset_before_delete = await self.asset_service.get_asset(asset_id)
-                    logger.info(f"Asset {asset_id} before delete: isDeleted={asset_before_delete.get('isDeleted', False) if asset_before_delete else 'NOT_FOUND'}")
-                    
                     # Soft delete the asset in the database
                     success = await self.asset_service.soft_delete(
                         asset_id=asset_id,
                         deleted_by=initiator_address
                     )
-                    
-                    logger.info(f"Asset {asset_id} soft delete result: {success}")
                     
                     if success:
                         # Record transaction
