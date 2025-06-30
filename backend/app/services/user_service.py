@@ -590,3 +590,81 @@ class UserService:
         except Exception as e:
             logger.error(f"Error during user migration: {str(e)}")
             raise
+    
+    async def search_users(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search for users by username or wallet address.
+        
+        Args:
+            query: Search query (partial username or wallet address)
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of formatted user responses
+        """
+        try:
+            users = await self.user_repository.search_users(query, limit)
+            
+            # Format each user response
+            formatted_users = []
+            for user in users:
+                formatted_user = self._format_user_response(user)
+                formatted_users.append(formatted_user["user"])
+            
+            return formatted_users
+            
+        except Exception as e:
+            logger.error(f"Error searching users: {str(e)}")
+            raise
+    
+    async def search_users_by_username(self, username_query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search for users by username (partial match).
+        
+        Args:
+            username_query: Partial username to search for
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of formatted user responses
+        """
+        try:
+            users = await self.user_repository.search_users_by_username(username_query, limit)
+            
+            # Format each user response
+            formatted_users = []
+            for user in users:
+                formatted_user = self._format_user_response(user)
+                formatted_users.append(formatted_user["user"])
+            
+            return formatted_users
+            
+        except Exception as e:
+            logger.error(f"Error searching users by username: {str(e)}")
+            raise
+    
+    async def search_users_by_wallet(self, wallet_query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search for users by wallet address (partial match).
+        
+        Args:
+            wallet_query: Partial wallet address to search for
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of formatted user responses
+        """
+        try:
+            users = await self.user_repository.search_users_by_wallet(wallet_query, limit)
+            
+            # Format each user response
+            formatted_users = []
+            for user in users:
+                formatted_user = self._format_user_response(user)
+                formatted_users.append(formatted_user["user"])
+            
+            return formatted_users
+            
+        except Exception as e:
+            logger.error(f"Error searching users by wallet: {str(e)}")
+            raise

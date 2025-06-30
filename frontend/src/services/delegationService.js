@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import { ethers } from 'ethers';
 
 const DELEGATION_BASE_URL = '/delegation';
 
@@ -136,6 +137,140 @@ const delegationService = {
       name: `Unknown Network (${chainId})`, 
       explorer: '#' 
     };
+  },
+
+  // User-to-User Delegation Methods
+
+  /**
+   * Search for users by wallet address or username
+   * @param {string} query - Search query (wallet address or username)
+   * @param {number} limit - Maximum number of results
+   * @returns {Promise<Object>} Search results
+   */
+  searchUsers: async (query, limit = 10) => {
+    try {
+      const response = await apiClient.get(`${DELEGATION_BASE_URL}/users/search`, {
+        params: { q: query, limit }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error searching users:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Prepare a transaction to delegate to another user
+   * @param {string} delegateAddress - Address to delegate to
+   * @param {boolean} status - True to delegate, false to revoke
+   * @returns {Promise<Object>} Unsigned transaction data
+   */
+  prepareUserDelegationTransaction: async (delegateAddress, status) => {
+    try {
+      const response = await apiClient.post(`${DELEGATION_BASE_URL}/users/delegate`, {
+        delegate_address: delegateAddress,
+        status: status
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error preparing user delegation transaction:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get list of users I have delegated to
+   * @returns {Promise<Object>} List of delegates
+   */
+  getMyDelegates: async () => {
+    try {
+      const response = await apiClient.get(`${DELEGATION_BASE_URL}/users/my-delegates`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting my delegates:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get list of users who have delegated to me
+   * @returns {Promise<Object>} List of delegators
+   */
+  getDelegatedToMe: async () => {
+    try {
+      const response = await apiClient.get(`${DELEGATION_BASE_URL}/users/delegated-to-me`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting delegated to me:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Prepare a transaction to revoke delegation from a user
+   * @param {string} delegateAddress - Address to revoke delegation from
+   * @returns {Promise<Object>} Unsigned transaction data
+   */
+  prepareRevokeDelegationTransaction: async (delegateAddress) => {
+    try {
+      const response = await apiClient.delete(`${DELEGATION_BASE_URL}/users/delegate/${delegateAddress}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error preparing revoke delegation transaction:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get assets of a user who has delegated to me
+   * @param {string} ownerAddress - Address of the user who delegated to me
+   * @returns {Promise<Object>} Delegated assets
+   */
+  getDelegatedAssets: async (ownerAddress) => {
+    try {
+      const response = await apiClient.get(`${DELEGATION_BASE_URL}/users/${ownerAddress}/assets`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting delegated assets:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Helper function to execute a delegation transaction using MetaMask
+   * @param {Object} txData - Transaction data from prepare delegation methods
+   * @param {Function} onProgress - Progress callback function
+   * @returns {Promise<Object>} Transaction receipt
+   */
+  executeDelegationTransaction: async (txData, onProgress = () => {}) => {
+    try {
+      if (!window.ethereum) {
+        throw new Error('MetaMask is not installed');
+      }
+
+      onProgress('Connecting to wallet...');
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+
+      if (!txData.transaction_data) {
+        throw new Error('Invalid transaction data');
+      }
+
+      onProgress('Sending transaction...');
+      const tx = await signer.sendTransaction(txData.transaction_data.transaction);
+
+      onProgress('Waiting for confirmation...');
+      const receipt = await tx.wait();
+
+      if (receipt.status === 0) {
+        throw new Error('Transaction failed on blockchain');
+      }
+
+      return receipt;
+    } catch (error) {
+      console.error('Error executing delegation transaction:', error);
+      throw error;
+    }
   }
 };
 

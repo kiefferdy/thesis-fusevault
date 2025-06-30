@@ -23,6 +23,7 @@ import HistoryPage from './pages/HistoryPage';
 import ProfilePage from './pages/ProfilePage';
 import ApiKeysPage from './pages/ApiKeysPage';
 import AssetHistoryPage from './pages/AssetHistoryPage';
+import DelegationPage from './pages/DelegationPage';
 
 
 // Create a new QueryClient instance
@@ -154,6 +155,15 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <ApiKeysPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/delegation"
+                  element={
+                    <ProtectedRoute>
+                      <DelegationPage />
                     </ProtectedRoute>
                   }
                 />

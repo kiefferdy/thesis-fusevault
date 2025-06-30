@@ -194,3 +194,108 @@ class UserRepository:
         except Exception as e:
             logger.error(f"Error finding users without username: {str(e)}")
             raise
+    
+    async def search_users(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search for users by username or wallet address.
+        
+        Args:
+            query: Search query (partial username or wallet address)
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of matching user documents
+        """
+        try:
+            search_conditions = []
+            
+            # If query starts with 0x, search by wallet address
+            if query.startswith("0x"):
+                # Case-insensitive partial match for wallet address
+                search_conditions.append({
+                    "walletAddress": {"$regex": f"^{query}", "$options": "i"}
+                })
+            else:
+                # Case-insensitive partial match for username
+                search_conditions.append({
+                    "username": {"$regex": query, "$options": "i"}
+                })
+                
+                # Also search wallet addresses for non-0x queries
+                search_conditions.append({
+                    "walletAddress": {"$regex": query, "$options": "i"}
+                })
+            
+            # MongoDB query using $or for multiple conditions
+            search_query = {"$or": search_conditions}
+            
+            cursor = self.users_collection.find(search_query).limit(limit)
+            users = await cursor.to_list(length=limit)
+            
+            # Convert ObjectIds to strings
+            for user in users:
+                user["_id"] = str(user["_id"])
+                
+            return users
+            
+        except Exception as e:
+            logger.error(f"Error searching users: {str(e)}")
+            raise
+    
+    async def search_users_by_username(self, username_query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search for users by username (partial match).
+        
+        Args:
+            username_query: Partial username to search for
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of matching user documents
+        """
+        try:
+            query = {
+                "username": {"$regex": username_query, "$options": "i"}
+            }
+            
+            cursor = self.users_collection.find(query).limit(limit)
+            users = await cursor.to_list(length=limit)
+            
+            # Convert ObjectIds to strings
+            for user in users:
+                user["_id"] = str(user["_id"])
+                
+            return users
+            
+        except Exception as e:
+            logger.error(f"Error searching users by username: {str(e)}")
+            raise
+    
+    async def search_users_by_wallet(self, wallet_query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search for users by wallet address (partial match).
+        
+        Args:
+            wallet_query: Partial wallet address to search for
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of matching user documents
+        """
+        try:
+            query = {
+                "walletAddress": {"$regex": f"^{wallet_query}", "$options": "i"}
+            }
+            
+            cursor = self.users_collection.find(query).limit(limit)
+            users = await cursor.to_list(length=limit)
+            
+            # Convert ObjectIds to strings
+            for user in users:
+                user["_id"] = str(user["_id"])
+                
+            return users
+            
+        except Exception as e:
+            logger.error(f"Error searching users by wallet: {str(e)}")
+            raise

@@ -89,11 +89,13 @@ class TransactionService:
             # Normalize wallet address for case-insensitive matching
             normalized_address = wallet_address.lower()
             
-            # Build query with case insensitivity
+            # Build query with case insensitivity - include both owned assets and delegated actions
             query = {
                 "$or": [
                     {"walletAddress": normalized_address},
-                    {"walletAddress": {"$regex": f"^{normalized_address}$", "$options": "i"}}
+                    {"walletAddress": {"$regex": f"^{normalized_address}$", "$options": "i"}},
+                    {"performedBy": normalized_address},
+                    {"performedBy": {"$regex": f"^{normalized_address}$", "$options": "i"}}
                 ]
             }
             
@@ -146,7 +148,8 @@ class TransactionService:
         asset_id: str, 
         action: str, 
         wallet_address: str, 
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        performed_by: Optional[str] = None
     ) -> str:
         """
         Record a transaction in the transaction history.
@@ -154,8 +157,9 @@ class TransactionService:
         Args:
             asset_id: The ID of the asset involved in the transaction
             action: The type of action (CREATE, UPDATE, VERSION_CREATE, DELETE, etc.)
-            wallet_address: The wallet address that initiated the transaction
+            wallet_address: The wallet address that owns the asset
             metadata: Optional additional metadata about the transaction
+            performed_by: Optional wallet address of who actually performed the action (for delegation)
             
         Returns:
             The ID of the newly created transaction record
@@ -178,6 +182,9 @@ class TransactionService:
                 "walletAddress": wallet_address,
                 "timestamp": datetime.now(timezone.utc)
             }
+            
+            if performed_by:
+                transaction_data["performedBy"] = performed_by
             
             if metadata:
                 transaction_data["metadata"] = metadata
