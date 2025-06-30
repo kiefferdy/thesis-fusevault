@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import delegationService from '../services/delegationService';
 import { toast } from 'react-hot-toast';
 import './DelegationPage.css';
 
 const DelegationPage = () => {
-  const { account, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = useState('search');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -290,8 +292,7 @@ const DelegationPage = () => {
                         <button 
                           className="btn btn-secondary"
                           onClick={() => {
-                            // TODO: Navigate to asset management for this user
-                            console.log('Managing assets for:', delegator.address);
+                            navigate(`/delegation/manage/${delegator.address}`);
                           }}
                         >
                           Manage Assets

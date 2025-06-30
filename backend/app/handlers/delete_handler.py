@@ -207,15 +207,19 @@ class DeleteHandler:
             # Record the transaction if transaction service is available
             transaction_id = None
             if self.transaction_service:
+                performed_by = wallet_address if wallet_address.lower() != asset_owner.lower() else asset_owner
+                
                 metadata = {
                     "reason": reason if reason else "User requested deletion",
-                    "blockchain_tx_hash": blockchain_tx_hash
+                    "blockchain_tx_hash": blockchain_tx_hash,
+                    "ownerAddress": asset_owner
                 }
                 
                 transaction_id = await self.transaction_service.record_transaction(
                     asset_id=asset_id,
                     action="DELETE",
-                    wallet_address=wallet_address,
+                    wallet_address=asset_owner,
+                    performed_by=performed_by,
                     metadata=metadata
                 )
                 
@@ -282,6 +286,8 @@ class DeleteHandler:
             # Record the transaction if transaction service is available
             transaction_id = None
             if self.transaction_service:
+                performed_by = initiator_address if initiator_address.lower() != owner_address.lower() else owner_address
+                
                 metadata = {
                     "reason": reason if reason else "User requested deletion",
                     "blockchain_tx_hash": blockchain_tx_hash,
@@ -291,7 +297,8 @@ class DeleteHandler:
                 transaction_id = await self.transaction_service.record_transaction(
                     asset_id=asset_id,
                     action="DELETE",
-                    wallet_address=initiator_address,
+                    wallet_address=owner_address,
+                    performed_by=performed_by,
                     metadata=metadata
                 )
             
@@ -567,14 +574,18 @@ class DeleteHandler:
                         if success:
                             # Record transaction for the sync operation
                             if self.transaction_service:
+                                owner_address = asset_data["owner_address"]
+                                performed_by = initiator_address if initiator_address.lower() != owner_address.lower() else owner_address
+                                
                                 await self.transaction_service.record_transaction(
                                     asset_id=asset_id,
                                     action="DELETE",
-                                    wallet_address=initiator_address,
+                                    wallet_address=owner_address,
+                                    performed_by=performed_by,
                                     metadata={
                                         "reason": reason or "Database sync - asset already deleted on blockchain",
                                         "sync_operation": True,
-                                        "owner_address": asset_data["owner_address"]
+                                        "owner_address": owner_address
                                     }
                                 )
                             
@@ -739,10 +750,13 @@ class DeleteHandler:
                                         
                                         # Record transaction
                                         if self.transaction_service:
+                                            performed_by = initiator_address if initiator_address.lower() != owner_address.lower() else owner_address
+                                            
                                             await self.transaction_service.record_transaction(
                                                 asset_id=asset["asset_id"],
                                                 action="DELETE",
-                                                wallet_address=initiator_address,
+                                                wallet_address=owner_address,
+                                                performed_by=performed_by,
                                                 metadata={
                                                     "reason": reason or "Batch deletion via API key",
                                                     "blockchain_tx_hash": blockchain_result.get("tx_hash"),
@@ -919,10 +933,13 @@ class DeleteHandler:
                         # Record transaction
                         transaction_id = None
                         if self.transaction_service:
+                            performed_by = initiator_address if initiator_address.lower() != owner_address.lower() else owner_address
+                            
                             transaction_id = await self.transaction_service.record_transaction(
                                 asset_id=asset_id,
                                 action="DELETE",
-                                wallet_address=initiator_address,
+                                wallet_address=owner_address,
+                                performed_by=performed_by,
                                 metadata={
                                     "reason": reason or "Batch deletion via MetaMask",
                                     "blockchain_tx_hash": blockchain_tx_hash,

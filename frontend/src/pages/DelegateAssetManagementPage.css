@@ -1,0 +1,392 @@
+/* Delegate Asset Management Page Styles */
+.delegate-asset-management {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px 0;
+}
+
+.delegate-asset-management .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* Page Header */
+.page-header {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.back-button {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  transition: all 0.2s ease;
+}
+
+.back-button:hover {
+  background: #5a6268;
+  transform: translateY(-1px);
+}
+
+.header-info h1 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.owner-info {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.owner-info h2 {
+  color: #2c3e50;
+  margin: 0 0 10px 0;
+  font-size: 1.5rem;
+}
+
+.owner-address {
+  color: #6c757d;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  margin: 5px 0;
+}
+
+.asset-count {
+  color: #28a745;
+  font-weight: 600;
+  margin: 5px 0 0 0;
+}
+
+/* Loading States */
+.loading-state, .error-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.loading-spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.error-state h1 {
+  color: #dc3545;
+  margin-bottom: 15px;
+}
+
+.error-state p {
+  color: #6c757d;
+  margin-bottom: 25px;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+}
+
+.empty-state h3 {
+  color: #2c3e50;
+  margin-bottom: 15px;
+  font-size: 1.5rem;
+}
+
+.empty-state p {
+  color: #6c757d;
+  font-size: 16px;
+}
+
+/* Assets Section */
+.assets-section {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.assets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 25px;
+}
+
+/* Asset Cards */
+.asset-card {
+  background: #f8f9fa;
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.asset-card:hover {
+  border-color: #667eea;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+}
+
+.asset-card.deleted {
+  background: #f8d7da;
+  border-color: #f5c6cb;
+  opacity: 0.8;
+}
+
+.asset-card.deleted:hover {
+  border-color: #dc3545;
+  box-shadow: 0 8px 25px rgba(220, 53, 69, 0.15);
+}
+
+.asset-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.asset-header h3 {
+  color: #2c3e50;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+  font-family: 'Courier New', monospace;
+}
+
+.deleted-badge {
+  background: #dc3545;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.asset-info {
+  margin-bottom: 20px;
+}
+
+.asset-meta p {
+  margin: 8px 0;
+  color: #495057;
+  font-size: 14px;
+}
+
+.asset-meta strong {
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.asset-description {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #dee2e6;
+}
+
+.description-text {
+  color: #6c757d;
+  font-style: italic;
+  line-height: 1.4;
+  margin-top: 5px;
+}
+
+.asset-actions {
+  border-top: 1px solid #dee2e6;
+  padding-top: 15px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Buttons */
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.btn-primary {
+  background: #667eea;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #5a67d8;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #5a6268;
+  transform: translateY(-1px);
+}
+
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+/* Delegate Info Section */
+.delegate-info {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.delegate-info h2 {
+  color: #2c3e50;
+  margin-bottom: 25px;
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 25px;
+}
+
+.info-card {
+  background: #f8f9fa;
+  padding: 25px;
+  border-radius: 12px;
+  border-left: 4px solid #667eea;
+}
+
+.info-card h3 {
+  color: #2c3e50;
+  margin-bottom: 15px;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.info-card p {
+  color: #495057;
+  line-height: 1.6;
+  margin-bottom: 0;
+}
+
+.info-card ul {
+  color: #495057;
+  line-height: 1.6;
+  margin: 10px 0 0 20px;
+}
+
+.info-card li {
+  margin-bottom: 8px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .delegate-asset-management .container {
+    padding: 0 15px;
+  }
+  
+  .page-header {
+    padding: 20px;
+  }
+  
+  .header-info h1 {
+    font-size: 2rem;
+  }
+  
+  .assets-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .asset-card {
+    padding: 15px;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .assets-section,
+  .delegate-info {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header {
+    padding: 15px;
+  }
+  
+  .header-info h1 {
+    font-size: 1.5rem;
+  }
+  
+  .owner-info {
+    padding: 15px;
+  }
+  
+  .asset-card {
+    padding: 12px;
+  }
+  
+  .asset-header h3 {
+    font-size: 1rem;
+  }
+  
+  .btn {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+}

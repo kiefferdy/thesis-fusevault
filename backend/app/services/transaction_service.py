@@ -148,8 +148,8 @@ class TransactionService:
         asset_id: str, 
         action: str, 
         wallet_address: str, 
-        metadata: Optional[Dict[str, Any]] = None,
-        performed_by: Optional[str] = None
+        performed_by: str,
+        metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Record a transaction in the transaction history.
@@ -158,8 +158,8 @@ class TransactionService:
             asset_id: The ID of the asset involved in the transaction
             action: The type of action (CREATE, UPDATE, VERSION_CREATE, DELETE, etc.)
             wallet_address: The wallet address that owns the asset
+            performed_by: Wallet address of who actually performed the action (for delegation)
             metadata: Optional additional metadata about the transaction
-            performed_by: Optional wallet address of who actually performed the action (for delegation)
             
         Returns:
             The ID of the newly created transaction record
@@ -180,11 +180,9 @@ class TransactionService:
                 "assetId": asset_id,
                 "action": action,
                 "walletAddress": wallet_address,
+                "performedBy": performed_by,
                 "timestamp": datetime.now(timezone.utc)
             }
-            
-            if performed_by:
-                transaction_data["performedBy"] = performed_by
             
             if metadata:
                 transaction_data["metadata"] = metadata

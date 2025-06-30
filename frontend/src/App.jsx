@@ -24,6 +24,7 @@ import ProfilePage from './pages/ProfilePage';
 import ApiKeysPage from './pages/ApiKeysPage';
 import AssetHistoryPage from './pages/AssetHistoryPage';
 import DelegationPage from './pages/DelegationPage';
+import DelegateAssetManagementPage from './pages/DelegateAssetManagementPage';
 
 
 // Create a new QueryClient instance
@@ -164,6 +165,15 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <DelegationPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/delegation/manage/:ownerAddress"
+                  element={
+                    <ProtectedRoute>
+                      <DelegateAssetManagementPage />
                     </ProtectedRoute>
                   }
                 />

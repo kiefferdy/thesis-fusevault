@@ -5,7 +5,7 @@ class TransactionBase(BaseModel):
     asset_id: str = Field(..., description="ID of the asset involved in the transaction", alias="assetId")
     action: str = Field(..., description="Type of action (CREATE, UPDATE, VERSION_CREATE, etc.)")
     wallet_address: str = Field(..., description="Wallet address that owns the asset", alias="walletAddress")
-    performed_by: Optional[str] = Field(None, description="Wallet address that actually performed the action (for delegation)", alias="performedBy")
+    performed_by: str = Field(..., description="Wallet address that actually performed the action (for delegation)", alias="performedBy")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata about the transaction")
 
 class TransactionRequest(TransactionBase):
@@ -43,7 +43,7 @@ class TransactionRecordResponse(BaseModel):
     asset_id: str = Field(..., description="ID of the asset involved", alias="assetId")
     action: str = Field(..., description="Type of action recorded")
     wallet_address: str = Field(..., description="Wallet address that owns the asset", alias="walletAddress")
-    performed_by: Optional[str] = Field(None, description="Wallet address that actually performed the action", alias="performedBy")
+    performed_by: str = Field(..., description="Wallet address that actually performed the action", alias="performedBy")
 
     model_config = {"populate_by_name": True}
 

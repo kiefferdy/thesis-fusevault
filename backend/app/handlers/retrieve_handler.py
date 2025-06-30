@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 import logging
 from fastapi import HTTPException
 
@@ -23,7 +23,8 @@ class RetrieveHandler:
         asset_service: AssetService,
         blockchain_service: BlockchainService,
         ipfs_service: IPFSService,
-        transaction_service: TransactionService = None
+        transaction_service: TransactionService = None,
+        auth_context: Optional[Dict[str, Any]] = None
     ):
         """
         Initialize with required services.
@@ -33,17 +34,20 @@ class RetrieveHandler:
             blockchain_service: Service for blockchain operations
             ipfs_service: Service for IPFS operations
             transaction_service: Optional service for recording transactions
+            auth_context: Authentication context for the current request
         """
         self.asset_service = asset_service
         self.blockchain_service = blockchain_service
         self.ipfs_service = ipfs_service
         self.transaction_service = transaction_service
+        self.auth_context = auth_context
         
     async def retrieve_metadata(
         self,
         asset_id: str,
         version: Optional[int] = None,
-        auto_recover: bool = True
+        auto_recover: bool = True,
+        initiator_address: Optional[str] = None
     ) -> MetadataRetrieveResponse:
         """
         Retrieve and verify metadata for an asset.
@@ -52,6 +56,7 @@ class RetrieveHandler:
             asset_id: The asset's unique identifier
             version: Optional specific version to retrieve
             auto_recover: Whether to automatically recover from tampering (only applies to latest version)
+            initiator_address: Address of the user performing the operation (for delegation context)
             
         Returns:
             MetadataRetrieveResponse containing metadata and verification results
@@ -231,10 +236,13 @@ class RetrieveHandler:
                     if restored:
                         # Record transaction if transaction service is available
                         if self.transaction_service:
+                            performed_by = initiator_address if initiator_address and initiator_address.lower() != wallet_address.lower() else wallet_address
+                            
                             await self.transaction_service.record_transaction(
                                 asset_id=asset_id,
                                 action="DELETION_STATUS_RESTORED",
                                 wallet_address=wallet_address,
+                                performed_by=performed_by,
                                 metadata={
                                     "previous_doc_id": doc_id,
                                     "previous_version": doc_version,
@@ -301,10 +309,13 @@ class RetrieveHandler:
                         
                         # Record transaction if transaction service is available
                         if self.transaction_service:
+                            performed_by = initiator_address if initiator_address and initiator_address.lower() != wallet_address.lower() else wallet_address
+                            
                             await self.transaction_service.record_transaction(
                                 asset_id=asset_id,
                                 action="INTEGRITY_RECOVERY",
                                 wallet_address=wallet_address,
+                                performed_by=performed_by,
                                 metadata={
                                     "previous_doc_id": doc_id,
                                     "new_doc_id": new_doc_id,

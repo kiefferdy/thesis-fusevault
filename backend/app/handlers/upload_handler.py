@@ -230,10 +230,13 @@ class UploadHandler:
                         
                         # Record transaction
                         if self.transaction_service:
+                            performed_by = initiator_address if initiator_address.lower() != owner_address.lower() else owner_address
+                            
                             await self.transaction_service.record_transaction(
                                 asset_id=asset_id,
                                 action="RECREATE_DELETED",
-                                wallet_address=initiator_address,
+                                wallet_address=owner_address,
+                                performed_by=performed_by,
                                 metadata={
                                     "ipfsHash": cid,
                                     "smartContractTxId": blockchain_tx_hash,
@@ -280,11 +283,14 @@ class UploadHandler:
                         
                         # Record transaction
                         if self.transaction_service:
+                            performed_by = initiator_address if initiator_address.lower() != owner_address.lower() else owner_address
+                            
                             tx_action = "VERSION_CREATE"
                             await self.transaction_service.record_transaction(
                                 asset_id=asset_id,
                                 action=tx_action,
-                                wallet_address=initiator_address,
+                                wallet_address=owner_address,
+                                performed_by=performed_by,
                                 metadata={
                                     "ipfsHash": cid,
                                     "smartContractTxId": blockchain_tx_hash,
@@ -336,10 +342,13 @@ class UploadHandler:
                     
                     # Record transaction
                     if self.transaction_service:
+                        performed_by = initiator_address if initiator_address.lower() != owner_address.lower() else owner_address
+                        
                         await self.transaction_service.record_transaction(
                             asset_id=asset_id,
                             action="UPDATE",
-                            wallet_address=initiator_address,
+                            wallet_address=owner_address,
+                            performed_by=performed_by,
                             metadata={
                                 "versionNumber": version_number,
                                 "ipfsVersion": ipfs_version,
@@ -444,10 +453,13 @@ class UploadHandler:
                 
                 # 4) Record transaction if transaction service is available
                 if self.transaction_service:
+                    performed_by = initiator_address if initiator_address.lower() != owner_address.lower() else owner_address
+                    
                     await self.transaction_service.record_transaction(
                         asset_id=asset_id,
                         action="CREATE",
-                        wallet_address=initiator_address,
+                        wallet_address=owner_address,
+                        performed_by=performed_by,
                         metadata={
                             "ipfsHash": cid,
                             "smartContractTxId": blockchain_tx_hash,
@@ -539,10 +551,13 @@ class UploadHandler:
                 
                 # Record transaction
                 if self.transaction_service:
+                    performed_by = initiator_address if initiator_address.lower() != owner_address.lower() else owner_address
+                    
                     await self.transaction_service.record_transaction(
                         asset_id=asset_id,
                         action="CREATE",
-                        wallet_address=initiator_address,
+                        wallet_address=owner_address,
+                        performed_by=performed_by,
                         metadata={
                             "ipfsHash": ipfs_cid,
                             "smartContractTxId": blockchain_tx_hash,
@@ -578,10 +593,13 @@ class UploadHandler:
                 
                 # Record transaction
                 if self.transaction_service:
+                    performed_by = initiator_address if initiator_address.lower() != owner_address.lower() else owner_address
+                    
                     await self.transaction_service.record_transaction(
                         asset_id=asset_id,
                         action="RECREATE_DELETED",
-                        wallet_address=initiator_address,
+                        wallet_address=owner_address,
+                        performed_by=performed_by,
                         metadata={
                             "ipfsHash": ipfs_cid,
                             "smartContractTxId": blockchain_tx_hash,
@@ -626,10 +644,13 @@ class UploadHandler:
                 
                 # Record transaction
                 if self.transaction_service:
+                    performed_by = initiator_address if initiator_address.lower() != owner_address.lower() else owner_address
+                    
                     await self.transaction_service.record_transaction(
                         asset_id=asset_id,
                         action="VERSION_CREATE",
-                        wallet_address=initiator_address,
+                        wallet_address=owner_address,
+                        performed_by=performed_by,
                         metadata={
                             "ipfsHash": ipfs_cid,
                             "smartContractTxId": blockchain_tx_hash,
@@ -1250,10 +1271,13 @@ class UploadHandler:
                     
                     # Record transaction
                     if self.transaction_service:
+                        performed_by = initiator_address if initiator_address.lower() != asset_data["owner_address"].lower() else asset_data["owner_address"]
+                        
                         await self.transaction_service.record_transaction(
                             asset_id=asset_data["asset_id"],
                             action="CREATE",
-                            wallet_address=initiator_address,
+                            wallet_address=asset_data["owner_address"],
+                            performed_by=performed_by,
                             metadata={
                                 "ipfsHash": asset_data["cid"],
                                 "smartContractTxId": blockchain_tx_hash,

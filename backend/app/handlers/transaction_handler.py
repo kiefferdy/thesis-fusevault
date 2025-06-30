@@ -186,6 +186,7 @@ class TransactionHandler:
         asset_id: str,
         action: str,
         wallet_address: str,
+        performed_by: str,
         metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
@@ -194,7 +195,8 @@ class TransactionHandler:
         Args:
             asset_id: The asset ID involved in the transaction
             action: The type of action (CREATE, UPDATE, VERSION_CREATE, etc.)
-            wallet_address: The wallet address performing the action
+            wallet_address: The wallet address that owns the asset
+            performed_by: Wallet address that actually performed the action (for delegation)
             metadata: Optional additional transaction metadata
             
         Returns:
@@ -209,6 +211,7 @@ class TransactionHandler:
                 asset_id=asset_id,
                 action=action,
                 wallet_address=wallet_address,
+                performed_by=performed_by,
                 metadata=metadata
             )
             
@@ -219,7 +222,8 @@ class TransactionHandler:
                 "transaction_id": transaction_id,
                 "asset_id": asset_id,
                 "action": action,
-                "wallet_address": wallet_address
+                "wallet_address": wallet_address,
+                "performed_by": performed_by
             }
             
         except ValueError as e:
