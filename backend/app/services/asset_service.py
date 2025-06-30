@@ -266,10 +266,9 @@ class AssetService:
             # Find assets directly with the query instead of using get_documents_by_wallet
             assets = await self.asset_repository.find_assets(query)
 
-            # Log what we found for debugging
-            logger.info(f"Raw asset count from DB: {len(assets)}")
+            # Log asset count for monitoring
             if len(assets) > 0:
-                logger.info(f"Sample asset fields: {list(assets[0].keys())}")
+                logger.debug(f"Found {len(assets)} assets from DB for wallet: {wallet_address}")
             
             # Format assets for frontend compatibility
             formatted_assets = []
@@ -288,7 +287,6 @@ class AssetService:
                 }
                 formatted_assets.append(formatted_asset)
             
-            logger.info(f"Found {len(formatted_assets)} assets for wallet: {wallet_address}")
             return formatted_assets
             
         except Exception as e:
@@ -441,6 +439,7 @@ class AssetService:
                 }}
             )
             
+            logger.info(f"Soft delete for asset {asset_id}: modified {result} documents")
             return result > 0
             
         except Exception as e:

@@ -254,15 +254,65 @@ export const metamaskUtils = {
 
   // Format transaction for MetaMask
   formatTransactionForMetaMask: (transaction) => {
-    return {
+    console.log('Formatting transaction for MetaMask:', transaction);
+    
+    // Validate required fields
+    if (!transaction) {
+      throw new Error('Transaction data is required');
+    }
+    
+    if (!transaction.to) {
+      throw new Error('Transaction "to" address is required');
+    }
+    
+    if (!transaction.data) {
+      throw new Error('Transaction "data" is required');
+    }
+    
+    // Helper function to convert values to hex
+    const toHex = (value, fieldName) => {
+      if (value === null || value === undefined) {
+        throw new Error(`Transaction field "${fieldName}" is required`);
+      }
+      
+      // If already a hex string, validate and return
+      if (typeof value === 'string' && value.startsWith('0x')) {
+        const hex = value.toLowerCase();
+        if (!/^0x[0-9a-f]+$/.test(hex)) {
+          throw new Error(`Invalid hex value for ${fieldName}: ${value}`);
+        }
+        return hex;
+      }
+      
+      // Convert number to hex
+      if (typeof value === 'number') {
+        return `0x${value.toString(16)}`;
+      }
+      
+      // Try to parse string as number
+      if (typeof value === 'string') {
+        const parsed = parseInt(value, 10);
+        if (isNaN(parsed)) {
+          throw new Error(`Cannot convert ${fieldName} to number: ${value}`);
+        }
+        return `0x${parsed.toString(16)}`;
+      }
+      
+      throw new Error(`Unsupported type for ${fieldName}: ${typeof value}`);
+    };
+    
+    const formatted = {
       from: transaction.from,
       to: transaction.to,
-      gas: `0x${transaction.gas.toString(16)}`,
-      gasPrice: `0x${transaction.gasPrice.toString(16)}`,
-      value: transaction.value || '0x0',
+      gas: toHex(transaction.gas, 'gas'),
+      gasPrice: toHex(transaction.gasPrice, 'gasPrice'),
+      value: transaction.value ? toHex(transaction.value, 'value') : '0x0',
       data: transaction.data,
-      nonce: `0x${transaction.nonce.toString(16)}`
+      nonce: toHex(transaction.nonce, 'nonce')
     };
+    
+    console.log('Formatted transaction:', formatted);
+    return formatted;
   }
 };
 
@@ -445,10 +495,11 @@ export const transactionFlow = {
       }
       
       // Preparing transaction for MetaMask signing
-      
+      console.log('Batch upload - formatting transaction:', blockchainData.transaction);
       const formattedTx = metamaskUtils.formatTransactionForMetaMask(
         blockchainData.transaction
       );
+      console.log('Batch upload - formatted transaction:', formattedTx);
       const txHash = await metamaskUtils.signTransaction(formattedTx);
       
       if (!txHash) {
@@ -567,7 +618,9 @@ export const transactionFlow = {
         onProgress('Waiting for transaction signature...', 30);
         
         // Step 2: Sign transaction with MetaMask
+        console.log('Upload - formatting transaction:', uploadResult.transaction);
         const formattedTx = metamaskUtils.formatTransactionForMetaMask(uploadResult.transaction);
+        console.log('Upload - formatted transaction:', formattedTx);
         const txHash = await metamaskUtils.signTransaction(formattedTx);
         
         if (!txHash) {
@@ -657,7 +710,9 @@ export const transactionFlow = {
         onProgress('Waiting for transaction signature...', 30);
         
         // Step 2: Sign transaction with MetaMask
+        console.log('Delete - formatting transaction:', deleteResult.transaction);
         const formattedTx = metamaskUtils.formatTransactionForMetaMask(deleteResult.transaction);
+        console.log('Delete - formatted transaction:', formattedTx);
         const txHash = await metamaskUtils.signTransaction(formattedTx);
         
         if (!txHash) {
@@ -747,7 +802,9 @@ export const transactionFlow = {
         onProgress('Waiting for transaction signature...', 30);
         
         // Step 2: Sign transaction with MetaMask
+        console.log('Edit - formatting transaction:', editResult.transaction);
         const formattedTx = metamaskUtils.formatTransactionForMetaMask(editResult.transaction);
+        console.log('Edit - formatted transaction:', formattedTx);
         const txHash = await metamaskUtils.signTransaction(formattedTx);
         
         if (!txHash) {
@@ -847,7 +904,9 @@ export const transactionFlow = {
       onProgress('Waiting for transaction signature...', 30);
       
       // Step 1: Sign transaction with MetaMask
+      console.log('CompleteEdit - formatting transaction:', editResult.transaction);
       const formattedTx = metamaskUtils.formatTransactionForMetaMask(editResult.transaction);
+      console.log('CompleteEdit - formatted transaction:', formattedTx);
       const txHash = await metamaskUtils.signTransaction(formattedTx);
       
       if (!txHash) {
@@ -930,6 +989,198 @@ export const transactionFlow = {
               'Transaction failed on blockchain - check your wallet for details'
             );
           }
+        } else if (status.status === 'failed') {
+          throw new Error(
+            status.details?.error || 
+            'Transaction failed on blockchain - insufficient gas or other error'
+          );
+        } else if (status.status === 'not_found' && attempts > 5) {
+          // Only throw not_found after several attempts to account for network delays
+          throw new Error('Transaction not found on blockchain - it may have been dropped');
+        }
+        
+        // Transaction is still pending, wait and retry
+        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+        attempts++;
+        
+        const progress = 60 + (attempts / maxAttempts) * 20; // Progress from 60% to 80%
+        onProgress(`Waiting for blockchain confirmation... (${attempts}/${maxAttempts})`, progress);
+      } catch (error) {
+        lastError = error;
+        
+        // If it's a non-network error, throw immediately
+        if (error.message.includes('failed') || error.message.includes('not found')) {
+          throw error;
+        }
+        
+        // For network errors, retry up to max attempts
+        if (attempts === maxAttempts - 1) {
+          throw new Error(
+            `Transaction confirmation timeout after ${maxAttempts} attempts. ` +
+            `Last error: ${lastError?.message || 'Unknown error'}`
+          );
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        attempts++;
+      }
+    }
+    
+    throw new Error('Transaction confirmation timeout - check your wallet and try again');
+  },
+
+  // Complete batch delete flow with user signing
+  batchDeleteWithSigning: async (assetIds, walletAddress, reason = null, onProgress = () => {}) => {
+    try {
+      // Stage 0: Validation
+      onProgress('Validating assets and preparing batch deletion...', 10, { 
+        stage: 0
+      });
+      
+      // Validate input data
+      if (!Array.isArray(assetIds) || assetIds.length === 0) {
+        throw new Error('Asset IDs array is required and must not be empty');
+      }
+      
+      if (assetIds.length > 50) {
+        throw new Error('Batch size cannot exceed 50 assets');
+      }
+      
+      if (!walletAddress) {
+        throw new Error('Wallet address is required');
+      }
+      
+      // Check network before starting
+      if (metamaskUtils.isMetaMaskAvailable()) {
+        const networkCheck = await metamaskUtils.checkNetwork();
+        if (!networkCheck.isCorrectNetwork) {
+          throw new Error(`Wrong network. Please switch to ${networkCheck.expectedNetwork}`);
+        }
+      }
+      
+      // Stage 1: Prepare batch deletion
+      onProgress('Preparing batch deletion transaction...', 20, { 
+        stage: 1
+      });
+      
+      const { assetService } = await import('./assetService');
+      const prepareResult = await assetService.prepareBatchDelete(assetIds, walletAddress, reason);
+      
+      console.log('Batch delete prepare result:', prepareResult); // Debug log
+      
+      if (prepareResult.status === 'error') {
+        throw new Error(prepareResult.message);
+      }
+      
+      // For API key users, deletion is completed directly
+      if (prepareResult.status === 'success' || prepareResult.status === 'partial') {
+        onProgress('Batch deletion completed!', 100, { 
+          stage: 4,
+          completion_result: prepareResult
+        });
+        return {
+          success: true,
+          message: prepareResult.message,
+          results: prepareResult.results,
+          success_count: prepareResult.success_count,
+          failure_count: prepareResult.failure_count,
+          completion_result: prepareResult
+        };
+      }
+      
+      // For wallet users, we need MetaMask signing
+      if (prepareResult.status === 'pending_signature') {
+        onProgress('Please sign the transaction in MetaMask...', 40, { 
+          stage: 2
+        });
+        
+        if (!prepareResult.transaction) {
+          throw new Error('No transaction data received for signing');
+        }
+        
+        // Format transaction for MetaMask and sign using the same method as batch upload
+        console.log('Batch delete - formatting transaction:', prepareResult.transaction);
+        const formattedTransaction = metamaskUtils.formatTransactionForMetaMask(prepareResult.transaction);
+        console.log('Batch delete - formatted transaction:', formattedTransaction);
+        
+        // Use the same signing method as batch upload for consistency
+        const signedTxHash = await metamaskUtils.signTransaction(formattedTransaction);
+        
+        onProgress('Transaction signed! Waiting for blockchain confirmation...', 60, { 
+          stage: 3,
+          txHash: signedTxHash
+        });
+        
+        // Get pending transaction ID - handle both camelCase and snake_case
+        const pendingTxId = prepareResult.pendingTxId || prepareResult.pending_tx_id;
+        if (!pendingTxId) {
+          console.error('No pending transaction ID in prepare result:', prepareResult);
+          throw new Error('No pending transaction ID received');
+        }
+        
+        console.log('Using pending transaction ID:', pendingTxId); // Debug log
+        
+        // Stage 3: Wait for blockchain confirmation and complete
+        const confirmationResult = await transactionFlow.waitForConfirmationAndComplete(
+          signedTxHash,
+          pendingTxId,
+          'batchDelete',
+          onProgress
+        );
+        
+        onProgress('Batch deletion completed!', 100, { 
+          stage: 4,
+          completion_result: confirmationResult
+        });
+        
+        return {
+          success: true,
+          txHash: signedTxHash,
+          ...confirmationResult
+        };
+      }
+      
+      throw new Error('Unexpected response from batch delete preparation');
+      
+    } catch (error) {
+      const handledError = transactionFlow.handleTransactionError(error);
+      throw handledError;
+    }
+  },
+
+  // Wait for confirmation and complete batch delete operation
+  waitForConfirmationAndComplete: async (txHash, pendingTxId, operationType, onProgress = () => {}) => {
+    const maxAttempts = 30; // 5 minutes maximum wait time
+    let attempts = 0;
+    let lastError = null;
+    
+    while (attempts < maxAttempts) {
+      try {
+        // Check transaction status
+        const status = await blockchainService.getTransactionStatus(txHash);
+        
+        if (status.status === 'confirmed') {
+          onProgress('Transaction confirmed! Completing operation...', 85);
+          
+          // Complete the operation based on type
+          if (operationType === 'batchDelete') {
+            const { assetService } = await import('./assetService');
+            const completion_result = await assetService.completeBatchDelete(pendingTxId, txHash);
+            
+            return {
+              completion_result: completion_result,
+              ...completion_result
+            };
+          }
+          
+          // For other operation types, return the status details
+          if (status.details) {
+            return {
+              completion_result: status.completion_result,
+              ...status.details
+            };
+          }
+          return status.details;
         } else if (status.status === 'failed') {
           throw new Error(
             status.details?.error || 

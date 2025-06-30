@@ -185,5 +185,159 @@ export const assetService = {
       // Return empty data structure on error to prevent crashes
       return { assets: [] };
     }
+  },
+
+  // Batch delete prepare - prepares batch deletion and returns transaction for signing
+  prepareBatchDelete: async (assetIds, walletAddress, reason = null) => {
+    // Validate input data
+    if (!Array.isArray(assetIds) || assetIds.length === 0) {
+      throw new Error('Asset IDs array is required and must not be empty');
+    }
+    
+    if (assetIds.length > 50) {
+      throw new Error('Batch size cannot exceed 50 assets');
+    }
+    
+    if (!walletAddress || typeof walletAddress !== 'string' || !walletAddress.trim()) {
+      throw new Error('Wallet address is required and must be a non-empty string');
+    }
+    
+    // Validate each asset ID
+    for (const assetId of assetIds) {
+      if (!assetId || typeof assetId !== 'string' || !assetId.trim()) {
+        throw new Error('All asset IDs must be non-empty strings');
+      }
+    }
+    
+    try {
+      const { data } = await apiClient.post('/delete/batch/prepare', {
+        asset_ids: assetIds.map(id => id.trim()),
+        wallet_address: walletAddress.trim(),
+        reason: reason ? reason.trim() : null
+      });
+      return data;
+    } catch (error) {
+      console.error('Error preparing batch delete:', error);
+      
+      // Provide better error messages based on the response
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        if (status === 400) {
+          throw new Error(data?.detail || 'Invalid request - please check your data and try again');
+        } else if (status === 401) {
+          throw new Error('Authentication failed - please reconnect your wallet');
+        } else if (status === 403) {
+          throw new Error('Permission denied - you can only delete assets you own or have delegation for');
+        } else if (status === 404) {
+          throw new Error('One or more assets not found - they may have already been deleted');
+        } else if (status >= 500) {
+          throw new Error('Server error - please try again later');
+        }
+      } else if (error.request) {
+        throw new Error('Network error - please check your connection and try again');
+      }
+      
+      throw error;
+    }
+  },
+
+  // Batch delete complete - completes batch deletion after blockchain confirmation
+  completeBatchDelete: async (pendingTxId, blockchainTxHash) => {
+    // Validate input data
+    if (!pendingTxId || typeof pendingTxId !== 'string' || !pendingTxId.trim()) {
+      throw new Error('Pending transaction ID is required and must be a non-empty string');
+    }
+    
+    if (!blockchainTxHash || typeof blockchainTxHash !== 'string' || !blockchainTxHash.trim()) {
+      throw new Error('Blockchain transaction hash is required and must be a non-empty string');
+    }
+    
+    try {
+      const { data } = await apiClient.post('/delete/batch/complete', {
+        pending_tx_id: pendingTxId.trim(),
+        blockchain_tx_hash: blockchainTxHash.trim()
+      });
+      return data;
+    } catch (error) {
+      console.error('Error completing batch delete:', error);
+      
+      // Provide better error messages based on the response
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        if (status === 400) {
+          throw new Error(data?.detail || 'Transaction completion failed - please check the transaction hash');
+        } else if (status === 401) {
+          throw new Error('Authentication failed - please reconnect your wallet');
+        } else if (status === 404) {
+          throw new Error('Pending transaction not found or expired - please try the operation again');
+        } else if (status >= 500) {
+          throw new Error('Server error - please try again later');
+        }
+      } else if (error.request) {
+        throw new Error('Network error - please check your connection and try again');
+      }
+      
+      throw error;
+    }
+  },
+
+  // Legacy batch delete (for backwards compatibility or direct execution)
+  batchDeleteAssets: async (assetIds, walletAddress, reason = null) => {
+    // Validate input data
+    if (!Array.isArray(assetIds) || assetIds.length === 0) {
+      throw new Error('Asset IDs array is required and must not be empty');
+    }
+    
+    if (assetIds.length > 50) {
+      throw new Error('Batch size cannot exceed 50 assets');
+    }
+    
+    if (!walletAddress || typeof walletAddress !== 'string' || !walletAddress.trim()) {
+      throw new Error('Wallet address is required and must be a non-empty string');
+    }
+    
+    // Validate each asset ID
+    for (const assetId of assetIds) {
+      if (!assetId || typeof assetId !== 'string' || !assetId.trim()) {
+        throw new Error('All asset IDs must be non-empty strings');
+      }
+    }
+    
+    try {
+      const { data } = await apiClient.post('/delete/batch', {
+        asset_ids: assetIds.map(id => id.trim()),
+        wallet_address: walletAddress.trim(),
+        reason: reason ? reason.trim() : null
+      });
+      return data;
+    } catch (error) {
+      console.error('Error batch deleting assets:', error);
+      
+      // Provide better error messages based on the response
+      if (error.response) {
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        if (status === 400) {
+          throw new Error(data?.detail || 'Invalid request - please check your data and try again');
+        } else if (status === 401) {
+          throw new Error('Authentication failed - please reconnect your wallet');
+        } else if (status === 403) {
+          throw new Error('Permission denied - you can only delete assets you own or have delegation for');
+        } else if (status === 404) {
+          throw new Error('One or more assets not found - they may have already been deleted');
+        } else if (status >= 500) {
+          throw new Error('Server error - please try again later');
+        }
+      } else if (error.request) {
+        throw new Error('Network error - please check your connection and try again');
+      }
+      
+      throw error;
+    }
   }
 };

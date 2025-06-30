@@ -1124,6 +1124,8 @@ class BlockchainService:
         Raises:
             HTTPException: If verification fails
         """
+        import asyncio
+        
         try:
             # Convert hex string to bytes if necessary
             if isinstance(tx_hash, str) and tx_hash.startswith('0x'):
@@ -1131,17 +1133,38 @@ class BlockchainService:
             else:
                 tx_hash_bytes = Web3.to_bytes(hexstr=f"0x{tx_hash}")
                 
-            # Get transaction receipt
-            receipt = self.web3.eth.get_transaction_receipt(tx_hash_bytes)
+            # Retry logic for transaction receipt (transaction might still be pending)
+            max_retries = 30  # Wait up to ~60 seconds
+            retry_delay = 2   # Start with 2 second delay
+            receipt = None
+            
+            for attempt in range(max_retries):
+                try:
+                    receipt = self.web3.eth.get_transaction_receipt(tx_hash_bytes)
+                    if receipt:
+                        break
+                except Exception as e:
+                    if "not found" in str(e).lower() or "not mined" in str(e).lower():
+                        # Transaction not yet mined, wait and retry
+                        if attempt < max_retries - 1:
+                            logger.info(f"Transaction {tx_hash} not yet mined, retrying in {retry_delay}s (attempt {attempt + 1}/{max_retries})")
+                            await asyncio.sleep(retry_delay)
+                            retry_delay = min(retry_delay * 1.2, 5)  # Exponential backoff with max 5s
+                            continue
+                        else:
+                            raise e
+                    else:
+                        # Different error, don't retry
+                        raise e
             
             if not receipt:
-                # More detailed error message for missing transactions
+                # Still no receipt after all retries
                 chain_id = self.web3.eth.chain_id
                 network_name = "Sepolia" if chain_id == 11155111 else f"Chain {chain_id}"
                 raise ValueError(
-                    f"Transaction with hash '{tx_hash}' not found on {network_name}. "
+                    f"Transaction with hash '{tx_hash}' not found on {network_name} after {max_retries} attempts. "
                     f"This typically means: (1) The transaction was sent to a different network, "
-                    f"(2) The transaction is still pending, or (3) The transaction failed to send. "
+                    f"(2) The transaction failed to send, or (3) Network congestion is causing delays. "
                     f"Please verify your wallet was connected to Sepolia when the transaction was sent."
                 )
                 
@@ -1461,3 +1484,176 @@ class BlockchainService:
         except Exception as e:
             logger.error(f"Error executing batch transaction: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Batch transaction failed: {str(e)}")
+
+    async def batch_delete_assets(
+        self,
+        asset_ids: list,
+        auth_context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Batch delete assets owned by the caller.
+        
+        If auth_context indicates wallet auth, return unsigned transaction.
+        If auth_context indicates API key auth or is None, sign and send transaction.
+        
+        Args:
+            asset_ids: List of asset IDs to delete
+            auth_context: Optional authentication context
+            
+        Returns:
+            Dict containing transaction hash or unsigned transaction
+            
+        Raises:
+            HTTPException: If blockchain transaction fails
+        """
+        if auth_context and auth_context.get("auth_method") == "wallet":
+            # Return unsigned transaction for frontend signing
+            return await self.transaction_builder.build_batch_delete_assets_transaction(
+                asset_ids=asset_ids,
+                from_address=auth_context.get("wallet_address")
+            )
+        else:
+            # Existing server-signed logic for API keys
+            return await self._batch_delete_assets_signed(asset_ids)
+    
+    async def _batch_delete_assets_signed(self, asset_ids: list) -> Dict[str, Any]:
+        """
+        Batch delete assets using server wallet signature.
+        
+        Args:
+            asset_ids: List of asset IDs to delete
+            
+        Returns:
+            Dict containing transaction hash
+            
+        Raises:
+            HTTPException: If blockchain transaction fails
+        """
+        try:
+            if len(asset_ids) == 0:
+                raise ValueError("Must provide at least one asset")
+            
+            if len(asset_ids) > 50:  # MAX_BATCH_SIZE from contract
+                raise ValueError("Batch size cannot exceed 50 assets")
+                
+            # Build transaction
+            nonce = self.web3.eth.get_transaction_count(self.wallet_address)
+            tx = self.contract.functions.batchDeleteAssets(asset_ids).build_transaction({
+                'from': self.wallet_address,
+                'nonce': nonce,
+                'gasPrice': self.web3.eth.gas_price,
+                'gas': 2000000,
+            })
+
+            # Sign transaction
+            signed_tx = self.web3.eth.account.sign_transaction(tx, private_key=self.private_key)
+
+            # Different versions of Web3.py use different attribute names
+            if hasattr(signed_tx, 'rawTransaction'):
+                raw_tx = signed_tx.rawTransaction
+            elif hasattr(signed_tx, 'raw_transaction'):
+                raw_tx = signed_tx.raw_transaction
+            else:
+                raw_tx = bytes(signed_tx)
+
+            # Send transaction
+            tx_hash = self.web3.eth.send_raw_transaction(raw_tx)
+
+            # Wait for transaction receipt
+            receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash)
+
+            logger.info(f"Batch deleted {len(asset_ids)} assets. Transaction hash: {receipt.transactionHash.hex()}")
+
+            return {"tx_hash": receipt.transactionHash.hex()}
+
+        except Exception as e:
+            logger.error(f"Blockchain error batch deleting assets: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Blockchain transaction failed: {str(e)}")
+
+    async def batch_delete_assets_for(
+        self,
+        owner_address: str,
+        asset_ids: list,
+        auth_context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Batch delete assets on behalf of another owner.
+        
+        If auth_context indicates wallet auth, return unsigned transaction.
+        If auth_context indicates API key auth or is None, sign and send transaction.
+        
+        Args:
+            owner_address: Address of the asset owner
+            asset_ids: List of asset IDs to delete
+            auth_context: Optional authentication context
+            
+        Returns:
+            Dict containing transaction hash or unsigned transaction
+            
+        Raises:
+            HTTPException: If blockchain transaction fails
+        """
+        if auth_context and auth_context.get("auth_method") == "wallet":
+            # Return unsigned transaction for frontend signing (delegation case)
+            return await self.transaction_builder.build_batch_delete_assets_for_transaction(
+                owner_address=owner_address,
+                asset_ids=asset_ids,
+                from_address=auth_context.get("wallet_address")
+            )
+        else:
+            # Existing server-signed logic for API keys
+            return await self._batch_delete_assets_for_signed(asset_ids, owner_address)
+    
+    async def _batch_delete_assets_for_signed(self, asset_ids: list, owner_address: str) -> Dict[str, Any]:
+        """
+        Batch delete assets for another owner using server wallet signature.
+        
+        Args:
+            asset_ids: List of asset IDs to delete
+            owner_address: Address of the asset owner
+            
+        Returns:
+            Dict containing transaction hash
+            
+        Raises:
+            HTTPException: If blockchain transaction fails
+        """
+        try:
+            if len(asset_ids) == 0:
+                raise ValueError("Must provide at least one asset")
+            
+            if len(asset_ids) > 50:  # MAX_BATCH_SIZE from contract
+                raise ValueError("Batch size cannot exceed 50 assets")
+                
+            # Build transaction
+            nonce = self.web3.eth.get_transaction_count(self.wallet_address)
+            tx = self.contract.functions.batchDeleteAssetsFor(
+                Web3.to_checksum_address(owner_address),
+                asset_ids
+            ).build_transaction({
+                'from': self.wallet_address,
+                'nonce': nonce,
+                'gasPrice': self.web3.eth.gas_price,
+                'gas': 2000000,
+            })
+
+            # Sign and send the transaction
+            signed_tx = self.web3.eth.account.sign_transaction(tx, private_key=self.private_key)
+            
+            if hasattr(signed_tx, 'rawTransaction'):
+                raw_tx = signed_tx.rawTransaction
+            elif hasattr(signed_tx, 'raw_transaction'):
+                raw_tx = signed_tx.raw_transaction
+            else:
+                raw_tx = bytes(signed_tx)
+
+            tx_hash = self.web3.eth.send_raw_transaction(raw_tx)
+            receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash)
+
+            logger.info(f"Batch deleted {len(asset_ids)} assets for owner {owner_address}. Transaction hash: {receipt.transactionHash.hex()}")
+
+            return {"tx_hash": receipt.transactionHash.hex()}
+
+        except Exception as e:
+            logger.error(f"Blockchain error batch deleting assets for another owner: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Blockchain transaction failed: {str(e)}")

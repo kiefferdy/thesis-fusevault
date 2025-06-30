@@ -45,9 +45,13 @@ import {
   GitHub,
   Twitter,
   LinkedIn,
-  Work
+  Work,
+  SelectAll,
+  CheckBox,
+  CheckBoxOutlineBlank
 } from '@mui/icons-material';
 import AssetCard from '../components/AssetCard';
+import BatchDeleteModal from '../components/BatchDeleteModal';
 import TransactionsList from '../components/TransactionsList';
 import UsernameInput from '../components/UsernameInput';
 import { useAssets } from '../hooks/useAssets';
@@ -64,9 +68,14 @@ function DashboardPage() {
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [isUsernameValid, setIsUsernameValid] = useState(false);
+  
+  // Batch delete state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedAssets, setSelectedAssets] = useState(new Set());
+  const [batchDeleteModalOpen, setBatchDeleteModalOpen] = useState(false);
   const { currentAccount, isAuthenticated } = useAuth();
   const { user, isLoading: userLoading, register, onboard, isRegistering, isOnboarding, error: userError } = useUser();
-  const { assets, isLoading: assetsLoading } = useAssets();
+  const { assets, isLoading: assetsLoading, refreshAssets } = useAssets();
   const {
     summary,
     recentTransactions,
@@ -153,6 +162,49 @@ function DashboardPage() {
   // Handle search input change
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
+  };
+
+  // Batch selection handlers
+  const toggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    setSelectedAssets(new Set()); // Clear selection when toggling mode
+  };
+
+  const handleAssetSelect = (assetId) => {
+    const newSelection = new Set(selectedAssets);
+    if (newSelection.has(assetId)) {
+      newSelection.delete(assetId);
+    } else {
+      newSelection.add(assetId);
+    }
+    setSelectedAssets(newSelection);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedAssets.size === filteredAssets.length) {
+      setSelectedAssets(new Set());
+    } else {
+      setSelectedAssets(new Set(filteredAssets.map(asset => asset.assetId)));
+    }
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedAssets.size === 0) return;
+    setBatchDeleteModalOpen(true);
+  };
+
+  const handleBatchDeleteSuccess = () => {
+    // Reset selection state
+    setSelectedAssets(new Set());
+    setSelectionMode(false);
+    setBatchDeleteModalOpen(false);
+    
+    // Refresh the assets list without page reload
+    refreshAssets();
+  };
+
+  const getSelectedAssetsData = () => {
+    return filteredAssets.filter(asset => selectedAssets.has(asset.assetId));
   };
 
   // Filter assets based on search term
@@ -409,9 +461,34 @@ function DashboardPage() {
         {/* Assets Tab */}
         {tabValue === 0 && (
           <Box id="assets-section" sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              mb: 2,
+              position: 'sticky',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 10,
+              backgroundColor: 'background.paper',
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              py: 2,
+              px: 3,
+              mx: -3,
+              mt: -1
+            }}>
               <Typography variant="h6">
                 Your Assets ({assets.length})
+                {selectionMode && (
+                  <Chip 
+                    label={`${selectedAssets.size} selected`} 
+                    size="small" 
+                    sx={{ ml: 1 }}
+                    color={selectedAssets.size > 0 ? "primary" : "default"}
+                  />
+                )}
               </Typography>
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -424,13 +501,56 @@ function DashboardPage() {
                     startAdornment: <Search sx={{ color: 'action.active', mr: 1 }} />
                   }}
                 />
-                <Button
-                  variant="contained"
-                  startIcon={<AddCircleOutline />}
-                  onClick={() => navigate('/upload')}
-                >
-                  Create Asset
-                </Button>
+                
+                {/* Batch selection controls */}
+                {selectionMode ? (
+                  <>
+                    <Button
+                      size="small"
+                      onClick={handleSelectAll}
+                      startIcon={selectedAssets.size === filteredAssets.length ? <CheckBox /> : <CheckBoxOutlineBlank />}
+                    >
+                      {selectedAssets.size === filteredAssets.length ? 'Deselect All' : 'Select All'}
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="error"
+                      size="small"
+                      onClick={handleBatchDelete}
+                      disabled={selectedAssets.size === 0}
+                      startIcon={<DeleteOutline />}
+                    >
+                      Delete ({selectedAssets.size})
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={toggleSelectionMode}
+                    >
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {assets.length > 0 && (
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={toggleSelectionMode}
+                        startIcon={<SelectAll />}
+                      >
+                        Select
+                      </Button>
+                    )}
+                    <Button
+                      variant="contained"
+                      startIcon={<AddCircleOutline />}
+                      onClick={() => navigate('/upload')}
+                    >
+                      Create Asset
+                    </Button>
+                  </>
+                )}
               </Box>
             </Box>
 
@@ -455,7 +575,45 @@ function DashboardPage() {
               <Grid container spacing={3}>
                 {filteredAssets.map((asset) => (
                   <Grid item xs={12} sm={6} md={4} key={asset._id || asset.id}>
-                    <AssetCard asset={asset} />
+                    <Box 
+                      sx={{ 
+                        position: 'relative',
+                        cursor: selectionMode ? 'pointer' : 'default'
+                      }}
+                      onClick={selectionMode ? () => handleAssetSelect(asset.assetId) : undefined}
+                    >
+                      {selectionMode && (
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            bottom: 8,
+                            right: 8,
+                            zIndex: 1,
+                            backgroundColor: 'white',
+                            borderRadius: '4px',
+                            padding: '2px'
+                          }}
+                        >
+                          {selectedAssets.has(asset.assetId) ? (
+                            <CheckBox color="primary" />
+                          ) : (
+                            <CheckBoxOutlineBlank />
+                          )}
+                        </Box>
+                      )}
+                      <AssetCard 
+                        asset={asset} 
+                        sx={{ 
+                          border: selectionMode && selectedAssets.has(asset.assetId) 
+                            ? '2px solid' 
+                            : '1px solid transparent',
+                          borderColor: selectionMode && selectedAssets.has(asset.assetId) 
+                            ? 'primary.main' 
+                            : 'transparent',
+                          opacity: selectionMode && !selectedAssets.has(asset.assetId) ? 0.7 : 1
+                        }}
+                      />
+                    </Box>
                   </Grid>
                 ))}
               </Grid>
@@ -548,6 +706,14 @@ function DashboardPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Batch Delete Modal */}
+      <BatchDeleteModal
+        open={batchDeleteModalOpen}
+        onClose={() => setBatchDeleteModalOpen(false)}
+        selectedAssets={getSelectedAssetsData()}
+        onDeleteSuccess={handleBatchDeleteSuccess}
+      />
     </Container>
   );
 }
