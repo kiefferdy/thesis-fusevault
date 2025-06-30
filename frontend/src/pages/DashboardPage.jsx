@@ -461,7 +461,24 @@ function DashboardPage() {
         {/* Assets Tab */}
         {tabValue === 0 && (
           <Box id="assets-section" sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              mb: 2,
+              position: 'sticky',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 10,
+              backgroundColor: 'background.paper',
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              py: 2,
+              px: 3,
+              mx: -3,
+              mt: -1
+            }}>
               <Typography variant="h6">
                 Your Assets ({assets.length})
                 {selectionMode && (
@@ -569,12 +586,11 @@ function DashboardPage() {
                         <Box
                           sx={{
                             position: 'absolute',
-                            top: 8,
-                            left: 8,
+                            bottom: 8,
+                            right: 8,
                             zIndex: 1,
                             backgroundColor: 'white',
                             borderRadius: '4px',
-                            border: '1px solid #ddd',
                             padding: '2px'
                           }}
                         >
