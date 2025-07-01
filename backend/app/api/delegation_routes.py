@@ -6,8 +6,11 @@ import logging
 from app.services.blockchain_service import BlockchainService
 from app.services.user_service import UserService
 from app.services.asset_service import AssetService
+from app.services.delegation_indexing_service import DelegationIndexingService
 from app.repositories.user_repo import UserRepository
 from app.repositories.asset_repo import AssetRepository
+from app.repositories.delegation_repo import DelegationRepository
+from app.schemas.delegation_schema import DelegationListResponse, DelegationResponse
 from app.utilities.auth_middleware import get_current_user, get_wallet_address
 from app.database import get_db_client
 from app.config import settings
@@ -81,6 +84,17 @@ def get_asset_service(db_client=Depends(get_db_client)) -> AssetService:
     """Dependency to get the asset service."""
     asset_repo = AssetRepository(db_client)
     return AssetService(asset_repo)
+
+
+def get_delegation_service(db_client=Depends(get_db_client)) -> DelegationIndexingService:
+    """Dependency to get the delegation indexing service."""
+    delegation_repo = DelegationRepository(db_client)
+    return DelegationIndexingService(delegation_repo)
+
+
+def get_delegation_repository(db_client=Depends(get_db_client)) -> DelegationRepository:
+    """Dependency to get the delegation repository."""
+    return DelegationRepository(db_client)
 
 
 @router.get("/server-info", response_model=ServerInfoResponse)
@@ -361,26 +375,56 @@ async def set_user_delegation(
         )
 
 
-@router.get("/users/my-delegates", response_model=DelegateListResponse)
+@router.get("/users/my-delegates", response_model=DelegationListResponse)
 async def get_my_delegates(
     wallet_address: str = Depends(get_wallet_address),
-    blockchain_service: BlockchainService = Depends(get_blockchain_service),
+    delegation_repo: DelegationRepository = Depends(get_delegation_repository),
     user_service: UserService = Depends(get_user_service)
 ):
     """
     Get list of users I have set as delegates.
     
     Returns:
-        DelegateListResponse with list of delegates
+        DelegationListResponse with list of delegates
     """
     try:
-        # This would require tracking delegations in the database or querying the blockchain
-        # For now, return empty list - would need to be implemented properly
-        delegates = []
+        # Get delegations from database
+        delegations = await delegation_repo.get_delegations_by_owner(wallet_address, active_only=True)
         
-        return DelegateListResponse(
-            delegates=delegates,
-            count=len(delegates)
+        # Enrich with user information
+        enriched_delegations = []
+        for delegation in delegations:
+            # Get delegate user info
+            delegate_user = await user_service.get_user(delegation["delegateAddress"])
+            delegate_username = None
+            if delegate_user and delegate_user.get("status") == "success":
+                delegate_username = delegate_user["user"].get("username")
+            
+            # Get owner user info (current user)
+            owner_user = await user_service.get_user(wallet_address)
+            owner_username = None
+            if owner_user and owner_user.get("status") == "success":
+                owner_username = owner_user["user"].get("username")
+            
+            # Create enriched delegation response
+            enriched_delegation = DelegationResponse(
+                id=delegation["id"],
+                ownerAddress=delegation["ownerAddress"],
+                delegateAddress=delegation["delegateAddress"],
+                isActive=delegation["isActive"],
+                ownerUsername=owner_username,
+                delegateUsername=delegate_username,
+                createdAt=delegation["createdAt"],
+                updatedAt=delegation["updatedAt"],
+                transactionHash=delegation.get("transactionHash"),
+                blockNumber=delegation.get("blockNumber")
+            )
+            enriched_delegations.append(enriched_delegation)
+        
+        return DelegationListResponse(
+            delegations=enriched_delegations,
+            count=len(enriched_delegations),
+            ownerAddress=wallet_address
         )
         
     except Exception as e:
@@ -391,26 +435,56 @@ async def get_my_delegates(
         )
 
 
-@router.get("/users/delegated-to-me", response_model=DelegateListResponse)
+@router.get("/users/delegated-to-me", response_model=DelegationListResponse)
 async def get_delegated_to_me(
     wallet_address: str = Depends(get_wallet_address),
-    blockchain_service: BlockchainService = Depends(get_blockchain_service),
+    delegation_repo: DelegationRepository = Depends(get_delegation_repository),
     user_service: UserService = Depends(get_user_service)
 ):
     """
     Get list of users who have set me as delegate.
     
     Returns:
-        DelegateListResponse with list of users who delegated to me
+        DelegationListResponse with list of users who delegated to me
     """
     try:
-        # This would require tracking delegations in the database or querying the blockchain
-        # For now, return empty list - would need to be implemented properly
-        delegators = []
+        # Get delegations from database where current user is the delegate
+        delegations = await delegation_repo.get_delegations_by_delegate(wallet_address, active_only=True)
         
-        return DelegateListResponse(
-            delegates=delegators,
-            count=len(delegators)
+        # Enrich with user information
+        enriched_delegations = []
+        for delegation in delegations:
+            # Get owner user info
+            owner_user = await user_service.get_user(delegation["ownerAddress"])
+            owner_username = None
+            if owner_user and owner_user.get("status") == "success":
+                owner_username = owner_user["user"].get("username")
+            
+            # Get delegate user info (current user)
+            delegate_user = await user_service.get_user(wallet_address)
+            delegate_username = None
+            if delegate_user and delegate_user.get("status") == "success":
+                delegate_username = delegate_user["user"].get("username")
+            
+            # Create enriched delegation response
+            enriched_delegation = DelegationResponse(
+                id=delegation["id"],
+                ownerAddress=delegation["ownerAddress"],
+                delegateAddress=delegation["delegateAddress"],
+                isActive=delegation["isActive"],
+                ownerUsername=owner_username,
+                delegateUsername=delegate_username,
+                createdAt=delegation["createdAt"],
+                updatedAt=delegation["updatedAt"],
+                transactionHash=delegation.get("transactionHash"),
+                blockNumber=delegation.get("blockNumber")
+            )
+            enriched_delegations.append(enriched_delegation)
+        
+        return DelegationListResponse(
+            delegations=enriched_delegations,
+            count=len(enriched_delegations),
+            delegateAddress=wallet_address
         )
         
     except Exception as e:
