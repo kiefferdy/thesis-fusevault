@@ -62,3 +62,67 @@ class DelegationStatsResponse(BaseModel):
     recent_activity: List[Dict[str, Any]] = Field([], description="Recent delegation activity", alias="recentActivity")
 
     model_config = {"populate_by_name": True}
+
+# API Request/Response Models (moved from routes file for proper separation of concerns)
+
+class DelegationStatusResponse(BaseModel):
+    is_delegated: bool
+    server_wallet_address: str
+    user_wallet_address: str
+    can_update_assets: bool
+    can_delete_assets: bool
+
+class SetDelegationRequest(BaseModel):
+    delegate_address: str
+    status: bool
+
+class ServerInfoResponse(BaseModel):
+    server_wallet_address: str
+    network: Dict[str, Any]
+    features: Dict[str, Any]
+
+class UserSearchResponse(BaseModel):
+    users: List[Dict[str, Any]]
+    total: int
+    query: str
+
+class UserDelegationRequest(BaseModel):
+    delegate_address: str
+    status: bool
+
+class UserDelegationResponse(BaseModel):
+    owner_address: str
+    delegate_address: str
+    is_delegated: bool
+    transaction_data: Optional[Dict[str, Any]] = None
+
+class DelegateListResponse(BaseModel):
+    delegates: List[Dict[str, Any]]
+    count: int
+
+class DelegatedAssetsResponse(BaseModel):
+    owner_address: str
+    owner_username: Optional[str]
+    assets: List[Dict[str, Any]]
+    total_assets: int
+
+class DelegationConfirmRequest(BaseModel):
+    transaction_hash: str
+    owner_address: str
+    delegate_address: str
+    status: bool
+
+class DelegationConfirmResponse(BaseModel):
+    success: bool
+    message: str
+    delegation_id: Optional[str] = None
+
+class DelegationSyncRequest(BaseModel):
+    owner_address: str
+    delegate_address: str
+
+class DelegationSyncResponse(BaseModel):
+    success: bool
+    message: str
+    was_synced: bool
+    delegation_id: Optional[str] = None

@@ -6,67 +6,31 @@ import logging
 from app.services.blockchain_service import BlockchainService
 from app.services.user_service import UserService
 from app.services.asset_service import AssetService
-from app.services.delegation_indexing_service import DelegationIndexingService
 from app.repositories.user_repo import UserRepository
 from app.repositories.asset_repo import AssetRepository
 from app.repositories.delegation_repo import DelegationRepository
-from app.schemas.delegation_schema import DelegationListResponse, DelegationResponse
+from app.schemas.delegation_schema import (
+    DelegationListResponse, 
+    DelegationResponse,
+    DelegationStatusResponse,
+    SetDelegationRequest,
+    ServerInfoResponse,
+    UserSearchResponse,
+    UserDelegationRequest,
+    UserDelegationResponse,
+    DelegateListResponse,
+    DelegatedAssetsResponse,
+    DelegationConfirmRequest,
+    DelegationConfirmResponse,
+    DelegationSyncRequest,
+    DelegationSyncResponse
+)
 from app.utilities.auth_middleware import get_current_user, get_wallet_address
 from app.database import get_db_client
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/delegation", tags=["Delegation"])
-
-
-class DelegationStatusResponse(BaseModel):
-    is_delegated: bool
-    server_wallet_address: str
-    user_wallet_address: str
-    can_update_assets: bool
-    can_delete_assets: bool
-
-
-class SetDelegationRequest(BaseModel):
-    delegate_address: str
-    status: bool
-
-
-class ServerInfoResponse(BaseModel):
-    server_wallet_address: str
-    network: Dict[str, Any]
-    features: Dict[str, Any]
-
-
-# New models for user delegation
-class UserSearchResponse(BaseModel):
-    users: List[Dict[str, Any]]
-    total: int
-    query: str
-
-
-class UserDelegationRequest(BaseModel):
-    delegate_address: str
-    status: bool
-
-
-class UserDelegationResponse(BaseModel):
-    owner_address: str
-    delegate_address: str
-    is_delegated: bool
-    transaction_data: Optional[Dict[str, Any]] = None
-
-
-class DelegateListResponse(BaseModel):
-    delegates: List[Dict[str, Any]]
-    count: int
-
-
-class DelegatedAssetsResponse(BaseModel):
-    owner_address: str
-    owner_username: Optional[str]
-    assets: List[Dict[str, Any]]
-    total_assets: int
 
 
 def get_blockchain_service() -> BlockchainService:
@@ -86,10 +50,7 @@ def get_asset_service(db_client=Depends(get_db_client)) -> AssetService:
     return AssetService(asset_repo)
 
 
-def get_delegation_service(db_client=Depends(get_db_client)) -> DelegationIndexingService:
-    """Dependency to get the delegation indexing service."""
-    delegation_repo = DelegationRepository(db_client)
-    return DelegationIndexingService(delegation_repo)
+# Using simplified hybrid approach for delegation management
 
 
 def get_delegation_repository(db_client=Depends(get_db_client)) -> DelegationRepository:
@@ -258,6 +219,197 @@ async def check_specific_delegation(
 
 # User-to-User Delegation Endpoints
 
+@router.post("/users/delegate/confirm", response_model=DelegationConfirmResponse)
+async def confirm_user_delegation(
+    confirm_request: DelegationConfirmRequest,
+    request: Request,
+    wallet_address: str = Depends(get_wallet_address),
+    blockchain_service: BlockchainService = Depends(get_blockchain_service),
+    delegation_repo: DelegationRepository = Depends(get_delegation_repository)
+):
+    """
+    Confirm delegation after successful MetaMask transaction.
+    
+    This endpoint verifies the transaction succeeded on-chain and immediately
+    updates the database for instant UI feedback.
+    
+    Args:
+        confirm_request: Transaction details and delegation info
+        
+    Returns:
+        DelegationConfirmResponse with success status and delegation ID
+    """
+    # Check if this is wallet auth
+    auth_context = getattr(request.state, "auth_context", {})
+    if auth_context.get("auth_method") != "wallet":
+        raise HTTPException(
+            status_code=403,
+            detail="This endpoint requires wallet authentication"
+        )
+    
+    try:
+        # Verify owner address matches authenticated wallet
+        if confirm_request.owner_address.lower() != wallet_address.lower():
+            raise HTTPException(
+                status_code=403,
+                detail="Owner address must match authenticated wallet"
+            )
+        
+        # Verify transaction exists and succeeded using existing blockchain service
+        logger.info(f"Verifying transaction {confirm_request.transaction_hash}")
+        
+        try:
+            verification_result = await blockchain_service.verify_transaction_success(confirm_request.transaction_hash)
+        except Exception as e:
+            logger.error(f"Failed to verify transaction: {str(e)}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Transaction verification failed: {str(e)}"
+            )
+        
+        if not verification_result.get("success"):
+            raise HTTPException(
+                status_code=400,
+                detail=verification_result.get("error", "Transaction failed on blockchain")
+            )
+        
+        # Extract block number for database record
+        block_number = verification_result.get("block_number")
+        
+        # Validate addresses
+        try:
+            from web3 import Web3
+            owner_checksum = Web3.to_checksum_address(confirm_request.owner_address)
+            delegate_checksum = Web3.to_checksum_address(confirm_request.delegate_address)
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid wallet addresses provided"
+            )
+        
+        # Create delegation data for database
+        delegation_data = {
+            "ownerAddress": confirm_request.owner_address.lower(),
+            "delegateAddress": confirm_request.delegate_address.lower(),
+            "isActive": confirm_request.status,
+            "transactionHash": confirm_request.transaction_hash,
+            "blockNumber": block_number
+        }
+        
+        # Update database immediately
+        delegation_id = await delegation_repo.upsert_delegation(delegation_data)
+        
+        logger.info(
+            f"Delegation confirmed: {confirm_request.owner_address} -> "
+            f"{confirm_request.delegate_address} = {confirm_request.status} "
+            f"(TX: {confirm_request.transaction_hash}, ID: {delegation_id})"
+        )
+        
+        action = "granted" if confirm_request.status else "revoked"
+        return DelegationConfirmResponse(
+            success=True,
+            message=f"Delegation {action} successfully",
+            delegation_id=delegation_id
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error confirming delegation: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to confirm delegation: {str(e)}"
+        )
+
+
+@router.post("/users/delegate/sync", response_model=DelegationSyncResponse)
+async def sync_delegation_from_blockchain(
+    sync_request: DelegationSyncRequest,
+    wallet_address: str = Depends(get_wallet_address),
+    blockchain_service: BlockchainService = Depends(get_blockchain_service),
+    delegation_repo: DelegationRepository = Depends(get_delegation_repository)
+):
+    """
+    Sync delegation state from blockchain to database when inconsistency is detected.
+    
+    This endpoint is called when frontend detects that delegation exists on blockchain
+    but not in database (during pre-checks). It updates database to match blockchain state.
+    
+    Args:
+        sync_request: Owner and delegate addresses to sync
+        
+    Returns:
+        DelegationSyncResponse with sync status
+    """
+    try:
+        # Verify owner address matches authenticated wallet
+        if sync_request.owner_address.lower() != wallet_address.lower():
+            raise HTTPException(
+                status_code=403,
+                detail="Owner address must match authenticated wallet"
+            )
+        
+        logger.info(f"Syncing delegation state: {sync_request.owner_address} -> {sync_request.delegate_address}")
+        
+        # Check current blockchain state (source of truth)
+        blockchain_status = await blockchain_service.check_delegation(
+            owner_address=sync_request.owner_address,
+            delegate_address=sync_request.delegate_address
+        )
+        
+        # Check current database state
+        existing_delegation = await delegation_repo.get_delegation(
+            sync_request.owner_address, 
+            sync_request.delegate_address
+        )
+        
+        database_status = existing_delegation and existing_delegation.get("isActive", False)
+        
+        # Check if sync is needed (both directions)
+        if blockchain_status == database_status:
+            return DelegationSyncResponse(
+                success=True,
+                message=f"Database already in sync (both show {blockchain_status})",
+                was_synced=False,
+                delegation_id=existing_delegation.get("id") if existing_delegation else None
+            )
+        
+        # Sync needed - update database to match blockchain
+        delegation_data = {
+            "ownerAddress": sync_request.owner_address.lower(),
+            "delegateAddress": sync_request.delegate_address.lower(),
+            "isActive": blockchain_status,
+            # Note: No transaction hash available for externally created/revoked delegations
+            # This is fine - the database record is just for UX optimization
+        }
+        
+        delegation_id = await delegation_repo.upsert_delegation(delegation_data)
+        
+        action = "activated" if blockchain_status else "deactivated"
+        logger.info(
+            f"Delegation synced from blockchain: {sync_request.owner_address} -> "
+            f"{sync_request.delegate_address} = {blockchain_status} ({action}, ID: {delegation_id})"
+        )
+        
+        return DelegationSyncResponse(
+            success=True,
+            message=f"Delegation {action} to match blockchain state",
+            was_synced=True,
+            delegation_id=delegation_id
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error syncing delegation: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to sync delegation: {str(e)}"
+        )
+
+
+# Original delegation endpoints below...
+
 @router.get("/users/search", response_model=UserSearchResponse)
 async def search_users(
     q: str = Query(..., description="Search query (wallet address or username)"),
@@ -361,7 +513,9 @@ async def set_user_delegation(
                 "transaction": result.get("transaction"),
                 "estimated_gas": result.get("estimated_gas"),
                 "gas_price": result.get("gas_price"),
-                "action": "setDelegate"
+                "action": "setDelegate",
+                "confirmation_endpoint": "/delegation/users/delegate/confirm",
+                "instructions": "After MetaMask transaction succeeds, call the confirmation endpoint with transaction hash to update database immediately"
             }
         )
         
@@ -541,7 +695,9 @@ async def revoke_user_delegation(
                 "transaction": result.get("transaction"),
                 "estimated_gas": result.get("estimated_gas"),
                 "gas_price": result.get("gas_price"),
-                "action": "setDelegate"
+                "action": "setDelegate",
+                "confirmation_endpoint": "/delegation/users/delegate/confirm",
+                "instructions": "After MetaMask transaction succeeds, call the confirmation endpoint with transaction hash to update database immediately"
             }
         )
         
@@ -566,6 +722,9 @@ async def get_delegated_assets(
     """
     Get assets of a user who has delegated to me.
     
+    SECURITY: Always verifies delegation on blockchain regardless of database state.
+    This ensures that even if database is inconsistent, access is properly controlled.
+    
     Args:
         owner_address: The address of the user who delegated to me
         
@@ -573,17 +732,22 @@ async def get_delegated_assets(
         DelegatedAssetsResponse with assets I can manage
     """
     try:
-        # Check if owner has delegated to current user
+        logger.info(f"Checking blockchain delegation: {owner_address} -> {wallet_address}")
+        
+        # SECURITY: Always check blockchain state (source of truth)
         is_delegated = await blockchain_service.check_delegation(
             owner_address=owner_address,
             delegate_address=wallet_address
         )
         
         if not is_delegated:
+            logger.warning(f"Delegation access denied: {owner_address} has not delegated to {wallet_address}")
             raise HTTPException(
                 status_code=403,
-                detail="You are not a delegate for this user"
+                detail="Access denied: delegation not found on blockchain"
             )
+        
+        logger.info(f"Delegation verified on blockchain: {owner_address} -> {wallet_address}")
         
         # Get owner user info
         owner_user = await user_service.get_user(owner_address)
@@ -608,4 +772,44 @@ async def get_delegated_assets(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get delegated assets: {str(e)}"
+        )
+
+
+# Simple monitoring endpoint (blockchain is source of truth)
+
+@router.get("/admin/system-status")
+async def get_system_status(
+    blockchain_service: BlockchainService = Depends(get_blockchain_service),
+    _: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Get basic system status. Database inconsistencies don't matter since 
+    blockchain is the source of truth for all operations.
+    
+    Returns:
+        System status information
+    """
+    try:
+        # Check blockchain connectivity
+        try:
+            current_block = blockchain_service.web3.eth.get_block('latest')['number']
+            blockchain_status = "connected"
+            blockchain_block = current_block
+        except Exception as e:
+            blockchain_status = f"error: {str(e)}"
+            blockchain_block = None
+        
+        return {
+            "blockchain_status": blockchain_status,
+            "current_block": blockchain_block,
+            "contract_address": blockchain_service.contract_address,
+            "approach": "hybrid_with_blockchain_verification",
+            "note": "Database serves as UX cache only. All operations verified on-chain."
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting system status: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get system status: {str(e)}"
         )

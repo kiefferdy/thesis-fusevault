@@ -7,7 +7,7 @@ import './DelegationPage.css';
 
 const DelegationPage = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, currentAccount } = useAuth();
   const [activeTab, setActiveTab] = useState('search');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -67,6 +67,39 @@ const DelegationPage = () => {
     try {
       setLoading(true);
       setError(null);
+      
+      toast.loading('Checking delegation status...', { id: 'delegation' });
+      
+      // Check if user is already delegated
+      const delegationCheck = await delegationService.checkSpecificDelegation(
+        currentAccount,
+        user.wallet_address
+      );
+      
+      if (delegationCheck.is_delegated) {
+        toast.loading('Syncing delegation state...', { id: 'delegation' });
+        
+        // Sync blockchain state to database for consistency
+        try {
+          const syncResult = await delegationService.syncDelegationFromBlockchain(
+            currentAccount,
+            user.wallet_address
+          );
+          
+          if (syncResult.was_synced) {
+            toast.success(`${user.username} is already your delegate! Database synced.`, { id: 'delegation' });
+            // Reload delegation data to show the synced delegation
+            await loadDelegationData();
+          } else {
+            toast.success(`${user.username} is already your delegate!`, { id: 'delegation' });
+          }
+        } catch (syncError) {
+          console.error('Failed to sync delegation:', syncError);
+          toast.success(`${user.username} is already your delegate! (Sync failed but delegation works)`, { id: 'delegation' });
+        }
+        
+        return;
+      }
       
       toast.loading('Preparing delegation transaction...', { id: 'delegation' });
       
