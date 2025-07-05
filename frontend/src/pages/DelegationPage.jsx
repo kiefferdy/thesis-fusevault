@@ -34,8 +34,8 @@ const DelegationPage = () => {
         delegationService.getDelegatedToMe()
       ]);
       
-      setMyDelegates(delegatesResult.delegates || []);
-      setDelegatedToMe(delegatorsResult.delegates || []);
+      setMyDelegates(delegatesResult.delegations || []);
+      setDelegatedToMe(delegatorsResult.delegations || []);
       
     } catch (err) {
       setError('Failed to load delegation data');
@@ -282,16 +282,16 @@ const DelegationPage = () => {
               ) : (
                 <div className="delegate-list">
                   {myDelegates.map((delegate) => (
-                    <div key={delegate.address} className="delegate-item">
+                    <div key={delegate.delegateAddress} className="delegate-item">
                       <div className="delegate-info">
-                        <h4>{delegate.username || 'Unknown User'}</h4>
-                        <p>{formatAddress(delegate.address)}</p>
+                        <h4>{delegate.delegateUsername || 'Unknown User'}</h4>
+                        <p>{formatAddress(delegate.delegateAddress)}</p>
                         <span className="delegate-status">Active</span>
                       </div>
                       <div className="delegate-actions">
                         <button 
                           className="btn btn-danger"
-                          onClick={() => handleRevoke(delegate.address)}
+                          onClick={() => handleRevoke(delegate.delegateAddress)}
                           disabled={loading}
                         >
                           Revoke
@@ -315,17 +315,17 @@ const DelegationPage = () => {
               ) : (
                 <div className="delegated-list">
                   {delegatedToMe.map((delegator) => (
-                    <div key={delegator.address} className="delegated-item">
+                    <div key={delegator.ownerAddress} className="delegated-item">
                       <div className="delegated-info">
-                        <h4>{delegator.username || 'Unknown User'}</h4>
-                        <p>{formatAddress(delegator.address)}</p>
+                        <h4>{delegator.ownerUsername || 'Unknown User'}</h4>
+                        <p>{formatAddress(delegator.ownerAddress)}</p>
                         <span className="asset-count">{delegator.assetCount || 0} assets</span>
                       </div>
                       <div className="delegated-actions">
                         <button 
                           className="btn btn-secondary"
                           onClick={() => {
-                            navigate(`/delegation/manage/${delegator.address}`);
+                            navigate(`/delegation/manage/${delegator.ownerAddress}`);
                           }}
                         >
                           Manage Assets
