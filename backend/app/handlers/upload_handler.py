@@ -273,7 +273,8 @@ class UploadHandler:
                             ipfs_hash=cid,
                             critical_metadata=critical_metadata,
                             non_critical_metadata=non_critical_metadata,
-                            ipfs_version=next_ipfs_version
+                            ipfs_version=next_ipfs_version,
+                            performed_by=initiator_address
                         )
                         
                         # Extract results
@@ -332,7 +333,8 @@ class UploadHandler:
                         ipfs_hash=existing_ipfs_hash,
                         critical_metadata=critical_metadata,
                         non_critical_metadata=non_critical_metadata,
-                        ipfs_version=current_ipfs_version
+                        ipfs_version=current_ipfs_version,
+                        performed_by=initiator_address
                     )
                     
                     # Extract results
@@ -634,7 +636,8 @@ class UploadHandler:
                     ipfs_hash=ipfs_cid,
                     critical_metadata=critical_metadata,
                     non_critical_metadata=non_critical_metadata,
-                    ipfs_version=next_ipfs_version
+                    ipfs_version=next_ipfs_version,
+                    performed_by=initiator_address
                 )
                 
                 # Extract results
@@ -696,16 +699,18 @@ class UploadHandler:
         asset_id: str,
         wallet_address: str,
         critical_metadata: str,
-        non_critical_metadata: Optional[str] = None
+        non_critical_metadata: Optional[str] = None,
+        owner_address: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Upload metadata directly (not as a file).
         
         Args:
             asset_id: The asset's unique identifier
-            wallet_address: The wallet address of the initiator
+            wallet_address: The wallet address of the initiator (person doing the action)
             critical_metadata: JSON string of core metadata
             non_critical_metadata: JSON string of additional metadata
+            owner_address: The wallet address of the asset owner (for delegation)
             
         Returns:
             Dict with processing results
@@ -715,14 +720,16 @@ class UploadHandler:
             critical_md = json.loads(critical_metadata)
             non_critical_md = json.loads(non_critical_metadata) if non_critical_metadata else {}
             
-            # For direct metadata upload, the initiator is also the owner
-            owner_address = wallet_address
+            # Determine the actual owner address
+            # If owner_address is provided (delegation case), use it; otherwise initiator is owner
+            actual_owner_address = owner_address if owner_address else wallet_address
+            initiator_address = wallet_address
             
             # Process metadata
             return await self.process_metadata(
                 asset_id=asset_id,
-                owner_address=owner_address,
-                initiator_address=wallet_address,
+                owner_address=actual_owner_address,
+                initiator_address=initiator_address,
                 critical_metadata=critical_md,
                 non_critical_metadata=non_critical_md
             )

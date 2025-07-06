@@ -35,12 +35,29 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAssets } from '../hooks/useAssets';
 import { toast } from 'react-hot-toast';
 
-// Simple function to check if we're in edit mode and get asset ID
+// Function to check edit mode and delegation parameters
 function getEditModeInfo() {
   const pathname = window.location.pathname;
-  const isEditMode = pathname.includes('/edit');
-  const assetId = isEditMode ? pathname.split('/')[2] : null;
-  return { isEditMode, assetId };
+  const searchParams = new URLSearchParams(window.location.search);
+  
+  // Check if editing via URL path (/assets/:assetId/edit)
+  const isEditModeFromPath = pathname.includes('/edit');
+  const assetIdFromPath = isEditModeFromPath ? pathname.split('/')[2] : null;
+  
+  // Check if editing via URL params (?edit=assetId&delegate=ownerAddress)
+  const assetIdFromParams = searchParams.get('edit');
+  const delegateOwner = searchParams.get('delegate');
+  
+  // Determine if we're in edit mode
+  const isEditMode = isEditModeFromPath || assetIdFromParams;
+  const assetId = assetIdFromPath || assetIdFromParams;
+  
+  return { 
+    isEditMode, 
+    assetId, 
+    isDelegateMode: !!delegateOwner,
+    originalOwner: delegateOwner 
+  };
 }
 
 function UploadPage() {
@@ -77,7 +94,7 @@ function UploadPage() {
   const navigate = useNavigate();
 
   // Get edit mode info
-  const { isEditMode, assetId } = getEditModeInfo();
+  const { isEditMode, assetId, isDelegateMode, originalOwner } = getEditModeInfo();
 
   // Fetch existing asset data when in edit mode
   useEffect(() => {
@@ -324,6 +341,8 @@ function UploadPage() {
             <Box data-navigate onClick={() => navigate('/dashboard')} style={{ display: 'none' }} />
             <UploadFormWithSigning 
               existingAsset={isEditMode ? existingAsset : null}
+              isDelegateMode={isDelegateMode}
+              originalOwner={originalOwner}
               onUploadSuccess={(result) => {
                 if (!isEditMode) {
                   // Asset creation
