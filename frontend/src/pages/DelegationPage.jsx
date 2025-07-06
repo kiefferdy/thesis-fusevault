@@ -35,7 +35,28 @@ const DelegationPage = () => {
       ]);
       
       setMyDelegates(delegatesResult.delegations || []);
-      setDelegatedToMe(delegatorsResult.delegations || []);
+      
+      // For delegated users, fetch asset counts
+      const delegatedUsers = delegatorsResult.delegations || [];
+      const delegatedWithAssets = await Promise.all(
+        delegatedUsers.map(async (delegator) => {
+          try {
+            const assetsResult = await delegationService.getDelegatedAssets(delegator.ownerAddress);
+            return {
+              ...delegator,
+              assetCount: assetsResult.total_assets || 0
+            };
+          } catch (error) {
+            console.error(`Error fetching assets for ${delegator.ownerAddress}:`, error);
+            return {
+              ...delegator,
+              assetCount: 0
+            };
+          }
+        })
+      );
+      
+      setDelegatedToMe(delegatedWithAssets);
       
     } catch (err) {
       setError('Failed to load delegation data');

@@ -14,12 +14,6 @@ const DelegateAssetManagementPage = () => {
   const [error, setError] = useState(null);
   const [ownerInfo, setOwnerInfo] = useState({});
 
-  useEffect(() => {
-    if (isAuthenticated && ownerAddress) {
-      loadDelegatedAssets();
-    }
-  }, [isAuthenticated, ownerAddress, loadDelegatedAssets]);
-
   const loadDelegatedAssets = useCallback(async () => {
     try {
       setLoading(true);
@@ -47,6 +41,12 @@ const DelegateAssetManagementPage = () => {
     }
   }, [ownerAddress, navigate]);
 
+  useEffect(() => {
+    if (isAuthenticated && ownerAddress) {
+      loadDelegatedAssets();
+    }
+  }, [isAuthenticated, ownerAddress, loadDelegatedAssets]);
+
   const formatAddress = (address) => {
     if (!address) return '';
     if (address.length < 10) return address;
@@ -60,7 +60,7 @@ const DelegateAssetManagementPage = () => {
 
   const handleAssetClick = (assetId) => {
     // Navigate to asset details or management page
-    navigate(`/asset/${assetId}`);
+    navigate(`/assets/${assetId}`);
   };
 
   const handleBack = () => {
@@ -136,10 +136,10 @@ const DelegateAssetManagementPage = () => {
                 <div 
                   key={asset._id} 
                   className={`asset-card ${asset.isDeleted ? 'deleted' : ''}`}
-                  onClick={() => handleAssetClick(asset.asset_id)}
+                  onClick={() => handleAssetClick(asset.assetId)}
                 >
                   <div className="asset-header">
-                    <h3>{asset.asset_id}</h3>
+                    <h3>{asset.assetId}</h3>
                     {asset.isDeleted && (
                       <span className="deleted-badge">Deleted</span>
                     )}
@@ -173,7 +173,7 @@ const DelegateAssetManagementPage = () => {
                         className="btn btn-secondary btn-sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleAssetClick(asset.asset_id);
+                          handleAssetClick(asset.assetId);
                         }}
                       >
                         View Details
@@ -184,7 +184,7 @@ const DelegateAssetManagementPage = () => {
                           onClick={(e) => {
                             e.stopPropagation();
                             // Navigate to edit page or open edit modal
-                            navigate(`/upload?edit=${asset.asset_id}&delegate=${ownerInfo.address}`);
+                            navigate(`/upload?edit=${asset.assetId}&delegate=${ownerInfo.address}`);
                           }}
                         >
                           Edit Metadata

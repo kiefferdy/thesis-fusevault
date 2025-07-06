@@ -761,8 +761,8 @@ async def get_delegated_assets(
         return DelegatedAssetsResponse(
             owner_address=owner_address,
             owner_username=owner_username,
-            assets=assets.get("assets", []),
-            total_assets=len(assets.get("assets", []))
+            assets=assets,
+            total_assets=len(assets)
         )
         
     except HTTPException:
