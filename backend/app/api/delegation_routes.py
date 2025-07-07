@@ -6,9 +6,11 @@ import logging
 from app.services.blockchain_service import BlockchainService
 from app.services.user_service import UserService
 from app.services.asset_service import AssetService
+from app.services.transaction_service import TransactionService
 from app.repositories.user_repo import UserRepository
 from app.repositories.asset_repo import AssetRepository
 from app.repositories.delegation_repo import DelegationRepository
+from app.repositories.transaction_repo import TransactionRepository
 from app.schemas.delegation_schema import (
     DelegationListResponse, 
     DelegationResponse,
@@ -48,6 +50,12 @@ def get_asset_service(db_client=Depends(get_db_client)) -> AssetService:
     """Dependency to get the asset service."""
     asset_repo = AssetRepository(db_client)
     return AssetService(asset_repo)
+
+
+def get_transaction_service(db_client=Depends(get_db_client)) -> TransactionService:
+    """Dependency to get the transaction service."""
+    transaction_repo = TransactionRepository(db_client)
+    return TransactionService(transaction_repo)
 
 
 # Using simplified hybrid approach for delegation management
@@ -802,17 +810,18 @@ async def get_delegated_assets_summary(
     owner_address: str,
     wallet_address: str = Depends(get_wallet_address),
     blockchain_service: BlockchainService = Depends(get_blockchain_service),
-    asset_service: AssetService = Depends(get_asset_service)
+    asset_service: AssetService = Depends(get_asset_service),
+    transaction_service: TransactionService = Depends(get_transaction_service)
 ):
     """
     Get asset summary for a user who has delegated to me.
-    Returns quick statistics and breakdown for better UX.
+    Returns quick statistics and recent transactions for better UX.
     
     Args:
         owner_address: The address of the user who delegated to me
         
     Returns:
-        Asset summary with counts and categories
+        Asset summary with counts and recent transactions
     """
     try:
         # SECURITY: Always check blockchain state (source of truth)
@@ -830,35 +839,21 @@ async def get_delegated_assets_summary(
         # Get assets for the owner
         assets = await asset_service.get_user_assets(owner_address)
         
-        # Categorize assets
-        asset_categories = {}
-        recent_assets = []
-        total_size = 0
-        
-        for asset in assets:
-            # Get category from content type or file extension
-            content_type = asset.get("contentType", "unknown")
-            category = categorize_content_type(content_type)
-            asset_categories[category] = asset_categories.get(category, 0) + 1
-            
-            # Track recent assets (last 5)
-            if len(recent_assets) < 5:
-                recent_assets.append({
-                    "name": asset.get("name", "Untitled"),
-                    "created_at": asset.get("createdAt"),
-                    "content_type": content_type
-                })
-            
-            # Calculate total size if available
-            if asset.get("size"):
-                total_size += asset.get("size", 0)
+        # Get recent transactions for the owner
+        try:
+            recent_transactions = await transaction_service.get_wallet_history(
+                wallet_address=owner_address,
+                include_all_versions=False,
+                limit=5  # Get last 5 transactions
+            )
+        except Exception as e:
+            logger.warning(f"Failed to fetch recent transactions for {owner_address}: {str(e)}")
+            recent_transactions = []
         
         return {
             "owner_address": owner_address,
             "total_assets": len(assets),
-            "asset_categories": asset_categories,
-            "recent_assets": recent_assets,
-            "total_size_bytes": total_size,
+            "recent_transactions": recent_transactions,
             "last_activity": assets[0].get("createdAt") if assets else None
         }
         
@@ -956,6 +951,69 @@ async def get_delegated_assets(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get delegated assets: {str(e)}"
+        )
+
+
+@router.get("/users/{owner_address}/transactions")
+async def get_delegated_user_transactions(
+    owner_address: str,
+    limit: int = Query(50, description="Maximum number of transactions to return"),
+    wallet_address: str = Depends(get_wallet_address),
+    blockchain_service: BlockchainService = Depends(get_blockchain_service),
+    transaction_service: TransactionService = Depends(get_transaction_service)
+):
+    """
+    Get transaction history for a user who has delegated to me.
+    
+    SECURITY: Always verifies delegation on blockchain before allowing access.
+    
+    Args:
+        owner_address: The address of the user who delegated to me
+        limit: Maximum number of transactions to return
+        
+    Returns:
+        Transaction history for the delegated user
+    """
+    try:
+        logger.info(f"Checking blockchain delegation for transaction access: {owner_address} -> {wallet_address}")
+        
+        # SECURITY: Always check blockchain state (source of truth)
+        is_delegated = await blockchain_service.check_delegation(
+            owner_address=owner_address,
+            delegate_address=wallet_address
+        )
+        
+        if not is_delegated:
+            logger.warning(f"Transaction access denied: {owner_address} has not delegated to {wallet_address}")
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: delegation not found on blockchain"
+            )
+        
+        logger.info(f"Delegation verified on blockchain: {owner_address} -> {wallet_address}")
+        
+        # Get transaction history for the owner
+        transactions = await transaction_service.get_wallet_history(
+            wallet_address=owner_address,
+            include_all_versions=False,
+            limit=limit
+        )
+        
+        return {
+            "status": "success",
+            "owner_address": owner_address,
+            "delegate_address": wallet_address,
+            "transactions": transactions,
+            "count": len(transactions)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting delegated user transactions: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get delegated user transactions: {str(e)}"
         )
 
 

@@ -251,6 +251,23 @@ const delegationService = {
     }
   },
 
+  /**
+   * Get transaction history of a user who has delegated to me
+   * @param {string} ownerAddress - Address of the user who delegated to me
+   * @param {number} limit - Maximum number of transactions to return
+   * @returns {Promise<Object>} Transaction history for the delegated user
+   */
+  getDelegatedUserTransactions: async (ownerAddress, limit = 50) => {
+    try {
+      const response = await apiClient.get(`${DELEGATION_BASE_URL}/users/${ownerAddress}/transactions`, {
+        params: { limit }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error getting delegated user transactions:', error);
+      throw error;
+    }
+  },
 
   /**
    * Confirm delegation with backend after successful MetaMask transaction

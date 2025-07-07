@@ -187,6 +187,13 @@
   gap: 20px;
 }
 
+/* Full-width layout for Delegated to Me tab */
+.delegated-list-wide {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .delegate-item,
 .delegated-item {
   display: flex;
@@ -202,6 +209,73 @@
 .delegate-item:hover,
 .delegated-item:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Three-section layout for wide delegated items */
+.delegated-item-wide {
+  display: flex;
+  align-items: stretch;
+  padding: 25px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  background: #fafafa;
+  transition: all 0.3s ease;
+  gap: 25px;
+}
+
+.delegated-item-wide:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.delegated-user-profile {
+  flex: 0 0 30%;
+  padding: 20px;
+  border-radius: 12px;
+  background: white;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.delegated-user-profile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.delegated-activity {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 0 25px;
+}
+
+.delegated-actions-wide {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* Activity section specific styles */
+.delegated-activity .asset-count-enhanced {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1565c0;
+  margin-bottom: 20px;
+  text-align: center;
+  padding: 12px;
+  background: #f0f8ff;
+  border-radius: 10px;
+  border: 1px solid #bbdefb;
+}
+
+.delegated-activity .recent-transactions h5 {
+  font-size: 1rem;
+  color: #333;
+  margin-bottom: 15px;
+  text-align: center;
+  font-weight: 600;
 }
 
 .delegate-info h4,
@@ -383,20 +457,152 @@
   margin-bottom: 8px;
 }
 
-.asset-breakdown {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+.recent-transactions {
+  margin-top: 8px;
 }
 
-.asset-type-badge {
-  background-color: #fff3e0;
-  color: #e65100;
+.recent-transactions h5 {
+  color: #1565c0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+}
+
+.transaction-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  border: 1px solid #e9ecef;
+}
+
+.transaction-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.transaction-asset {
+  color: #666;
+  font-size: 0.75rem;
+  font-family: 'Courier New', monospace;
+}
+
+.transaction-action {
+  background-color: #e3f2fd;
+  color: #1565c0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.transaction-date {
+  color: #666;
+  font-size: 0.75rem;
+}
+
+.no-transactions {
+  color: #888;
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+/* Redesigned transaction styles */
+.transaction-item-redesigned {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.85rem;
+}
+
+.transaction-item-redesigned:last-child {
+  border-bottom: none;
+}
+
+.transaction-left {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.transaction-right {
+  display: flex;
+  align-items: center;
+  max-width: 45%;
+}
+
+.transaction-action-redesigned {
+  background-color: #e3f2fd;
+  color: #1565c0;
   padding: 3px 8px;
-  border-radius: 12px;
+  border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 500;
-  border: 1px solid #ffcc02;
+  width: fit-content;
+}
+
+.transaction-date-redesigned {
+  color: #888;
+  font-size: 0.75rem;
+}
+
+.transaction-asset-redesigned {
+  color: #666;
+  font-size: 0.8rem;
+  font-family: 'Courier New', monospace;
+  background-color: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+  text-align: right;
+}
+
+.no-transactions-redesigned {
+  text-align: center;
+  padding: 20px 0;
+  color: #888;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+/* Asset count section in right panel */
+.asset-count-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f0f8ff;
+  border-radius: 10px;
+  border: 1px solid #bbdefb;
+}
+
+.asset-count-section .asset-count-enhanced {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1565c0;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: center;
+}
+
+.asset-count-label {
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Enhanced User Profile Styles */
@@ -523,13 +729,6 @@
   margin-bottom: 8px;
 }
 
-.storage-size {
-  color: #666;
-  font-size: 0.8rem;
-  padding: 3px 8px;
-  background-color: #f5f5f5;
-  border-radius: 8px;
-}
 
 /* Icon Styles */
 .location-icon {
@@ -660,6 +859,51 @@
     grid-template-columns: 1fr;
   }
   
+  /* Mobile layout for wide delegated items */
+  .delegated-item-wide {
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px;
+  }
+  
+  .delegated-user-profile,
+  .delegated-activity,
+  .delegated-actions-wide {
+    flex: none;
+  }
+  
+  .delegated-activity {
+    padding: 15px 0;
+  }
+  
+  .delegated-actions-wide {
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+  }
+  
+  .asset-count-section {
+    margin-bottom: 15px;
+    width: 100%;
+  }
+  
+  .transaction-item-redesigned {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+    padding: 12px 0;
+  }
+  
+  .transaction-right {
+    max-width: 100%;
+    width: 100%;
+  }
+  
+  .transaction-asset-redesigned {
+    text-align: left;
+    width: 100%;
+  }
+  
   .delegate-item,
   .delegated-item {
     flex-direction: column;
@@ -681,8 +925,7 @@
     align-items: center;
   }
   
-  .delegate-permissions,
-  .asset-breakdown {
+  .delegate-permissions {
     justify-content: center;
   }
   

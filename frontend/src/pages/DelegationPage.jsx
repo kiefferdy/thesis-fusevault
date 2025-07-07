@@ -57,18 +57,16 @@ const DelegationPage = () => {
             return {
               ...delegator,
               assetCount: summaryResult.total_assets || 0,
-              assetCategories: summaryResult.asset_categories || {},
-              lastActivity: summaryResult.last_activity || null,
-              totalSizeBytes: summaryResult.total_size_bytes || 0
+              recentTransactions: summaryResult.recent_transactions || [],
+              lastActivity: summaryResult.last_activity || null
             };
           } catch (error) {
             console.error(`Error fetching asset summary for ${delegator.ownerAddress}:`, error);
             return {
               ...delegator,
               assetCount: 0,
-              assetCategories: {},
-              lastActivity: null,
-              totalSizeBytes: 0
+              recentTransactions: [],
+              lastActivity: null
             };
           }
         })
@@ -212,13 +210,6 @@ const DelegationPage = () => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
-  const formatBytes = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
 
   if (!isAuthenticated) {
     return (
@@ -489,10 +480,11 @@ const DelegationPage = () => {
                   <p>When users delegate to you, you'll be able to manage their assets here.</p>
                 </div>
               ) : (
-                <div className="delegated-list">
+                <div className="delegated-list-wide">
                   {delegatedToMe.map((delegator) => (
-                    <div key={delegator.ownerAddress} className="delegated-item">
-                      <div className="delegated-info">
+                    <div key={delegator.ownerAddress} className="delegated-item-wide">
+                      {/* Left Section: User Profile */}
+                      <div className="delegated-user-profile">
                         <div className="delegated-header">
                           {delegator.ownerProfileImage && (
                             <img 
@@ -546,30 +538,6 @@ const DelegationPage = () => {
                           </span>
                         </div>
                         
-                        <div className="asset-summary">
-                          <div className="asset-header">
-                            <span className="asset-count-enhanced">
-                              {delegator.assetCount || 0} total assets
-                            </span>
-                            {delegator.totalSizeBytes > 0 && (
-                              <span className="storage-size">
-                                {formatBytes(delegator.totalSizeBytes)}
-                              </span>
-                            )}
-                          </div>
-                          <div className="asset-breakdown">
-                            {delegator.assetCategories && Object.keys(delegator.assetCategories).length > 0 ? (
-                              Object.entries(delegator.assetCategories).map(([type, count]) => (
-                                <span key={type} className="asset-type-badge">
-                                  {count} {type}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="asset-type-badge">Mixed content</span>
-                            )}
-                          </div>
-                        </div>
-                        
                         {(delegator.ownerTwitter || delegator.ownerLinkedin || delegator.ownerGithub) && (
                           <div className="delegated-social">
                             {delegator.ownerTwitter && (
@@ -593,7 +561,46 @@ const DelegationPage = () => {
                           </div>
                         )}
                       </div>
-                      <div className="delegated-actions">
+
+                      {/* Middle Section: Recent Transactions */}
+                      <div className="delegated-activity">
+                        <div className="recent-transactions">
+                          <h5>Recent Transactions</h5>
+                          {delegator.recentTransactions && delegator.recentTransactions.length > 0 ? (
+                            delegator.recentTransactions.slice(0, 3).map((transaction, index) => (
+                              <div key={index} className="transaction-item-redesigned">
+                                <div className="transaction-left">
+                                  <span className="transaction-action-redesigned">{transaction.action}</span>
+                                  <span className="transaction-date-redesigned">
+                                    {new Date(transaction.timestamp).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <div className="transaction-right">
+                                  <span className="transaction-asset-redesigned">
+                                    {transaction.assetId ? 
+                                      `${transaction.assetId.length > 20 ? transaction.assetId.slice(0, 20) + '...' : transaction.assetId}` 
+                                      : 'Unknown Asset'
+                                    }
+                                  </span>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="no-transactions-redesigned">
+                              <span>No recent transactions</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right Section: Asset Count & Action Buttons */}
+                      <div className="delegated-actions-wide">
+                        <div className="asset-count-section">
+                          <span className="asset-count-enhanced">
+                            {delegator.assetCount || 0}
+                          </span>
+                          <span className="asset-count-label">Total Assets</span>
+                        </div>
                         <button 
                           className="btn btn-primary"
                           onClick={() => {
@@ -601,6 +608,14 @@ const DelegationPage = () => {
                           }}
                         >
                           Manage Assets
+                        </button>
+                        <button 
+                          className="btn btn-secondary"
+                          onClick={() => {
+                            navigate(`/delegation/transactions/${delegator.ownerAddress}`);
+                          }}
+                        >
+                          View Transactions
                         </button>
                       </div>
                     </div>
