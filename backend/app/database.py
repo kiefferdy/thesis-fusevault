@@ -15,6 +15,10 @@ except ImportError:
     MONGODB_AVAILABLE = False
     logging.warning("motor not available, using mock database for development")
 
+# Constants for sorting (compatible with pymongo)
+ASCENDING = 1
+DESCENDING = -1
+
 logger = logging.getLogger(__name__)
 
 # Helper to convert ObjectId to string in JSON serialization
@@ -68,6 +72,14 @@ class MockCollection:
                 self.data = data
                 self.query = query
                 self._results = None
+                self._sort_field = None
+                self._sort_direction = 1
+                
+            def sort(self, field, direction=1):
+                """Add sorting to the cursor"""
+                self._sort_field = field
+                self._sort_direction = direction
+                return self
                 
             async def to_list(self, length=None):
                 if self._results is None:
@@ -91,6 +103,14 @@ class MockCollection:
                         
                         if matches:
                             self._results.append(json.loads(json.dumps(item, cls=JSONEncoder)))
+                    
+                    # Apply sorting if specified
+                    if self._sort_field:
+                        reverse = self._sort_direction == -1
+                        self._results.sort(
+                            key=lambda x: x.get(self._sort_field, ""),
+                            reverse=reverse
+                        )
                 
                 return self._results[:length] if length else self._results
         
@@ -127,18 +147,26 @@ class MockCollection:
                     for key, value in update["$set"].items():
                         document[key] = value
                 
-                await self.insert_one(document)
+                if "$setOnInsert" in update:
+                    for key, value in update["$setOnInsert"].items():
+                        if key not in document:  # Only set if not already set
+                            document[key] = value
+                
+                result = await self.insert_one(document)
                 
                 class Result:
+                    def __init__(self, doc_id):
+                        self._upserted_id = doc_id
+                    
                     @property
                     def modified_count(self):
                         return 0
                     
                     @property
                     def upserted_id(self):
-                        return document["_id"]
+                        return self._upserted_id
                 
-                return Result()
+                return Result(result.inserted_id)
             else:
                 class Result:
                     @property
@@ -268,6 +296,7 @@ class DatabaseClient:
                 self.sessions_collection = self.db["sessions"]
                 self.transaction_collection = self.db["transactions"]
                 self.users_collection = self.db["users"]
+                self.delegations_collection = self.db["delegations"]
                 
                 logger.info(f"Connected to MongoDB database: {db_name}")
                 
@@ -288,6 +317,7 @@ class DatabaseClient:
         self.sessions_collection = MockCollection("sessions")
         self.transaction_collection = MockCollection("transactions")
         self.users_collection = MockCollection("users")
+        self.delegations_collection = MockCollection("delegations")
         
         logger.warning("Using mock database for development")
     

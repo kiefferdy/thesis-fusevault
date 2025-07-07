@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from datetime import datetime
 
 from app.config import settings
 
@@ -355,3 +356,174 @@ class TestDelegationRoutes:
         assert data["success"] is True
         assert data["status"] is False  # Should be revoked
         assert data["action"] == "setDelegate"
+
+    @pytest.mark.asyncio
+    async def test_get_my_delegates_empty(self, mock_current_user, mock_auth_bypass):
+        """Test getting delegates when user has no delegates."""
+        from app.repositories.delegation_repo import DelegationRepository
+        from unittest.mock import AsyncMock
+        
+        # Setup mocks
+        wallet_address = mock_current_user["walletAddress"]
+        mock_delegation_repo = AsyncMock(spec=DelegationRepository)
+        mock_delegation_repo.get_delegations_by_owner.return_value = []
+        
+        mock_user_service = AsyncMock()
+        
+        # Mock the dependencies
+        app = self.setup_dependency_overrides(wallet_address=wallet_address)
+        
+        with patch('app.api.delegation_routes.get_delegation_repository', return_value=mock_delegation_repo):
+            with patch('app.api.delegation_routes.get_user_service', return_value=mock_user_service):
+                with mock_auth_bypass():
+                    with TestClient(app) as client:
+                        response = client.get("/delegation/users/my-delegates")
+        
+        self.cleanup_dependency_overrides()
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 0
+        assert len(data["delegations"]) == 0
+        assert data["ownerAddress"] == wallet_address
+
+    @pytest.mark.asyncio
+    async def test_get_my_delegates_with_data(self, mock_current_user, mock_auth_bypass):
+        """Test getting delegates when user has delegates."""
+        from app.repositories.delegation_repo import DelegationRepository
+        from unittest.mock import AsyncMock
+        from datetime import datetime
+        
+        # Setup mocks
+        wallet_address = mock_current_user["walletAddress"]
+        delegate_address = "0x1234567890123456789012345678901234567890"
+        
+        mock_delegation_data = {
+            "id": "delegation_123",
+            "ownerAddress": wallet_address.lower(),
+            "delegateAddress": delegate_address.lower(),
+            "isActive": True,
+            "createdAt": datetime.utcnow(),
+            "updatedAt": datetime.utcnow(),
+            "transactionHash": "0xabcdef",
+            "blockNumber": 12345
+        }
+        
+        mock_delegation_repo = AsyncMock(spec=DelegationRepository)
+        mock_delegation_repo.get_delegations_by_owner.return_value = [mock_delegation_data]
+        
+        mock_user_service = AsyncMock()
+        mock_user_service.get_user.return_value = {
+            "status": "success",
+            "user": {"username": "testuser"}
+        }
+        
+        # Mock the dependencies
+        app = self.setup_dependency_overrides(wallet_address=wallet_address)
+        
+        with patch('app.api.delegation_routes.get_delegation_repository', return_value=mock_delegation_repo):
+            with patch('app.api.delegation_routes.get_user_service', return_value=mock_user_service):
+                with mock_auth_bypass():
+                    with TestClient(app) as client:
+                        response = client.get("/delegation/users/my-delegates")
+        
+        self.cleanup_dependency_overrides()
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 1
+        assert len(data["delegations"]) == 1
+        assert data["ownerAddress"] == wallet_address
+        
+        delegation = data["delegations"][0]
+        assert delegation["delegateAddress"] == delegate_address.lower()
+        assert delegation["isActive"] is True
+        assert delegation["delegateUsername"] == "testuser"
+
+    @pytest.mark.asyncio
+    async def test_get_delegated_to_me_empty(self, mock_current_user, mock_auth_bypass):
+        """Test getting delegators when no users delegated to current user."""
+        from app.repositories.delegation_repo import DelegationRepository
+        from unittest.mock import AsyncMock
+        
+        # Setup mocks
+        wallet_address = mock_current_user["walletAddress"]
+        mock_delegation_repo = AsyncMock(spec=DelegationRepository)
+        mock_delegation_repo.get_delegations_by_delegate.return_value = []
+        
+        mock_user_service = AsyncMock()
+        
+        # Mock the dependencies
+        app = self.setup_dependency_overrides(wallet_address=wallet_address)
+        
+        with patch('app.api.delegation_routes.get_delegation_repository', return_value=mock_delegation_repo):
+            with patch('app.api.delegation_routes.get_user_service', return_value=mock_user_service):
+                with mock_auth_bypass():
+                    with TestClient(app) as client:
+                        response = client.get("/delegation/users/delegated-to-me")
+        
+        self.cleanup_dependency_overrides()
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 0
+        assert len(data["delegations"]) == 0
+        assert data["delegateAddress"] == wallet_address
+
+    @pytest.mark.asyncio
+    async def test_get_delegated_to_me_with_data(self, mock_current_user, mock_auth_bypass):
+        """Test getting delegators when users have delegated to current user."""
+        from app.repositories.delegation_repo import DelegationRepository
+        from unittest.mock import AsyncMock
+        from datetime import datetime
+        
+        # Setup mocks
+        wallet_address = mock_current_user["walletAddress"]
+        owner_address = "0x1234567890123456789012345678901234567890"
+        
+        mock_delegation_data = {
+            "id": "delegation_456",
+            "ownerAddress": owner_address.lower(),
+            "delegateAddress": wallet_address.lower(),
+            "isActive": True,
+            "createdAt": datetime.utcnow(),
+            "updatedAt": datetime.utcnow(),
+            "transactionHash": "0xabcdef",
+            "blockNumber": 12345
+        }
+        
+        mock_delegation_repo = AsyncMock(spec=DelegationRepository)
+        mock_delegation_repo.get_delegations_by_delegate.return_value = [mock_delegation_data]
+        
+        mock_user_service = AsyncMock()
+        # Mock different responses for owner and delegate
+        async def mock_get_user(address):
+            if address.lower() == owner_address.lower():
+                return {"status": "success", "user": {"username": "owneruser"}}
+            else:
+                return {"status": "success", "user": {"username": "delegateuser"}}
+        
+        mock_user_service.get_user.side_effect = mock_get_user
+        
+        # Mock the dependencies
+        app = self.setup_dependency_overrides(wallet_address=wallet_address)
+        
+        with patch('app.api.delegation_routes.get_delegation_repository', return_value=mock_delegation_repo):
+            with patch('app.api.delegation_routes.get_user_service', return_value=mock_user_service):
+                with mock_auth_bypass():
+                    with TestClient(app) as client:
+                        response = client.get("/delegation/users/delegated-to-me")
+        
+        self.cleanup_dependency_overrides()
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 1
+        assert len(data["delegations"]) == 1
+        assert data["delegateAddress"] == wallet_address
+        
+        delegation = data["delegations"][0]
+        assert delegation["ownerAddress"] == owner_address.lower()
+        assert delegation["isActive"] is True
+        assert delegation["ownerUsername"] == "owneruser"
+        assert delegation["delegateUsername"] == "delegateuser"

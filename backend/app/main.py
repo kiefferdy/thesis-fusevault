@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
     from app.database import get_db_client
     from app.repositories.api_key_repo import APIKeyRepository
     from app.repositories.user_repo import UserRepository
+    from app.repositories.delegation_repo import DelegationRepository
     from app.config import settings
     
     db_client = get_db_client()
@@ -49,6 +50,14 @@ async def lifespan(app: FastAPI):
             logging.info("API key indexes created successfully")
     except Exception as e:
         logging.error(f"Error creating API key indexes: {e}")
+    
+    try:
+        # Initialize delegation indexes
+        delegation_repo = DelegationRepository(db_client)
+        await delegation_repo.create_indexes()
+        logging.info("Delegation indexes created successfully")
+    except Exception as e:
+        logging.error(f"Error creating delegation indexes: {e}")
     
     yield
     

@@ -24,7 +24,8 @@ import {
   Home,
   CloudOff,
   VpnKey,
-  Block
+  Block,
+  SupervisorAccount
 } from '@mui/icons-material';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import WalletButton from './WalletButton';
@@ -57,6 +58,7 @@ function NavBar() {
     { text: 'Upload', icon: <CloudUpload />, path: '/upload', requiresAuth: true },
     { text: 'History', icon: <History />, path: '/history', requiresAuth: true },
     { text: 'Profile', icon: <Person />, path: '/profile', requiresAuth: true },
+    { text: 'Delegation', icon: <SupervisorAccount />, path: '/delegation', requiresAuth: true },
     { text: 'API Keys', icon: <VpnKey />, path: '/api-keys', requiresAuth: true },
   ];
 

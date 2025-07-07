@@ -302,19 +302,21 @@ class AssetService:
         ipfs_hash: str,
         critical_metadata: Dict[str, Any],
         non_critical_metadata: Optional[Dict[str, Any]] = None,
-        ipfs_version: Optional[int] = None
+        ipfs_version: Optional[int] = None,
+        performed_by: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Create a new version of an existing asset in MongoDB.
         
         Args:
             asset_id: The asset ID to create new version for
-            wallet_address: Owner's wallet address
+            wallet_address: Owner's wallet address (preserved across versions)
             smart_contract_tx_id: Transaction hash from blockchain
             ipfs_hash: CID from IPFS storage
             critical_metadata: Core metadata stored on blockchain
             non_critical_metadata: Additional metadata stored only in MongoDB
             ipfs_version: Optional specific blockchain IPFS version (if None, will be set to versionNumber)
+            performed_by: Optional wallet address of who performed this action (for delegation tracking)
             
         Returns:
             Dict containing new document ID and version number
@@ -357,7 +359,7 @@ class AssetService:
                 "assetId": asset_id,
                 "versionNumber": new_version_number,
                 "ipfsVersion": ipfs_version,
-                "walletAddress": wallet_address,
+                "walletAddress": wallet_address,  # This preserves the original owner
                 "smartContractTxId": smart_contract_tx_id,
                 "ipfsHash": ipfs_hash,
                 "lastVerified": datetime.now(timezone.utc),
@@ -369,6 +371,13 @@ class AssetService:
                 "previousVersionId": current_asset["_id"],
                 "documentHistory": [*current_asset.get("documentHistory", []), current_asset["_id"]]
             }
+            
+            # Add delegation audit trail if action was performed by someone else
+            if performed_by and performed_by.lower() != wallet_address.lower():
+                new_doc["performedBy"] = performed_by
+                new_doc["isDelegatedAction"] = True
+            else:
+                new_doc["isDelegatedAction"] = False
             
             # Insert new version
             new_doc_id = await self.asset_repository.insert_asset(new_doc)

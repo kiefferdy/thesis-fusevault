@@ -82,7 +82,7 @@ async def upload_metadata(
     
     Args:
         asset_id: The asset's unique identifier
-        wallet_address: The wallet address of the initiator (either the owner or an admin/delegate)
+        wallet_address: The wallet address of the initiator (authenticated user)
         critical_metadata: JSON string of core metadata 
         non_critical_metadata: JSON string of additional metadata
         current_user: The authenticated user data
@@ -90,17 +90,64 @@ async def upload_metadata(
     Returns:
         MetadataUploadResponse with processing results
     """
-    # Verify that the authenticated user is the one initiating the upload
+    # Get authenticated user
     authenticated_wallet = current_user.get("walletAddress")
+    
+    # Validate wallet_address parameter matches authenticated user for security
     if authenticated_wallet.lower() != wallet_address.lower():
-        logger.warning(f"Unauthorized upload attempt: {authenticated_wallet} tried to upload as {wallet_address}")
-        raise HTTPException(status_code=403, detail="You can only upload metadata for your own wallet address")
+        logger.warning(f"Security violation: {authenticated_wallet} tried to upload as {wallet_address}")
+        raise HTTPException(status_code=403, detail="Wallet address mismatch - you can only upload with your authenticated wallet")
+    
+    # Determine actual asset owner and validate authorization
+    try:
+        # Check if asset exists to determine real owner
+        existing_asset = await upload_handler.asset_service.get_asset(asset_id)
+        
+        if existing_asset:
+            # Asset exists - get real owner from existing asset
+            actual_owner_address = existing_asset.get("walletAddress")
+            
+            # Check if authenticated user is the real owner
+            if authenticated_wallet.lower() == actual_owner_address.lower():
+                # User owns the asset - authorized
+                logger.info(f"Owner {authenticated_wallet} editing their asset {asset_id}")
+            else:
+                # User doesn't own the asset - check delegation
+                is_delegated = await upload_handler.blockchain_service.check_delegation(
+                    owner_address=actual_owner_address,
+                    delegate_address=authenticated_wallet
+                )
+                
+                if not is_delegated:
+                    logger.warning(f"Access denied: {authenticated_wallet} attempted to edit asset {asset_id} owned by {actual_owner_address} without delegation")
+                    raise HTTPException(
+                        status_code=403, 
+                        detail=f"Access denied: You are not authorized to edit this asset owned by {actual_owner_address}. Owner has not delegated permission to you."
+                    )
+                
+                logger.info(f"Delegation authorized: {authenticated_wallet} editing asset {asset_id} for owner {actual_owner_address}")
+        else:
+            # Asset doesn't exist - new asset, authenticated user becomes owner
+            actual_owner_address = authenticated_wallet
+            logger.info(f"Creating new asset {asset_id} with owner {actual_owner_address}")
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (authorization failures)
+        raise
+    except Exception as e:
+        # For any other errors, deny access for security
+        logger.error(f"Error validating asset ownership for {asset_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to validate asset authorization - please try again"
+        )
         
     result = await upload_handler.handle_metadata_upload(
         asset_id=asset_id,
-        wallet_address=wallet_address,
+        wallet_address=authenticated_wallet,  # Who is doing the action
         critical_metadata=critical_metadata,
-        non_critical_metadata=non_critical_metadata
+        non_critical_metadata=non_critical_metadata,
+        owner_address=actual_owner_address  # Who owns the asset
     )
     return MetadataUploadResponse(**result)
 
@@ -196,18 +243,63 @@ async def process_metadata(
     Returns:
         MetadataUploadResponse with processing results
     """
-    # Verify that the authenticated user is the one initiating the upload
+    # Get authenticated user
     authenticated_wallet = current_user.get("walletAddress")
+    
+    # Validate wallet_address parameter matches authenticated user for security
     if authenticated_wallet.lower() != metadata_request.wallet_address.lower():
-        logger.warning(f"Unauthorized metadata processing attempt: {authenticated_wallet} tried to process as {metadata_request.wallet_address}")
-        raise HTTPException(status_code=403, detail="You can only process metadata for your own wallet address")
+        logger.warning(f"Security violation: {authenticated_wallet} tried to process as {metadata_request.wallet_address}")
+        raise HTTPException(status_code=403, detail="Wallet address mismatch - you can only process with your authenticated wallet")
+    
+    # Determine actual asset owner and validate authorization
+    try:
+        # Check if asset exists to determine real owner
+        existing_asset = await upload_handler.asset_service.get_asset(metadata_request.asset_id)
         
-    # For this endpoint, the wallet_address in the request is both the initiator and owner
-    # Extract fields from the request
+        if existing_asset:
+            # Asset exists - get real owner from existing asset
+            actual_owner_address = existing_asset.get("walletAddress")
+            
+            # Check if authenticated user is the real owner
+            if authenticated_wallet.lower() == actual_owner_address.lower():
+                # User owns the asset - authorized
+                logger.info(f"Owner {authenticated_wallet} processing their asset {metadata_request.asset_id}")
+            else:
+                # User doesn't own the asset - check delegation
+                is_delegated = await upload_handler.blockchain_service.check_delegation(
+                    owner_address=actual_owner_address,
+                    delegate_address=authenticated_wallet
+                )
+                
+                if not is_delegated:
+                    logger.warning(f"Access denied: {authenticated_wallet} attempted to process asset {metadata_request.asset_id} owned by {actual_owner_address} without delegation")
+                    raise HTTPException(
+                        status_code=403, 
+                        detail=f"Access denied: You are not authorized to edit this asset owned by {actual_owner_address}. Owner has not delegated permission to you."
+                    )
+                
+                logger.info(f"Delegation authorized: {authenticated_wallet} processing asset {metadata_request.asset_id} for owner {actual_owner_address}")
+        else:
+            # Asset doesn't exist - new asset, authenticated user becomes owner
+            actual_owner_address = authenticated_wallet
+            logger.info(f"Creating new asset {metadata_request.asset_id} with owner {actual_owner_address}")
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (authorization failures)
+        raise
+    except Exception as e:
+        # For any other errors, deny access for security
+        logger.error(f"Error validating asset ownership for {metadata_request.asset_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Unable to validate asset authorization - please try again"
+        )
+    
+    # Process metadata with correct owner/initiator distinction
     result = await upload_handler.process_metadata(
         asset_id=metadata_request.asset_id,
-        owner_address=metadata_request.wallet_address,
-        initiator_address=metadata_request.wallet_address,
+        owner_address=actual_owner_address,  # Real asset owner
+        initiator_address=authenticated_wallet,  # Who is performing the action
         critical_metadata=metadata_request.critical_metadata,
         non_critical_metadata=metadata_request.non_critical_metadata or {},
         file_info=metadata_request.file_info

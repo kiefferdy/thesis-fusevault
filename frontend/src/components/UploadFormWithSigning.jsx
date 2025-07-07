@@ -33,7 +33,7 @@ import TransactionSigner from './TransactionSigner';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 
-const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
+const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null, isDelegateMode = false, originalOwner = null }) => {
   const { currentAccount, isAuthenticated } = useAuth();
 
 
@@ -48,7 +48,7 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
   // State initialization function
   const getInitialFormData = () => ({
     assetId: existingAsset?.assetId || uuidv4(),
-    walletAddress: currentAccount,
+    walletAddress: isDelegateMode ? originalOwner : currentAccount,
     criticalMetadata: {
       name: existingAsset?.criticalMetadata?.name || '',
       description: existingAsset?.criticalMetadata?.description || '',
@@ -389,6 +389,15 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null }) => {
       <Typography variant="h5" gutterBottom>
         {existingAsset ? 'Edit Asset' : 'Create New Asset'}
       </Typography>
+
+      {isDelegateMode && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            ⚡ <strong>Delegation Mode:</strong> You are editing this asset on behalf of {originalOwner}. 
+            The original ownership will be preserved.
+          </Typography>
+        </Alert>
+      )}
 
       <form onSubmit={handleSubmit}>
         <Grid container spacing={3}>

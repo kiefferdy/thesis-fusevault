@@ -18,7 +18,8 @@ class TransferHandler:
         self, 
         asset_service: AssetService,
         blockchain_service: BlockchainService,
-        transaction_service: TransactionService = None
+        transaction_service: TransactionService = None,
+        auth_context: Optional[Dict[str, Any]] = None
     ):
         """
         Initialize with required services.
@@ -27,17 +28,20 @@ class TransferHandler:
             asset_service: Service for asset operations
             blockchain_service: Service for blockchain operations
             transaction_service: Optional service for recording transactions
+            auth_context: Authentication context for the current request
         """
         self.asset_service = asset_service
         self.blockchain_service = blockchain_service
         self.transaction_service = transaction_service
+        self.auth_context = auth_context
         
     async def initiate_transfer(
         self,
         asset_id: str,
         current_owner: str,
         new_owner: str,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
+        initiator_address: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Initiate a transfer of an asset to a new owner.
@@ -47,6 +51,7 @@ class TransferHandler:
             current_owner: The current owner's wallet address
             new_owner: The new owner's wallet address
             notes: Optional notes about the transfer
+            initiator_address: Address of the user performing the operation (for delegation context)
             
         Returns:
             Dict containing transfer initiation result
@@ -104,6 +109,8 @@ class TransferHandler:
             # 6. Record the transaction
             transaction_id = None
             if self.transaction_service:
+                performed_by = initiator_address if initiator_address and initiator_address.lower() != current_owner.lower() else current_owner
+                
                 metadata = {
                     "from": current_owner,
                     "to": new_owner,
@@ -116,6 +123,7 @@ class TransferHandler:
                     asset_id=asset_id,
                     action="TRANSFER_INITIATED",
                     wallet_address=current_owner,
+                    performed_by=performed_by,
                     metadata=metadata
                 )
                 
@@ -141,7 +149,8 @@ class TransferHandler:
         asset_id: str,
         previous_owner: str,
         new_owner: str,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
+        initiator_address: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Accept a transfer of an asset from the previous owner.
@@ -151,6 +160,7 @@ class TransferHandler:
             previous_owner: The previous owner's wallet address
             new_owner: The new owner's wallet address (the acceptor)
             notes: Optional notes about the transfer
+            initiator_address: Address of the user performing the operation (for delegation context)
             
         Returns:
             Dict containing transfer acceptance result
@@ -230,6 +240,8 @@ class TransferHandler:
             # 5. Record the transaction
             transaction_id = None
             if self.transaction_service:
+                performed_by = initiator_address if initiator_address and initiator_address.lower() != new_owner.lower() else new_owner
+                
                 metadata = {
                     "from": previous_owner,
                     "to": new_owner,
@@ -244,6 +256,7 @@ class TransferHandler:
                     asset_id=asset_id,
                     action="TRANSFER_COMPLETED",
                     wallet_address=new_owner,
+                    performed_by=performed_by,
                     metadata=metadata
                 )
                 
@@ -270,7 +283,8 @@ class TransferHandler:
         self,
         asset_id: str,
         current_owner: str,
-        notes: Optional[str] = None
+        notes: Optional[str] = None,
+        initiator_address: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Cancel a pending transfer.
@@ -279,6 +293,7 @@ class TransferHandler:
             asset_id: The asset ID to cancel transfer for
             current_owner: The current owner's wallet address
             notes: Optional notes about the cancellation
+            initiator_address: Address of the user performing the operation (for delegation context)
             
         Returns:
             Dict containing transfer cancellation result
@@ -329,6 +344,8 @@ class TransferHandler:
             # 4. Record the transaction
             transaction_id = None
             if self.transaction_service:
+                performed_by = initiator_address if initiator_address and initiator_address.lower() != current_owner.lower() else current_owner
+                
                 metadata = {
                     "from": current_owner,
                     "to": pending_to,
@@ -341,6 +358,7 @@ class TransferHandler:
                     asset_id=asset_id,
                     action="TRANSFER_CANCELLED",
                     wallet_address=current_owner,
+                    performed_by=performed_by,
                     metadata=metadata
                 )
                 

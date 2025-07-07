@@ -89,11 +89,13 @@ class TransactionService:
             # Normalize wallet address for case-insensitive matching
             normalized_address = wallet_address.lower()
             
-            # Build query with case insensitivity
+            # Build query with case insensitivity - include both owned assets and delegated actions
             query = {
                 "$or": [
                     {"walletAddress": normalized_address},
-                    {"walletAddress": {"$regex": f"^{normalized_address}$", "$options": "i"}}
+                    {"walletAddress": {"$regex": f"^{normalized_address}$", "$options": "i"}},
+                    {"performedBy": normalized_address},
+                    {"performedBy": {"$regex": f"^{normalized_address}$", "$options": "i"}}
                 ]
             }
             
@@ -146,6 +148,7 @@ class TransactionService:
         asset_id: str, 
         action: str, 
         wallet_address: str, 
+        performed_by: str,
         metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
@@ -154,7 +157,8 @@ class TransactionService:
         Args:
             asset_id: The ID of the asset involved in the transaction
             action: The type of action (CREATE, UPDATE, VERSION_CREATE, DELETE, etc.)
-            wallet_address: The wallet address that initiated the transaction
+            wallet_address: The wallet address that owns the asset
+            performed_by: Wallet address of who actually performed the action (for delegation)
             metadata: Optional additional metadata about the transaction
             
         Returns:
@@ -176,6 +180,7 @@ class TransactionService:
                 "assetId": asset_id,
                 "action": action,
                 "walletAddress": wallet_address,
+                "performedBy": performed_by,
                 "timestamp": datetime.now(timezone.utc)
             }
             
