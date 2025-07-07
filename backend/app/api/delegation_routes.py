@@ -846,6 +846,38 @@ async def get_delegated_assets_summary(
                 include_all_versions=False,
                 limit=5  # Get last 5 transactions
             )
+            
+            # Enrich transactions with asset names
+            enriched_transactions = []
+            for transaction in recent_transactions:
+                enriched_transaction = transaction.copy()
+                asset_id = transaction.get('assetId')
+                
+                if asset_id:
+                    try:
+                        # Get asset metadata to extract name
+                        asset_documents = await asset_service.get_user_assets(owner_address)
+                        asset_name = None
+                        
+                        # Find the asset with matching ID
+                        for asset_doc in asset_documents:
+                            if asset_doc.get('assetId') == asset_id:
+                                asset_name = asset_doc.get('criticalMetadata', {}).get('name') or asset_doc.get('nonCriticalMetadata', {}).get('name')
+                                break
+                        
+                        # Add asset name to transaction
+                        enriched_transaction['assetName'] = asset_name or asset_id
+                        
+                    except Exception as asset_error:
+                        logger.warning(f"Failed to get asset name for {asset_id}: {str(asset_error)}")
+                        enriched_transaction['assetName'] = asset_id
+                else:
+                    enriched_transaction['assetName'] = 'Unknown Asset'
+                
+                enriched_transactions.append(enriched_transaction)
+            
+            recent_transactions = enriched_transactions
+            
         except Exception as e:
             logger.warning(f"Failed to fetch recent transactions for {owner_address}: {str(e)}")
             recent_transactions = []
@@ -931,8 +963,22 @@ async def get_delegated_assets(
         # Get owner user info
         owner_user = await user_service.get_user(owner_address)
         owner_username = None
+        owner_name = None
+        owner_profile_image = None
+        owner_organization = None
+        owner_job_title = None
+        owner_bio = None
+        owner_location = None
+        
         if owner_user and owner_user.get("status") == "success":
-            owner_username = owner_user["user"].get("username")
+            user_data = owner_user["user"]
+            owner_username = user_data.get("username")
+            owner_name = user_data.get("name")
+            owner_profile_image = user_data.get("profileImage")
+            owner_organization = user_data.get("organization")
+            owner_job_title = user_data.get("jobTitle")
+            owner_bio = user_data.get("bio")
+            owner_location = user_data.get("location")
         
         # Get assets for the owner
         assets = await asset_service.get_user_assets(owner_address)
@@ -940,6 +986,12 @@ async def get_delegated_assets(
         return DelegatedAssetsResponse(
             owner_address=owner_address,
             owner_username=owner_username,
+            owner_name=owner_name,
+            owner_profile_image=owner_profile_image,
+            owner_organization=owner_organization,
+            owner_job_title=owner_job_title,
+            owner_bio=owner_bio,
+            owner_location=owner_location,
             assets=assets,
             total_assets=len(assets)
         )

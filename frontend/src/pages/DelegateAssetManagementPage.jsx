@@ -25,6 +25,12 @@ const DelegateAssetManagementPage = () => {
       setOwnerInfo({
         address: response.owner_address,
         username: response.owner_username,
+        name: response.owner_name,
+        profileImage: response.owner_profile_image,
+        organization: response.owner_organization,
+        jobTitle: response.owner_job_title,
+        bio: response.owner_bio,
+        location: response.owner_location,
         totalAssets: response.total_assets
       });
       
@@ -110,16 +116,63 @@ const DelegateAssetManagementPage = () => {
   return (
     <div className="delegate-asset-management">
       <div className="container">
+        <button onClick={handleBack} className="back-button">
+          ← Back to Delegation
+        </button>
         <div className="page-header">
-          <button onClick={handleBack} className="back-button">
-            ← Back to Delegation
-          </button>
-          <div className="header-info">
-            <h1>🛠️ Managing Assets</h1>
-            <div className="owner-info">
-              <h2>Owner: {ownerInfo.username || 'Unknown User'}</h2>
-              <p className="owner-address">{formatAddress(ownerInfo.address)}</p>
-              <p className="asset-count">{ownerInfo.totalAssets} assets</p>
+          <div className="header-content">
+            <div className="header-left">
+              <h1>Managing Assets</h1>
+              <div className="asset-count-container">
+                <span className="asset-count">{ownerInfo.totalAssets} assets</span>
+              </div>
+            </div>
+            <div className="header-right">
+              <div className="owner-info">
+                <div className="owner-profile">
+                  <div className="profile-picture">
+                    {ownerInfo.profileImage ? (
+                      <img 
+                        src={ownerInfo.profileImage} 
+                        alt="Owner profile" 
+                        className="profile-image"
+                      />
+                    ) : (
+                      <div className="profile-placeholder">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="profile-details">
+                    <h2>{ownerInfo.name || 'Unknown Name'}</h2>
+                    <p className="profile-username">@{ownerInfo.username || 'unknown_user'}</p>
+                    {ownerInfo.organization && (
+                      <p className="profile-org">{ownerInfo.organization}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="wallet-address-container">
+                  <span className="owner-address">{ownerInfo.address || 'Unknown Address'}</span>
+                  <button 
+                    className="copy-button"
+                    onClick={() => {
+                      if (ownerInfo.address) {
+                        navigator.clipboard.writeText(ownerInfo.address);
+                        // You could add a toast notification here
+                      }
+                    }}
+                    title="Copy wallet address"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -148,7 +201,6 @@ const DelegateAssetManagementPage = () => {
                   <div className="asset-info">
                     <div className="asset-meta">
                       <p><strong>Name:</strong> {asset.criticalMetadata?.name || 'Unnamed'}</p>
-                      <p><strong>Type:</strong> {asset.criticalMetadata?.type || 'Unknown'}</p>
                       <p><strong>Version:</strong> {asset.versionNumber || 1}</p>
                       <p><strong>Created:</strong> {formatDate(asset.createdAt)}</p>
                       <p><strong>Updated:</strong> {formatDate(asset.updatedAt)}</p>
@@ -214,7 +266,7 @@ const DelegateAssetManagementPage = () => {
                 <li>View asset details and metadata</li>
                 <li>Update asset metadata</li>
                 <li>Create new versions of assets</li>
-                <li>Delete assets (if permitted)</li>
+                <li>Delete assets</li>
               </ul>
             </div>
             <div className="info-card">

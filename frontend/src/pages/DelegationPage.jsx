@@ -576,12 +576,28 @@ const DelegationPage = () => {
                                   </span>
                                 </div>
                                 <div className="transaction-right">
-                                  <span className="transaction-asset-redesigned">
-                                    {transaction.assetId ? 
-                                      `${transaction.assetId.length > 20 ? transaction.assetId.slice(0, 20) + '...' : transaction.assetId}` 
-                                      : 'Unknown Asset'
-                                    }
-                                  </span>
+                                  <div className="transaction-asset-redesigned">
+                                    {transaction.assetName && transaction.assetName !== transaction.assetId ? (
+                                      <>
+                                        <div className="asset-name">
+                                          {transaction.assetName.length > 25 ? transaction.assetName.slice(0, 25) + '...' : transaction.assetName}
+                                        </div>
+                                        <div className="asset-id">
+                                          {transaction.assetId ? 
+                                            (transaction.assetId.length > 15 ? transaction.assetId.slice(0, 15) + '...' : transaction.assetId)
+                                            : 'Unknown ID'
+                                          }
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className="asset-id-only">
+                                        {transaction.assetId ? 
+                                          (transaction.assetId.length > 20 ? transaction.assetId.slice(0, 20) + '...' : transaction.assetId)
+                                          : 'Unknown Asset'
+                                        }
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             ))

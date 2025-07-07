@@ -130,6 +130,12 @@ class DelegateListResponse(BaseModel):
 class DelegatedAssetsResponse(BaseModel):
     owner_address: str
     owner_username: Optional[str]
+    owner_name: Optional[str] = Field(None, description="Display name of the asset owner")
+    owner_profile_image: Optional[str] = Field(None, description="Profile image URL of the asset owner")
+    owner_organization: Optional[str] = Field(None, description="Organization of the asset owner")
+    owner_job_title: Optional[str] = Field(None, description="Job title of the asset owner")
+    owner_bio: Optional[str] = Field(None, description="Bio of the asset owner")
+    owner_location: Optional[str] = Field(None, description="Location of the asset owner")
     assets: List[Dict[str, Any]]
     total_assets: int
 

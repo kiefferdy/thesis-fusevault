@@ -38,37 +38,191 @@
   transform: translateY(-1px);
 }
 
-.header-info h1 {
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.header-left {
+  flex: 1;
+}
+
+.header-left h1 {
   color: #2c3e50;
-  margin-bottom: 20px;
-  font-size: 2.5rem;
+  margin: 0;
+  font-size: 2.8rem;
   font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.header-right {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .owner-info {
   background: #f8f9fa;
-  padding: 20px;
-  border-radius: 8px;
-  border-left: 4px solid #667eea;
+  padding: 18px 22px;
+  border-radius: 10px;
+  border: 1px solid #e9ecef;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  min-width: 480px;
+}
+
+.owner-profile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.profile-picture {
+  flex-shrink: 0;
+}
+
+.profile-image {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e9ecef;
+}
+
+.profile-placeholder {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6c757d;
+  border: 2px solid #e9ecef;
+}
+
+.profile-placeholder svg {
+  width: 36px;
+  height: 36px;
+}
+
+.profile-details {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.profile-details h2 {
+  color: #2c3e50;
+  margin: 0 0 4px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.profile-username {
+  color: #6c757d;
+  font-size: 0.9rem;
+  margin: 0 0 4px 0;
+  font-weight: 500;
+}
+
+.profile-org {
+  color: #495057;
+  font-size: 0.85rem;
+  margin: 0;
+  font-weight: 500;
 }
 
 .owner-info h2 {
   color: #2c3e50;
   margin: 0 0 10px 0;
-  font-size: 1.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.wallet-address-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+  margin-bottom: 12px;
 }
 
 .owner-address {
-  color: #6c757d;
+  color: #495057;
   font-family: 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.2;
+  flex: 1;
+  white-space: nowrap;
+  overflow: visible;
+  min-width: 0;
+}
+
+.copy-button {
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  color: #6c757d;
+  opacity: 0.7;
+}
+
+.copy-button:hover {
+  background: rgba(108, 117, 125, 0.1);
+  opacity: 1;
+  color: #495057;
+}
+
+.header-left .asset-count-container {
+  margin-top: 8px;
+}
+
+.header-left .asset-count {
+  color: white;
+  font-weight: 600;
+  margin: 0;
   font-size: 14px;
-  margin: 5px 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 6px 12px;
+  border-radius: 20px;
+  display: inline-block;
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.asset-count-container {
+  display: flex;
+  justify-content: center;
 }
 
 .asset-count {
-  color: #28a745;
-  font-weight: 600;
-  margin: 5px 0 0 0;
+  color: white;
+  font-weight: 700;
+  margin: 0;
+  font-size: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 10px 16px;
+  border-radius: 25px;
+  display: inline-block;
+  box-shadow: 0 3px 8px rgba(102, 126, 234, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Loading States */
@@ -336,7 +490,54 @@
     padding: 20px;
   }
   
-  .header-info h1 {
+  .header-content {
+    flex-direction: column;
+    gap: 20px;
+    align-items: stretch;
+  }
+  
+  .header-right {
+    flex: none;
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .owner-info {
+    text-align: center;
+    max-width: 100%;
+    min-width: auto;
+  }
+  
+  .owner-profile {
+    flex-direction: column;
+    text-align: center;
+    gap: 8px;
+  }
+  
+  .profile-details h2 {
+    font-size: 1rem;
+  }
+  
+  .profile-username {
+    font-size: 0.85rem;
+  }
+  
+  .profile-org {
+    font-size: 0.8rem;
+  }
+  
+  .wallet-address-container {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  
+  .owner-address {
+    white-space: normal;
+    word-break: break-all;
+  }
+  
+  .header-left h1 {
     font-size: 2rem;
   }
   
@@ -369,12 +570,64 @@
     padding: 15px;
   }
   
-  .header-info h1 {
-    font-size: 1.5rem;
+  .header-left h1 {
+    font-size: 1.8rem;
+    text-align: center;
   }
   
   .owner-info {
-    padding: 15px;
+    padding: 16px;
+  }
+  
+  .profile-image,
+  .profile-placeholder {
+    width: 50px;
+    height: 50px;
+  }
+  
+  .profile-placeholder svg {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .profile-details h2 {
+    font-size: 0.95rem;
+  }
+  
+  .profile-username {
+    font-size: 0.8rem;
+  }
+  
+  .profile-org {
+    font-size: 0.75rem;
+  }
+  
+  .wallet-address-container {
+    padding: 8px 10px;
+  }
+  
+  .owner-address {
+    font-size: 11px;
+  }
+  
+  .header-left .asset-count {
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+  
+  .asset-count {
+    font-size: 14px;
+    padding: 8px 12px;
+  }
+  
+  .copy-button {
+    min-width: 20px;
+    height: 20px;
+  }
+  
+  .copy-button svg {
+    width: 12px;
+    height: 12px;
   }
   
   .asset-card {
