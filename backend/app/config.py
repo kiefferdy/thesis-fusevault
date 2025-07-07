@@ -49,6 +49,16 @@ class Settings(BaseSettings):
             raise ValueError("API_KEY_SECRET_KEY must be at least 32 characters long")
         return v
     
+    @validator("redis_url")
+    def validate_redis_for_api_keys(cls, v, values):
+        """Ensure Redis URL is set when API keys are enabled (required for rate limiting)"""
+        if values.get("api_key_auth_enabled") and not v:
+            raise ValueError(
+                "REDIS_URL is required when API_KEY_AUTH_ENABLED is true. "
+                "API key rate limiting requires Redis for security."
+            )
+        return v
+    
     @property
     def cors_origins_list(self) -> List[str]:
         """Parse CORS origins from comma-separated string"""

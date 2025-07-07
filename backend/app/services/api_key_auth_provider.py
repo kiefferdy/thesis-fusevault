@@ -64,21 +64,20 @@ class APIKeyAuthProvider:
             # Get key hash
             key_hash = get_api_key_hash(api_key)
             
-            # Check rate limit if Redis is available
-            if self.redis_client:
-                is_rate_limited = await self._check_rate_limit(key_hash)
-                if is_rate_limited:
-                    raise HTTPException(
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        detail="Rate limit exceeded"
-                    )
-            
-            # Validate and get API key from database
+            # Get API key data first to get wallet address for rate limiting
             api_key_data = await self.api_key_repo.validate_and_get_api_key(key_hash)
             if not api_key_data:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid or expired API key"
+                )
+            
+            # Check rate limit per wallet address (not per API key)
+            is_rate_limited = await self._check_rate_limit(api_key_data.wallet_address)
+            if is_rate_limited:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Rate limit exceeded"
                 )
                 
             # Return wallet context
@@ -99,19 +98,30 @@ class APIKeyAuthProvider:
                 detail="Authentication failed"
             )
     
-    async def _check_rate_limit(self, key_hash: str) -> bool:
+    async def _check_rate_limit(self, wallet_address: str) -> bool:
         """
-        Check if the API key has exceeded rate limit.
+        Check if the wallet has exceeded rate limit for API key usage.
+        Rate limiting is enforced per wallet address to prevent bypass via multiple API keys.
         
         Args:
-            key_hash: The hash of the API key
+            wallet_address: The wallet address to check rate limits for
             
         Returns:
             True if rate limited, False otherwise
+            
+        Raises:
+            HTTPException: If Redis is not available (fail closed for security)
         """
+        if not self.redis_client:
+            logger.error("Redis client not available for API key rate limiting")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Rate limiting service unavailable"
+            )
+        
         try:
-            # Create rate limit key
-            rate_limit_key = f"rate_limit:api_key:{key_hash}"
+            # Create rate limit key per wallet address (not per API key)
+            rate_limit_key = f"rate_limit:wallet:{wallet_address.lower()}"
             
             # Get current minute timestamp
             current_minute = int(datetime.now(timezone.utc).timestamp() / 60)
@@ -124,12 +134,27 @@ class APIKeyAuthProvider:
             if count == 1:
                 await self.redis_client.expire(minute_key, 120)  # Expire after 2 minutes
             
-            # Check if over limit
-            return count > settings.api_key_rate_limit_per_minute
+            # Log rate limiting activity
+            if count > settings.api_key_rate_limit_per_minute:
+                logger.warning(
+                    f"Rate limit exceeded for wallet {wallet_address}: "
+                    f"{count} requests in current minute (limit: {settings.api_key_rate_limit_per_minute})"
+                )
+                return True
+            else:
+                logger.debug(
+                    f"Rate limit check for wallet {wallet_address}: "
+                    f"{count}/{settings.api_key_rate_limit_per_minute} requests"
+                )
+                return False
             
-        except Exception:
-            # If Redis fails, allow the request
-            return False
+        except Exception as e:
+            # Fail closed - reject request when rate limiting fails
+            logger.error(f"Redis rate limiting failed for wallet {wallet_address}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Rate limiting service unavailable"
+            )
     
     def check_permission(self, required_permission: str, permissions: list) -> bool:
         """
