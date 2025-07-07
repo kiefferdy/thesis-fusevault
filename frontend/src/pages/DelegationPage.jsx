@@ -3,6 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import delegationService from '../services/delegationService';
 import { toast } from 'react-hot-toast';
+import { 
+  LocationOn, 
+  Twitter, 
+  LinkedIn, 
+  GitHub,
+  Security,
+  Search,
+  People,
+  Assignment,
+  Lock,
+  Speed
+} from '@mui/icons-material';
 import './DelegationPage.css';
 
 const DelegationPage = () => {
@@ -36,21 +48,27 @@ const DelegationPage = () => {
       
       setMyDelegates(delegatesResult.delegations || []);
       
-      // For delegated users, fetch asset counts
+      // For delegated users, fetch asset summaries
       const delegatedUsers = delegatorsResult.delegations || [];
       const delegatedWithAssets = await Promise.all(
         delegatedUsers.map(async (delegator) => {
           try {
-            const assetsResult = await delegationService.getDelegatedAssets(delegator.ownerAddress);
+            const summaryResult = await delegationService.getDelegatedAssetsSummary(delegator.ownerAddress);
             return {
               ...delegator,
-              assetCount: assetsResult.total_assets || 0
+              assetCount: summaryResult.total_assets || 0,
+              assetCategories: summaryResult.asset_categories || {},
+              lastActivity: summaryResult.last_activity || null,
+              totalSizeBytes: summaryResult.total_size_bytes || 0
             };
           } catch (error) {
-            console.error(`Error fetching assets for ${delegator.ownerAddress}:`, error);
+            console.error(`Error fetching asset summary for ${delegator.ownerAddress}:`, error);
             return {
               ...delegator,
-              assetCount: 0
+              assetCount: 0,
+              assetCategories: {},
+              lastActivity: null,
+              totalSizeBytes: 0
             };
           }
         })
@@ -194,6 +212,14 @@ const DelegationPage = () => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
+  const formatBytes = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="delegation-page">
@@ -209,7 +235,7 @@ const DelegationPage = () => {
     <div className="delegation-page">
       <div className="container">
         <div className="page-header">
-          <h1>🛡️ User Delegation</h1>
+          <h1>User Delegation</h1>
           <p>Manage user delegations to allow others to manage your assets on your behalf.</p>
         </div>
 
@@ -224,19 +250,19 @@ const DelegationPage = () => {
             className={`tab ${activeTab === 'search' ? 'active' : ''}`}
             onClick={() => setActiveTab('search')}
           >
-            🔍 Search Users
+            <Search className="tab-icon" /> Search Users
           </button>
           <button 
             className={`tab ${activeTab === 'delegates' ? 'active' : ''}`}
             onClick={() => setActiveTab('delegates')}
           >
-            👥 My Delegates
+            <People className="tab-icon" /> My Delegates
           </button>
           <button 
             className={`tab ${activeTab === 'delegated' ? 'active' : ''}`}
             onClick={() => setActiveTab('delegated')}
           >
-            📋 Delegated to Me
+            <Assignment className="tab-icon" /> Delegated to Me
           </button>
         </div>
 
@@ -270,10 +296,69 @@ const DelegationPage = () => {
                     {searchResults.map((user) => (
                       <div key={user.id} className="user-card">
                         <div className="user-info">
-                          <h4>{user.username}</h4>
+                          <div className="user-header">
+                            {user.profile_image && (
+                              <img 
+                                src={user.profile_image} 
+                                alt={user.name || user.username}
+                                className="user-avatar"
+                              />
+                            )}
+                            <div className="user-names">
+                              <h4>{user.name || user.username}</h4>
+                              {user.name && user.username && (
+                                <span className="user-username">@{user.username}</span>
+                              )}
+                            </div>
+                          </div>
                           <p className="user-address">{formatAddress(user.wallet_address)}</p>
-                          {user.name && <p className="user-name">{user.name}</p>}
+                          
+                          {(user.organization || user.job_title) && (
+                            <div className="user-professional">
+                              {user.job_title && user.organization ? (
+                                <span className="job-org-combined">{user.job_title}, {user.organization}</span>
+                              ) : user.job_title ? (
+                                <span className="job-title">{user.job_title}</span>
+                              ) : (
+                                <span className="organization">{user.organization}</span>
+                              )}
+                            </div>
+                          )}
+                          
+                          {user.location && (
+                            <div className="user-location">
+                              <LocationOn className="location-icon" />
+                              {user.location}
+                            </div>
+                          )}
+                          
                           {user.bio && <p className="user-bio">{user.bio}</p>}
+                          
+                          {(user.twitter || user.linkedin || user.github) && (
+                            <div className="user-social">
+                              {user.twitter && (
+                                <a href={`https://twitter.com/${user.twitter}`} target="_blank" rel="noopener noreferrer" className="social-link-small">
+                                  <Twitter className="social-icon-small" />
+                                </a>
+                              )}
+                              {user.linkedin && (
+                                <a href={user.linkedin} target="_blank" rel="noopener noreferrer" className="social-link-small">
+                                  <LinkedIn className="social-icon-small" />
+                                </a>
+                              )}
+                              {user.github && (
+                                <a href={`https://github.com/${user.github}`} target="_blank" rel="noopener noreferrer" className="social-link-small">
+                                  <GitHub className="social-icon-small" />
+                                </a>
+                              )}
+                            </div>
+                          )}
+                          
+                          {user.created_at && (
+                            <div className="user-since">
+                              Member since {new Date(user.created_at).toLocaleDateString()}
+                            </div>
+                          )}
                         </div>
                         <div className="user-actions">
                           <button 
@@ -305,9 +390,79 @@ const DelegationPage = () => {
                   {myDelegates.map((delegate) => (
                     <div key={delegate.delegateAddress} className="delegate-item">
                       <div className="delegate-info">
-                        <h4>{delegate.delegateUsername || 'Unknown User'}</h4>
-                        <p>{formatAddress(delegate.delegateAddress)}</p>
-                        <span className="delegate-status">Active</span>
+                        <div className="delegate-header">
+                          {delegate.delegateProfileImage && (
+                            <img 
+                              src={delegate.delegateProfileImage} 
+                              alt={delegate.delegateName || delegate.delegateUsername}
+                              className="delegate-avatar"
+                            />
+                          )}
+                          <div className="delegate-names">
+                            <h4>{delegate.delegateName || delegate.delegateUsername || 'Unknown User'}</h4>
+                            {delegate.delegateName && delegate.delegateUsername && (
+                              <span className="delegate-username">@{delegate.delegateUsername}</span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="delegate-address">{formatAddress(delegate.delegateAddress)}</p>
+                        
+                        {(delegate.delegateOrganization || delegate.delegateJobTitle) && (
+                          <div className="delegate-professional">
+                            {delegate.delegateJobTitle && delegate.delegateOrganization ? (
+                              <span className="job-org-combined">{delegate.delegateJobTitle}, {delegate.delegateOrganization}</span>
+                            ) : delegate.delegateJobTitle ? (
+                              <span className="job-title">{delegate.delegateJobTitle}</span>
+                            ) : (
+                              <span className="organization">{delegate.delegateOrganization}</span>
+                            )}
+                          </div>
+                        )}
+                        
+                        {delegate.delegateLocation && (
+                          <div className="delegate-location">
+                            <LocationOn className="location-icon" />
+                            {delegate.delegateLocation}
+                          </div>
+                        )}
+                        
+                        <div className="delegate-metadata">
+                          <span className="delegate-status">Active</span>
+                          <span className="delegate-date">
+                            {delegate.createdAt ? 
+                              `Delegated ${new Date(delegate.createdAt).toLocaleDateString()}` : 
+                              'Recently delegated'
+                            }
+                          </span>
+                          {delegate.delegateLastLogin && (
+                            <span className="last-activity">
+                              Last seen {new Date(delegate.delegateLastLogin).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {(delegate.delegateTwitter || delegate.delegateLinkedin || delegate.delegateGithub) && (
+                          <div className="delegate-social">
+                            {delegate.delegateTwitter && (
+                              <a href={`https://twitter.com/${delegate.delegateTwitter}`} target="_blank" rel="noopener noreferrer" className="social-link">
+                                <Twitter className="social-icon" />
+                                Twitter
+                              </a>
+                            )}
+                            {delegate.delegateLinkedin && (
+                              <a href={delegate.delegateLinkedin} target="_blank" rel="noopener noreferrer" className="social-link">
+                                <LinkedIn className="social-icon" />
+                                LinkedIn
+                              </a>
+                            )}
+                            {delegate.delegateGithub && (
+                              <a href={`https://github.com/${delegate.delegateGithub}`} target="_blank" rel="noopener noreferrer" className="social-link">
+                                <GitHub className="social-icon" />
+                                GitHub
+                              </a>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="delegate-actions">
                         <button 
@@ -338,13 +493,109 @@ const DelegationPage = () => {
                   {delegatedToMe.map((delegator) => (
                     <div key={delegator.ownerAddress} className="delegated-item">
                       <div className="delegated-info">
-                        <h4>{delegator.ownerUsername || 'Unknown User'}</h4>
-                        <p>{formatAddress(delegator.ownerAddress)}</p>
-                        <span className="asset-count">{delegator.assetCount || 0} assets</span>
+                        <div className="delegated-header">
+                          {delegator.ownerProfileImage && (
+                            <img 
+                              src={delegator.ownerProfileImage} 
+                              alt={delegator.ownerName || delegator.ownerUsername}
+                              className="delegated-avatar"
+                            />
+                          )}
+                          <div className="delegated-names">
+                            <h4>{delegator.ownerName || delegator.ownerUsername || 'Unknown User'}</h4>
+                            {delegator.ownerName && delegator.ownerUsername && (
+                              <span className="delegated-username">@{delegator.ownerUsername}</span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="delegated-address">{formatAddress(delegator.ownerAddress)}</p>
+                        
+                        {(delegator.ownerOrganization || delegator.ownerJobTitle) && (
+                          <div className="delegated-professional">
+                            {delegator.ownerJobTitle && delegator.ownerOrganization ? (
+                              <span className="job-org-combined">{delegator.ownerJobTitle}, {delegator.ownerOrganization}</span>
+                            ) : delegator.ownerJobTitle ? (
+                              <span className="job-title">{delegator.ownerJobTitle}</span>
+                            ) : (
+                              <span className="organization">{delegator.ownerOrganization}</span>
+                            )}
+                          </div>
+                        )}
+                        
+                        {delegator.ownerLocation && (
+                          <div className="delegated-location">
+                            <LocationOn className="location-icon" />
+                            {delegator.ownerLocation}
+                          </div>
+                        )}
+                        
+                        <div className="delegated-metadata">
+                          <span className="delegation-received">
+                            {delegator.createdAt ? 
+                              `Delegated ${new Date(delegator.createdAt).toLocaleDateString()}` : 
+                              'Recently received'
+                            }
+                          </span>
+                          <span className="last-activity">
+                            {delegator.lastActivity ? 
+                              `Last activity: ${new Date(delegator.lastActivity).toLocaleDateString()}` : 
+                              delegator.ownerLastLogin ? 
+                              `Last seen ${new Date(delegator.ownerLastLogin).toLocaleDateString()}` :
+                              'No recent activity'
+                            }
+                          </span>
+                        </div>
+                        
+                        <div className="asset-summary">
+                          <div className="asset-header">
+                            <span className="asset-count-enhanced">
+                              {delegator.assetCount || 0} total assets
+                            </span>
+                            {delegator.totalSizeBytes > 0 && (
+                              <span className="storage-size">
+                                {formatBytes(delegator.totalSizeBytes)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="asset-breakdown">
+                            {delegator.assetCategories && Object.keys(delegator.assetCategories).length > 0 ? (
+                              Object.entries(delegator.assetCategories).map(([type, count]) => (
+                                <span key={type} className="asset-type-badge">
+                                  {count} {type}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="asset-type-badge">Mixed content</span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        {(delegator.ownerTwitter || delegator.ownerLinkedin || delegator.ownerGithub) && (
+                          <div className="delegated-social">
+                            {delegator.ownerTwitter && (
+                              <a href={`https://twitter.com/${delegator.ownerTwitter}`} target="_blank" rel="noopener noreferrer" className="social-link">
+                                <Twitter className="social-icon" />
+                                Twitter
+                              </a>
+                            )}
+                            {delegator.ownerLinkedin && (
+                              <a href={delegator.ownerLinkedin} target="_blank" rel="noopener noreferrer" className="social-link">
+                                <LinkedIn className="social-icon" />
+                                LinkedIn
+                              </a>
+                            )}
+                            {delegator.ownerGithub && (
+                              <a href={`https://github.com/${delegator.ownerGithub}`} target="_blank" rel="noopener noreferrer" className="social-link">
+                                <GitHub className="social-icon" />
+                                GitHub
+                              </a>
+                            )}
+                          </div>
+                        )}
                       </div>
                       <div className="delegated-actions">
                         <button 
-                          className="btn btn-secondary"
+                          className="btn btn-primary"
                           onClick={() => {
                             navigate(`/delegation/manage/${delegator.ownerAddress}`);
                           }}
@@ -364,21 +615,21 @@ const DelegationPage = () => {
           <h2>About User Delegation</h2>
           <div className="info-grid">
             <div className="info-card">
-              <h3>🔒 Security</h3>
+              <h3><Lock className="info-icon" /> Security</h3>
               <p>
                 Delegation allows trusted users to manage your assets without transferring ownership. 
                 You maintain full control and can revoke delegation at any time.
               </p>
             </div>
             <div className="info-card">
-              <h3>⚡ Convenience</h3>
+              <h3><Speed className="info-icon" /> Convenience</h3>
               <p>
                 Delegates can update, delete, and manage your assets on your behalf, 
                 making collaboration and asset management more efficient.
               </p>
             </div>
             <div className="info-card">
-              <h3>🛡️ Smart Contract</h3>
+              <h3><Security className="info-icon" /> Smart Contract</h3>
               <p>
                 All delegation is managed through blockchain smart contracts, 
                 ensuring transparency and immutable delegation records.

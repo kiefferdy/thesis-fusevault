@@ -435,9 +435,37 @@ async def search_users(
         current_wallet = current_user.get("walletAddress", "").lower()
         filtered_users = [user for user in users if user.get("wallet_address", "").lower() != current_wallet]
         
+        # Enrich search results with full profile information
+        enriched_users = []
+        for user in filtered_users[:limit]:
+            # Get full user profile
+            full_user = await user_service.get_user(user.get("wallet_address"))
+            if full_user and full_user.get("status") == "success":
+                user_data = full_user["user"]
+                enriched_user = {
+                    "id": user_data.get("id"),
+                    "wallet_address": user_data.get("wallet_address"),
+                    "username": user_data.get("username"),
+                    "name": user_data.get("name"),
+                    "organization": user_data.get("organization"),
+                    "job_title": user_data.get("job_title"),
+                    "bio": user_data.get("bio"),
+                    "profile_image": user_data.get("profile_image"),
+                    "location": user_data.get("location"),
+                    "twitter": user_data.get("twitter"),
+                    "linkedin": user_data.get("linkedin"),
+                    "github": user_data.get("github"),
+                    "created_at": user_data.get("created_at"),
+                    "last_login": user_data.get("last_login")
+                }
+                enriched_users.append(enriched_user)
+            else:
+                # Fallback to basic user data if full profile not available
+                enriched_users.append(user)
+        
         return UserSearchResponse(
-            users=filtered_users[:limit],
-            total=len(filtered_users),
+            users=enriched_users,
+            total=len(enriched_users),
             query=q
         )
         
@@ -548,17 +576,35 @@ async def get_my_delegates(
         # Enrich with user information
         enriched_delegations = []
         for delegation in delegations:
-            # Get delegate user info
+            # Get delegate user info with full profile
             delegate_user = await user_service.get_user(delegation["delegateAddress"])
-            delegate_username = None
+            delegate_data = {}
             if delegate_user and delegate_user.get("status") == "success":
-                delegate_username = delegate_user["user"].get("username")
+                user_info = delegate_user["user"]
+                delegate_data = {
+                    "username": user_info.get("username"),
+                    "name": user_info.get("name"),
+                    "organization": user_info.get("organization"),
+                    "job_title": user_info.get("job_title"),
+                    "bio": user_info.get("bio"),
+                    "profile_image": user_info.get("profile_image"),
+                    "location": user_info.get("location"),
+                    "twitter": user_info.get("twitter"),
+                    "linkedin": user_info.get("linkedin"),
+                    "github": user_info.get("github"),
+                    "last_login": user_info.get("last_login"),
+                    "created_at": user_info.get("created_at")
+                }
             
             # Get owner user info (current user)
             owner_user = await user_service.get_user(wallet_address)
-            owner_username = None
+            owner_data = {}
             if owner_user and owner_user.get("status") == "success":
-                owner_username = owner_user["user"].get("username")
+                user_info = owner_user["user"]
+                owner_data = {
+                    "username": user_info.get("username"),
+                    "name": user_info.get("name")
+                }
             
             # Create enriched delegation response
             enriched_delegation = DelegationResponse(
@@ -566,8 +612,19 @@ async def get_my_delegates(
                 ownerAddress=delegation["ownerAddress"],
                 delegateAddress=delegation["delegateAddress"],
                 isActive=delegation["isActive"],
-                ownerUsername=owner_username,
-                delegateUsername=delegate_username,
+                ownerUsername=owner_data.get("username"),
+                delegateUsername=delegate_data.get("username"),
+                delegateName=delegate_data.get("name"),
+                delegateOrganization=delegate_data.get("organization"),
+                delegateJobTitle=delegate_data.get("job_title"),
+                delegateBio=delegate_data.get("bio"),
+                delegateProfileImage=delegate_data.get("profile_image"),
+                delegateLocation=delegate_data.get("location"),
+                delegateTwitter=delegate_data.get("twitter"),
+                delegateLinkedin=delegate_data.get("linkedin"),
+                delegateGithub=delegate_data.get("github"),
+                delegateLastLogin=delegate_data.get("last_login"),
+                delegateCreatedAt=delegate_data.get("created_at"),
                 createdAt=delegation["createdAt"],
                 updatedAt=delegation["updatedAt"],
                 transactionHash=delegation.get("transactionHash"),
@@ -608,17 +665,35 @@ async def get_delegated_to_me(
         # Enrich with user information
         enriched_delegations = []
         for delegation in delegations:
-            # Get owner user info
+            # Get owner user info with full profile
             owner_user = await user_service.get_user(delegation["ownerAddress"])
-            owner_username = None
+            owner_data = {}
             if owner_user and owner_user.get("status") == "success":
-                owner_username = owner_user["user"].get("username")
+                user_info = owner_user["user"]
+                owner_data = {
+                    "username": user_info.get("username"),
+                    "name": user_info.get("name"),
+                    "organization": user_info.get("organization"),
+                    "job_title": user_info.get("job_title"),
+                    "bio": user_info.get("bio"),
+                    "profile_image": user_info.get("profile_image"),
+                    "location": user_info.get("location"),
+                    "twitter": user_info.get("twitter"),
+                    "linkedin": user_info.get("linkedin"),
+                    "github": user_info.get("github"),
+                    "last_login": user_info.get("last_login"),
+                    "created_at": user_info.get("created_at")
+                }
             
             # Get delegate user info (current user)
             delegate_user = await user_service.get_user(wallet_address)
-            delegate_username = None
+            delegate_data = {}
             if delegate_user and delegate_user.get("status") == "success":
-                delegate_username = delegate_user["user"].get("username")
+                user_info = delegate_user["user"]
+                delegate_data = {
+                    "username": user_info.get("username"),
+                    "name": user_info.get("name")
+                }
             
             # Create enriched delegation response
             enriched_delegation = DelegationResponse(
@@ -626,8 +701,19 @@ async def get_delegated_to_me(
                 ownerAddress=delegation["ownerAddress"],
                 delegateAddress=delegation["delegateAddress"],
                 isActive=delegation["isActive"],
-                ownerUsername=owner_username,
-                delegateUsername=delegate_username,
+                ownerUsername=owner_data.get("username"),
+                ownerName=owner_data.get("name"),
+                ownerOrganization=owner_data.get("organization"),
+                ownerJobTitle=owner_data.get("job_title"),
+                ownerBio=owner_data.get("bio"),
+                ownerProfileImage=owner_data.get("profile_image"),
+                ownerLocation=owner_data.get("location"),
+                ownerTwitter=owner_data.get("twitter"),
+                ownerLinkedin=owner_data.get("linkedin"),
+                ownerGithub=owner_data.get("github"),
+                ownerLastLogin=owner_data.get("last_login"),
+                ownerCreatedAt=owner_data.get("created_at"),
+                delegateUsername=delegate_data.get("username"),
                 createdAt=delegation["createdAt"],
                 updatedAt=delegation["updatedAt"],
                 transactionHash=delegation.get("transactionHash"),
@@ -709,6 +795,104 @@ async def revoke_user_delegation(
             status_code=500,
             detail=f"Failed to prepare revoke delegation transaction: {str(e)}"
         )
+
+
+@router.get("/users/{owner_address}/assets/summary")
+async def get_delegated_assets_summary(
+    owner_address: str,
+    wallet_address: str = Depends(get_wallet_address),
+    blockchain_service: BlockchainService = Depends(get_blockchain_service),
+    asset_service: AssetService = Depends(get_asset_service)
+):
+    """
+    Get asset summary for a user who has delegated to me.
+    Returns quick statistics and breakdown for better UX.
+    
+    Args:
+        owner_address: The address of the user who delegated to me
+        
+    Returns:
+        Asset summary with counts and categories
+    """
+    try:
+        # SECURITY: Always check blockchain state (source of truth)
+        is_delegated = await blockchain_service.check_delegation(
+            owner_address=owner_address,
+            delegate_address=wallet_address
+        )
+        
+        if not is_delegated:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: delegation not found on blockchain"
+            )
+        
+        # Get assets for the owner
+        assets = await asset_service.get_user_assets(owner_address)
+        
+        # Categorize assets
+        asset_categories = {}
+        recent_assets = []
+        total_size = 0
+        
+        for asset in assets:
+            # Get category from content type or file extension
+            content_type = asset.get("contentType", "unknown")
+            category = categorize_content_type(content_type)
+            asset_categories[category] = asset_categories.get(category, 0) + 1
+            
+            # Track recent assets (last 5)
+            if len(recent_assets) < 5:
+                recent_assets.append({
+                    "name": asset.get("name", "Untitled"),
+                    "created_at": asset.get("createdAt"),
+                    "content_type": content_type
+                })
+            
+            # Calculate total size if available
+            if asset.get("size"):
+                total_size += asset.get("size", 0)
+        
+        return {
+            "owner_address": owner_address,
+            "total_assets": len(assets),
+            "asset_categories": asset_categories,
+            "recent_assets": recent_assets,
+            "total_size_bytes": total_size,
+            "last_activity": assets[0].get("createdAt") if assets else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting delegated assets summary: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get delegated assets summary: {str(e)}"
+        )
+
+
+def categorize_content_type(content_type: str) -> str:
+    """Categorize content type into broad categories for UI display."""
+    if not content_type:
+        return "unknown"
+    
+    content_type_lower = content_type.lower()
+    
+    if content_type_lower.startswith("image/"):
+        return "images"
+    elif content_type_lower.startswith("video/"):
+        return "videos"
+    elif content_type_lower.startswith("audio/"):
+        return "audio"
+    elif content_type_lower in ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]:
+        return "documents"
+    elif content_type_lower.startswith("text/"):
+        return "text"
+    elif content_type_lower.startswith("application/"):
+        return "applications"
+    else:
+        return "other"
 
 
 @router.get("/users/{owner_address}/assets", response_model=DelegatedAssetsResponse)

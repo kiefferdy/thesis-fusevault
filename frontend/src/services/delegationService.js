@@ -237,20 +237,20 @@ const delegationService = {
   },
 
   /**
-   * Check if delegation exists between two addresses
-   * @param {string} ownerAddress - The owner's wallet address
-   * @param {string} delegateAddress - The delegate's wallet address
-   * @returns {Promise<Object>} Delegation status
+   * Get asset summary of a user who has delegated to me
+   * @param {string} ownerAddress - Address of the user who delegated to me
+   * @returns {Promise<Object>} Delegated assets summary
    */
-  checkSpecificDelegation: async (ownerAddress, delegateAddress) => {
+  getDelegatedAssetsSummary: async (ownerAddress) => {
     try {
-      const response = await apiClient.get(`${DELEGATION_BASE_URL}/check/${ownerAddress}/${delegateAddress}`);
+      const response = await apiClient.get(`${DELEGATION_BASE_URL}/users/${ownerAddress}/assets/summary`);
       return response.data;
     } catch (error) {
-      console.error('Error checking specific delegation:', error);
+      console.error('Error getting delegated assets summary:', error);
       throw error;
     }
   },
+
 
   /**
    * Confirm delegation with backend after successful MetaMask transaction

@@ -31,6 +31,33 @@ class DelegationResponse(BaseModel):
     is_active: bool = Field(True, description="Whether the delegation is currently active", alias="isActive")
     owner_username: Optional[str] = Field(None, description="Username of the asset owner", alias="ownerUsername")
     delegate_username: Optional[str] = Field(None, description="Username of the delegate", alias="delegateUsername")
+    
+    # Enhanced owner profile fields
+    owner_name: Optional[str] = Field(None, description="Display name of the asset owner", alias="ownerName")
+    owner_organization: Optional[str] = Field(None, description="Organization of the asset owner", alias="ownerOrganization")
+    owner_job_title: Optional[str] = Field(None, description="Job title of the asset owner", alias="ownerJobTitle")
+    owner_bio: Optional[str] = Field(None, description="Bio of the asset owner", alias="ownerBio")
+    owner_profile_image: Optional[str] = Field(None, description="Profile image URL of the asset owner", alias="ownerProfileImage")
+    owner_location: Optional[str] = Field(None, description="Location of the asset owner", alias="ownerLocation")
+    owner_twitter: Optional[str] = Field(None, description="Twitter handle of the asset owner", alias="ownerTwitter")
+    owner_linkedin: Optional[str] = Field(None, description="LinkedIn profile of the asset owner", alias="ownerLinkedin")
+    owner_github: Optional[str] = Field(None, description="GitHub profile of the asset owner", alias="ownerGithub")
+    owner_last_login: Optional[str] = Field(None, description="Last login of the asset owner", alias="ownerLastLogin")
+    owner_created_at: Optional[str] = Field(None, description="Account creation date of the asset owner", alias="ownerCreatedAt")
+    
+    # Enhanced delegate profile fields
+    delegate_name: Optional[str] = Field(None, description="Display name of the delegate", alias="delegateName")
+    delegate_organization: Optional[str] = Field(None, description="Organization of the delegate", alias="delegateOrganization")
+    delegate_job_title: Optional[str] = Field(None, description="Job title of the delegate", alias="delegateJobTitle")
+    delegate_bio: Optional[str] = Field(None, description="Bio of the delegate", alias="delegateBio")
+    delegate_profile_image: Optional[str] = Field(None, description="Profile image URL of the delegate", alias="delegateProfileImage")
+    delegate_location: Optional[str] = Field(None, description="Location of the delegate", alias="delegateLocation")
+    delegate_twitter: Optional[str] = Field(None, description="Twitter handle of the delegate", alias="delegateTwitter")
+    delegate_linkedin: Optional[str] = Field(None, description="LinkedIn profile of the delegate", alias="delegateLinkedin")
+    delegate_github: Optional[str] = Field(None, description="GitHub profile of the delegate", alias="delegateGithub")
+    delegate_last_login: Optional[str] = Field(None, description="Last login of the delegate", alias="delegateLastLogin")
+    delegate_created_at: Optional[str] = Field(None, description="Account creation date of the delegate", alias="delegateCreatedAt")
+    
     created_at: datetime = Field(..., description="When the delegation was first created", alias="createdAt")
     updated_at: datetime = Field(..., description="When the delegation was last updated", alias="updatedAt")
     transaction_hash: Optional[str] = Field(None, description="Blockchain transaction hash", alias="transactionHash")
