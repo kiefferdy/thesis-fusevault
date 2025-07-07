@@ -16,7 +16,7 @@ from app.services.transaction_state_service import TransactionStateService
 from app.repositories.asset_repo import AssetRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.database import get_db_client
-from app.utilities.auth_middleware import get_current_user, get_wallet_address
+from app.utilities.auth_middleware import get_current_user, get_wallet_address, check_permission
 from pydantic import BaseModel, Field
 
 # Setup router
@@ -74,11 +74,12 @@ async def upload_metadata(
     critical_metadata: str = Form(...),
     non_critical_metadata: Optional[str] = Form(None),
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    write_permission = Depends(check_permission("write"))
 ) -> MetadataUploadResponse:
     """
     Upload metadata directly.
-    User must be authenticated to use this endpoint.
+    User must be authenticated with 'write' permission to use this endpoint.
     
     Args:
         asset_id: The asset's unique identifier
@@ -156,11 +157,12 @@ async def upload_json_files(
     wallet_address: str = Form(...),
     files: List[UploadFile] = File(...),
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    write_permission = Depends(check_permission("write"))
 ) -> JsonUploadResponse:
     """
     Upload JSON files.
-    User must be authenticated to use this endpoint.
+    User must be authenticated with 'write' permission to use this endpoint.
     
     Args:
         wallet_address: The wallet address of the initiator (either the owner or an admin/delegate)
@@ -192,11 +194,12 @@ async def upload_csv_files(
     critical_metadata_fields: str = Form(...),
     files: List[UploadFile] = File(...),
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    write_permission = Depends(check_permission("write"))
 ) -> CsvUploadResponse:
     """
     Upload CSV files.
-    User must be authenticated to use this endpoint.
+    User must be authenticated with 'write' permission to use this endpoint.
     
     Args:
         wallet_address: The wallet address of the initiator (either the owner or an admin/delegate)
@@ -230,11 +233,12 @@ async def upload_csv_files(
 async def process_metadata(
     metadata_request: MetadataUploadRequest = Body(...),
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    write_permission = Depends(check_permission("write"))
 ) -> MetadataUploadResponse:
     """
     Process metadata for an asset.
-    User must be authenticated to use this endpoint.
+    User must be authenticated with 'write' permission to use this endpoint.
     
     Args:
         metadata_request: Request containing metadata to process
@@ -511,7 +515,8 @@ async def cancel_pending_transaction(
 async def prepare_batch_upload(
     request: BatchUploadRequest,
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    write_permission = Depends(check_permission("write"))
 ) -> BatchUploadResponse:
     """
     Prepare a batch upload requiring blockchain signature.
@@ -605,7 +610,8 @@ async def upload_json_files_batch(
     wallet_address: str = Form(...),
     files: List[UploadFile] = File(...),
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    write_permission = Depends(check_permission("write"))
 ) -> BatchUploadResponse:
     """
     Upload JSON files using the new batch flow with single MetaMask signature.

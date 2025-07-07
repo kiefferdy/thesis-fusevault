@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from typing import Optional
+from typing import Optional, Dict, Any
 import logging
 
 from app.handlers.retrieve_handler import RetrieveHandler
@@ -11,6 +11,7 @@ from app.services.transaction_service import TransactionService
 from app.repositories.asset_repo import AssetRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.database import get_db_client
+from app.utilities.auth_middleware import get_current_user, check_permission
 
 # Setup router
 router = APIRouter(
@@ -43,10 +44,13 @@ async def retrieve_metadata(
     asset_id: str,
     version: Optional[int] = Query(None, description="Specific version to retrieve"),
     auto_recover: bool = Query(True, description="Whether to automatically recover from tampering"),
-    retrieve_handler: RetrieveHandler = Depends(get_retrieve_handler)
+    retrieve_handler: RetrieveHandler = Depends(get_retrieve_handler),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    read_permission = Depends(check_permission("read"))
 ) -> MetadataRetrieveResponse:
     """
     Retrieve metadata for an asset and verify its integrity.
+    User must be authenticated with 'read' permission to use this endpoint.
     
     If tampering is detected (CID mismatch) and auto_recover is True, authentic data is retrieved from IPFS
     and a new version is created with the recovered data. This only applies to the latest version.
@@ -55,6 +59,8 @@ async def retrieve_metadata(
         asset_id: The asset ID to retrieve metadata for
         version: Optional specific version to retrieve (defaults to current version)
         auto_recover: Whether to automatically recover from tampering (defaults to True)
+        current_user: The authenticated user data
+        read_permission: Validates user has 'read' permission
         
     Returns:
         MetadataRetrieveResponse containing the verified metadata
