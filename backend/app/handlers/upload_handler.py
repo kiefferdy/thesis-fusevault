@@ -1037,7 +1037,95 @@ class UploadHandler:
                         update_progress(asset_data["asset_id"], 0, "error")
             else:
                 # For API key users, complete the full process immediately
-                logger.info(f"API key batch upload completed for batch {batch_id}")
+                try:
+                    # Extract data for blockchain transaction
+                    asset_ids = [r["asset_id"] for r in ipfs_results]
+                    cids = [r["cid"] for r in ipfs_results]
+                    owner_addresses = [r["owner_address"] for r in ipfs_results]
+                    
+                    # Execute blockchain transaction
+                    blockchain_result = await self.blockchain_service.execute_batch_transaction(
+                        asset_ids=asset_ids,
+                        cids=cids,
+                        owner_addresses=owner_addresses
+                    )
+                    
+                    blockchain_tx_hash = blockchain_result.get("tx_hash")
+                    if not blockchain_tx_hash:
+                        raise Exception("Blockchain transaction failed - no transaction hash returned")
+                    
+                    logger.info(f"Blockchain transaction completed for batch {batch_id}: {blockchain_tx_hash}")
+                    
+                    # Create assets in database and update progress
+                    for ipfs_result in ipfs_results:
+                        asset_id = ipfs_result["asset_id"]
+                        cid = ipfs_result["cid"]
+                        owner_address = ipfs_result["owner_address"]
+                        critical_metadata = ipfs_result["critical_metadata"]
+                        non_critical_metadata = ipfs_result["non_critical_metadata"]
+                        
+                        try:
+                            # Create asset document
+                            doc_id = await self.asset_service.create_asset(
+                                asset_id=asset_id,
+                                wallet_address=owner_address,
+                                smart_contract_tx_id=blockchain_tx_hash,
+                                ipfs_hash=cid,
+                                critical_metadata=critical_metadata,
+                                non_critical_metadata=non_critical_metadata,
+                                ipfs_version=1
+                            )
+                            
+                            # Record transaction for audit trail
+                            if self.transaction_service:
+                                await self.transaction_service.record_transaction(
+                                    asset_id=asset_id,
+                                    action="CREATE",
+                                    wallet_address=owner_address,
+                                    performed_by=initiator_address,
+                                    metadata={
+                                        "ipfsHash": cid,
+                                        "smartContractTxId": blockchain_tx_hash,
+                                        "ipfsVersion": 1,
+                                        "ownerAddress": owner_address,
+                                        "batchId": batch_id
+                                    }
+                                )
+                            
+                            # Update progress tracker with actual IPFS CID
+                            progress_tracker.update_asset_progress(
+                                batch_id=batch_id,
+                                asset_id=asset_id,
+                                progress=100,
+                                status="completed",
+                                ipfs_cid=cid
+                            )
+                            
+                            logger.info(f"Asset {asset_id} created successfully in batch {batch_id}")
+                            
+                        except Exception as asset_error:
+                            logger.error(f"Failed to create asset {asset_id} in batch {batch_id}: {str(asset_error)}")
+                            progress_tracker.update_asset_progress(
+                                batch_id=batch_id,
+                                asset_id=asset_id,
+                                progress=0,
+                                status="error",
+                                error=str(asset_error)
+                            )
+                    
+                    logger.info(f"API key batch upload completed successfully for batch {batch_id}")
+                    
+                except Exception as batch_error:
+                    logger.error(f"API key batch upload failed for batch {batch_id}: {str(batch_error)}")
+                    # Mark all assets as error
+                    for ipfs_result in ipfs_results:
+                        progress_tracker.update_asset_progress(
+                            batch_id=batch_id,
+                            asset_id=ipfs_result["asset_id"],
+                            progress=0,
+                            status="error",
+                            error=str(batch_error)
+                        )
                 
         except Exception as e:
             logger.error(f"Background processing failed for batch {batch_id}: {str(e)}")

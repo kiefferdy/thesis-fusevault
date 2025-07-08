@@ -17,7 +17,7 @@ from app.repositories.transaction_repo import TransactionRepository
 from app.repositories.auth_repo import AuthRepository
 from app.services.wallet_auth_provider import WalletAuthProvider
 from app.database import get_db_client
-from app.utilities.auth_middleware import get_current_user, get_wallet_address
+from app.utilities.auth_middleware import get_current_user, get_wallet_only_user
 
 # Setup router
 router = APIRouter(
@@ -47,7 +47,7 @@ def get_transfer_handler(db_client=Depends(get_db_client)) -> TransferHandler:
 async def initiate_transfer(
     transfer_request: TransferInitiateRequest = Body(...),
     transfer_handler: TransferHandler = Depends(get_transfer_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> TransferInitiateResponse:
     """
     Initiate a transfer of an asset to a new owner.
@@ -82,7 +82,7 @@ async def initiate_transfer(
 async def accept_transfer(
     transfer_request: TransferAcceptRequest = Body(...),
     transfer_handler: TransferHandler = Depends(get_transfer_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> TransferAcceptResponse:
     """
     Accept a transfer of an asset from a previous owner.
@@ -117,7 +117,7 @@ async def accept_transfer(
 async def cancel_transfer(
     transfer_request: TransferCancelRequest = Body(...),
     transfer_handler: TransferHandler = Depends(get_transfer_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> TransferCancelResponse:
     """
     Cancel a pending transfer.
@@ -151,16 +151,18 @@ async def cancel_transfer(
 async def get_pending_transfers(
     wallet_address: str,
     request: Request,
-    transfer_handler: TransferHandler = Depends(get_transfer_handler)
+    transfer_handler: TransferHandler = Depends(get_transfer_handler),
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> PendingTransfersResponse:
     """
     Get all pending transfers for a wallet address.
-    This is a read operation.
+    Only available for wallet-authenticated users.
     
     Args:
         wallet_address: The wallet address to get pending transfers for
         request: The request object
         transfer_handler: The transfer handler
+        current_user: User data from wallet authentication
         
     Returns:
         PendingTransfersResponse containing lists of pending transfers

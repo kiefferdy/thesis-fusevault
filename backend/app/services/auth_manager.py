@@ -35,12 +35,19 @@ class AuthManager:
         
         # Setup API key provider if enabled
         redis_client = None
-        if settings.api_key_auth_enabled and settings.redis_url:
+        if settings.api_key_auth_enabled:
+            # Redis is mandatory for API keys (enforced by config validation)
             try:
                 import redis.asyncio as redis
                 redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+                logger.info("Redis client initialized for API key rate limiting")
             except Exception as e:
-                logger.warning(f"Failed to initialize Redis client: {e}")
+                logger.error(f"Failed to initialize Redis client for API key rate limiting: {e}")
+                # This is a critical error since Redis is mandatory for API keys
+                raise RuntimeError(
+                    f"Redis initialization failed for API key authentication: {e}. "
+                    "API keys require Redis for rate limiting."
+                )
                 
         self.api_key_provider = APIKeyAuthProvider(api_key_repo, redis_client)
         

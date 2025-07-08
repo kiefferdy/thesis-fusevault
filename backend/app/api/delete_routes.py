@@ -15,7 +15,7 @@ from app.services.transaction_state_service import TransactionStateService
 from app.repositories.asset_repo import AssetRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.database import get_db_client
-from app.utilities.auth_middleware import get_current_user, get_wallet_address
+from app.utilities.auth_middleware import get_current_user, get_wallet_address, check_permission, get_wallet_only_user
 from pydantic import BaseModel
 
 # Setup router
@@ -59,11 +59,12 @@ def get_delete_handler(db_client=Depends(get_db_client), request: Request = None
 async def delete_asset(
     delete_request: DeleteRequest = Body(...),
     delete_handler: DeleteHandler = Depends(get_delete_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    delete_permission = Depends(check_permission("delete"))
 ) -> DeleteResponse:
     """
     Delete an asset.
-    User must be authenticated to use this endpoint.
+    User must be authenticated with 'delete' permission to use this endpoint.
     
     Performs a soft delete, marking the asset as deleted without removing it from the database.
     Only the asset owner can delete their assets.
@@ -96,11 +97,12 @@ async def delete_asset(
 async def batch_delete_assets(
     batch_request: BatchDeleteRequest = Body(...),
     delete_handler: DeleteHandler = Depends(get_delete_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    delete_permission = Depends(check_permission("delete"))
 ) -> BatchDeleteResponse:
     """
     Delete multiple assets in a batch operation.
-    User must be authenticated to use this endpoint.
+    User must be authenticated with 'delete' permission to use this endpoint.
     
     Performs soft deletes, marking assets as deleted without removing them from the database.
     Only the asset owner can delete their assets.
@@ -133,16 +135,16 @@ async def batch_delete_assets(
 async def prepare_batch_delete(
     request: BatchDeletePrepareRequest,
     delete_handler: DeleteHandler = Depends(get_delete_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> BatchDeleteResponse:
     """
     Prepare a batch delete operation requiring blockchain signature.
+    Only available for wallet-authenticated users.
     
     This endpoint:
     1. Validates all assets in the batch
     2. Checks ownership and delegation permissions  
-    3. Returns transaction data for MetaMask signing (wallet users)
-    4. OR executes deletion directly (API key users)
+    3. Returns transaction data for MetaMask signing
     """
     # Verify that the authenticated user is the one initiating the deletion
     authenticated_wallet = current_user.get("walletAddress")
@@ -173,7 +175,7 @@ async def prepare_batch_delete(
 async def complete_batch_delete(
     request: BatchDeleteCompletionRequest,
     delete_handler: DeleteHandler = Depends(get_delete_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> BatchDeleteResponse:
     """
     Complete batch delete operation after blockchain transaction is confirmed.
@@ -219,11 +221,12 @@ async def delete_asset_by_path(
     wallet_address: str,
     reason: Optional[str] = None,
     delete_handler: DeleteHandler = Depends(get_delete_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    delete_permission = Depends(check_permission("delete"))
 ) -> DeleteResponse:
     """
     Delete an asset using path parameters.
-    User must be authenticated to use this endpoint.
+    User must be authenticated with 'delete' permission to use this endpoint.
     
     Alternative endpoint that uses path parameters instead of request body.
     Performs a soft delete, marking the asset as deleted without removing it from the database.
@@ -258,7 +261,7 @@ async def delete_asset_by_path(
 async def complete_delete(
     completion_request: DeleteCompletionRequest,
     delete_handler: DeleteHandler = Depends(get_delete_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> DeleteResponse:
     """
     Complete delete operation after blockchain transaction is confirmed.

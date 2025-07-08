@@ -16,7 +16,7 @@ from app.services.transaction_state_service import TransactionStateService
 from app.repositories.asset_repo import AssetRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.database import get_db_client
-from app.utilities.auth_middleware import get_current_user, get_wallet_address
+from app.utilities.auth_middleware import get_current_user, get_wallet_address, check_permission, get_wallet_only_user
 from pydantic import BaseModel, Field
 
 # Setup router
@@ -74,11 +74,12 @@ async def upload_metadata(
     critical_metadata: str = Form(...),
     non_critical_metadata: Optional[str] = Form(None),
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    write_permission = Depends(check_permission("write"))
 ) -> MetadataUploadResponse:
     """
     Upload metadata directly.
-    User must be authenticated to use this endpoint.
+    User must be authenticated with 'write' permission to use this endpoint.
     
     Args:
         asset_id: The asset's unique identifier
@@ -156,11 +157,12 @@ async def upload_json_files(
     wallet_address: str = Form(...),
     files: List[UploadFile] = File(...),
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    write_permission = Depends(check_permission("write"))
 ) -> JsonUploadResponse:
     """
     Upload JSON files.
-    User must be authenticated to use this endpoint.
+    User must be authenticated with 'write' permission to use this endpoint.
     
     Args:
         wallet_address: The wallet address of the initiator (either the owner or an admin/delegate)
@@ -192,11 +194,12 @@ async def upload_csv_files(
     critical_metadata_fields: str = Form(...),
     files: List[UploadFile] = File(...),
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    write_permission = Depends(check_permission("write"))
 ) -> CsvUploadResponse:
     """
     Upload CSV files.
-    User must be authenticated to use this endpoint.
+    User must be authenticated with 'write' permission to use this endpoint.
     
     Args:
         wallet_address: The wallet address of the initiator (either the owner or an admin/delegate)
@@ -230,11 +233,12 @@ async def upload_csv_files(
 async def process_metadata(
     metadata_request: MetadataUploadRequest = Body(...),
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    write_permission = Depends(check_permission("write"))
 ) -> MetadataUploadResponse:
     """
     Process metadata for an asset.
-    User must be authenticated to use this endpoint.
+    User must be authenticated with 'write' permission to use this endpoint.
     
     Args:
         metadata_request: Request containing metadata to process
@@ -310,7 +314,7 @@ async def process_metadata(
 async def complete_upload(
     request: Request,
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> MetadataUploadResponse:
     """
     Complete upload after blockchain transaction is confirmed.
@@ -387,7 +391,7 @@ async def complete_upload(
 @router.get("/pending/{pending_tx_id}", response_model=PendingTransactionResponse)
 async def get_pending_transaction(
     pending_tx_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> PendingTransactionResponse:
     """
     Get details of a pending transaction.
@@ -431,7 +435,7 @@ async def get_pending_transaction(
 
 @router.get("/pending", response_model=List[PendingTransactionResponse])
 async def list_pending_transactions(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> List[PendingTransactionResponse]:
     """
     List all pending transactions for the authenticated user.
@@ -467,7 +471,7 @@ async def list_pending_transactions(
 @router.delete("/pending/{pending_tx_id}")
 async def cancel_pending_transaction(
     pending_tx_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> Dict[str, str]:
     """
     Cancel a pending transaction.
@@ -511,10 +515,11 @@ async def cancel_pending_transaction(
 async def prepare_batch_upload(
     request: BatchUploadRequest,
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> BatchUploadResponse:
     """
     Prepare a batch upload requiring blockchain signature.
+    Only available for wallet-authenticated users.
     
     This endpoint:
     1. Validates all assets in the batch
@@ -559,7 +564,7 @@ async def prepare_batch_upload(
 async def complete_batch_upload(
     request: BatchCompletionRequest,
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
 ) -> BatchUploadResponse:
     """
     Complete batch upload after blockchain confirmation.
@@ -605,7 +610,8 @@ async def upload_json_files_batch(
     wallet_address: str = Form(...),
     files: List[UploadFile] = File(...),
     upload_handler: UploadHandler = Depends(get_upload_handler),
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    write_permission = Depends(check_permission("write"))
 ) -> BatchUploadResponse:
     """
     Upload JSON files using the new batch flow with single MetaMask signature.
@@ -684,14 +690,17 @@ async def upload_json_files_batch(
 @router.get("/batch/{batch_id}/progress")
 async def get_batch_progress(
     batch_id: str,
-    wallet_address: str = Depends(get_wallet_address)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    read_permission = Depends(check_permission("read"))
 ):
     """
     Get real-time progress for a batch upload.
+    Available for both wallet and API key authenticated users with read permission.
     
     Args:
         batch_id: Unique identifier for the batch upload
-        wallet_address: Wallet address from authentication
+        current_user: The authenticated user data
+        read_permission: Validates user has 'read' permission
         
     Returns:
         Dict containing batch progress information
