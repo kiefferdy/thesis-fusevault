@@ -27,7 +27,7 @@ from app.schemas.delegation_schema import (
     DelegationSyncRequest,
     DelegationSyncResponse
 )
-from app.utilities.auth_middleware import get_current_user, get_wallet_address
+from app.utilities.auth_middleware import get_current_user, get_wallet_address, get_wallet_only_user
 from app.database import get_db_client
 from app.config import settings
 
@@ -193,7 +193,7 @@ async def check_specific_delegation(
     owner_address: str,
     delegate_address: str,
     blockchain_service: BlockchainService = Depends(get_blockchain_service),
-    _: Dict[str, Any] = Depends(get_current_user)
+    _: Dict[str, Any] = Depends(get_wallet_only_user)
 ):
     """
     Check if a specific delegation exists between two addresses.
@@ -422,7 +422,7 @@ async def sync_delegation_from_blockchain(
 async def search_users(
     q: str = Query(..., description="Search query (wallet address or username)"),
     limit: int = Query(10, description="Maximum number of results"),
-    current_user: Dict[str, Any] = Depends(get_current_user),
+    current_user: Dict[str, Any] = Depends(get_wallet_only_user),
     user_service: UserService = Depends(get_user_service)
 ):
     """
@@ -1074,7 +1074,7 @@ async def get_delegated_user_transactions(
 @router.get("/admin/system-status")
 async def get_system_status(
     blockchain_service: BlockchainService = Depends(get_blockchain_service),
-    _: Dict[str, Any] = Depends(get_current_user)
+    _: Dict[str, Any] = Depends(get_wallet_only_user)
 ):
     """
     Get basic system status. Database inconsistencies don't matter since 

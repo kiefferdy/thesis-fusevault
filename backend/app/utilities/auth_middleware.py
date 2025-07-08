@@ -283,3 +283,44 @@ def check_permission(permission: str):
         )
 
     return permission_checker
+
+
+async def get_wallet_only_user(request: Request) -> Dict[str, Any]:
+    """
+    Get the current authenticated user, but only allow wallet authentication.
+    Use this as a dependency in route handlers that require wallet authentication
+    and should not be accessible via API keys.
+
+    Args:
+        request: The request object
+
+    Returns:
+        User data from session
+
+    Raises:
+        HTTPException: If user is not authenticated or using API key authentication
+    """
+    if not hasattr(request.state, "auth_context") or not request.state.auth_context:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
+
+    auth_method = request.state.auth_context.get("auth_method")
+    
+    # Reject API key authentication
+    if auth_method == "api_key":
+        raise HTTPException(
+            status_code=403,
+            detail="Wallet authentication required. This endpoint is not accessible via API keys."
+        )
+
+    # For wallet authentication, return user data
+    if hasattr(request.state, "user") and request.state.user:
+        return request.state.user
+    
+    # If no full user data but wallet authenticated, return minimal user object
+    return {
+        "walletAddress": request.state.auth_context.get("wallet_address"),
+        "auth_method": auth_method
+    }
