@@ -690,15 +690,17 @@ async def upload_json_files_batch(
 @router.get("/batch/{batch_id}/progress")
 async def get_batch_progress(
     batch_id: str,
-    current_user: Dict[str, Any] = Depends(get_wallet_only_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    read_permission = Depends(check_permission("read"))
 ):
     """
     Get real-time progress for a batch upload.
-    Only available for wallet-authenticated users.
+    Available for both wallet and API key authenticated users with read permission.
     
     Args:
         batch_id: Unique identifier for the batch upload
-        current_user: User data from wallet authentication
+        current_user: The authenticated user data
+        read_permission: Validates user has 'read' permission
         
     Returns:
         Dict containing batch progress information
