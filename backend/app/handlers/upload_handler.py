@@ -216,7 +216,11 @@ class UploadHandler:
                     
                     # 3) Handle based on whether the asset was deleted
                     if was_deleted:
-                        # For deleted assets, create a fresh asset (version 1)
+                        # For deleted assets, create a fresh asset 
+                        # Query blockchain for actual version after transaction
+                        blockchain_info = await self.blockchain_service.get_ipfs_info(asset_id, owner_address)
+                        actual_ipfs_version = blockchain_info.get("ipfs_version", 1)
+                        
                         # This will delete all previous versions marked as deleted
                         new_doc_id = await self.asset_service.create_asset(
                             asset_id=asset_id,
@@ -225,7 +229,7 @@ class UploadHandler:
                             ipfs_hash=cid,
                             critical_metadata=critical_metadata,
                             non_critical_metadata=non_critical_metadata,
-                            ipfs_version=1
+                            ipfs_version=actual_ipfs_version
                         )
                         
                         # Record transaction
@@ -1354,6 +1358,13 @@ class UploadHandler:
             results = []
             for asset_data in ipfs_results:
                 try:
+                    # Query blockchain for actual version after transaction
+                    blockchain_info = await self.blockchain_service.get_ipfs_info(
+                        asset_data["asset_id"], 
+                        asset_data["owner_address"]
+                    )
+                    actual_ipfs_version = blockchain_info.get("ipfs_version", 1)
+                    
                     doc_id = await self.asset_service.create_asset(
                         asset_id=asset_data["asset_id"],
                         wallet_address=asset_data["owner_address"],
@@ -1361,7 +1372,7 @@ class UploadHandler:
                         ipfs_hash=asset_data["cid"],
                         critical_metadata=asset_data["critical_metadata"],
                         non_critical_metadata=asset_data["non_critical_metadata"],
-                        ipfs_version=1
+                        ipfs_version=actual_ipfs_version
                     )
                     
                     # Record transaction
