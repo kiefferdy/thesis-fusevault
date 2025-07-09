@@ -1752,7 +1752,7 @@ class BlockchainService:
             
             try:
                 # Create event filter for this chunk
-                event_filter = self.contract.events.IPFSUpdated.createFilter(
+                event_filter = self.contract.events.IPFSUpdated.create_filter(
                     fromBlock=current_from,
                     toBlock=current_to,
                     argument_filters={

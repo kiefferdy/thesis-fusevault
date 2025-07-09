@@ -89,7 +89,7 @@ function AssetDetailPage() {
           if (assetData.verification.recoverySuccessful) {
             await simulateRecoveryProgress();
           } else {
-            setRecoveryMessage('Recovery failed - showing potentially compromised data');
+            setRecoveryMessage('Recovery failed - asset integrity could not be verified');
           }
         }
         
@@ -196,12 +196,37 @@ function AssetDetailPage() {
           <Typography variant="h4" component="h1">
             {asset.criticalMetadata?.name || 'Asset Details'}
           </Typography>
+          {asset.verification?.verified && !asset.verification?.recoveryNeeded && (
+            <Tooltip title="Asset critical metadata authenticity verified. No integrity issues detected.">
+              <Chip
+                icon={<VerifiedUser />}
+                label="Verified"
+                color="success"
+                size="small"
+                variant="outlined"
+              />
+            </Tooltip>
+          )}
           {recoveryStatus === 'recovered' && asset.verification?.recoverySuccessful && (
             <Tooltip title="Asset metadata was automatically restored from blockchain due to potential tampering. Click to view recovery details in transaction history.">
               <Chip
                 icon={<Warning />}
                 label="Metadata Restored"
                 color="warning"
+                size="small"
+                variant="outlined"
+                clickable
+                onClick={() => navigate(`/assets/${assetId}/history`)}
+                sx={{ cursor: 'pointer' }}
+              />
+            </Tooltip>
+          )}
+          {recoveryStatus === 'recovered' && asset.verification?.recoveryNeeded && !asset.verification?.recoverySuccessful && (
+            <Tooltip title="Asset integrity could not be verified and recovery failed. Contact support for assistance. Click to view recovery details in transaction history.">
+              <Chip
+                icon={<Warning />}
+                label="Integrity Compromised"
+                color="error"
                 size="small"
                 variant="outlined"
                 clickable

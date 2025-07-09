@@ -37,7 +37,8 @@ import {
     FilterList,
     Visibility,
     Edit,
-    VerifiedUser
+    VerifiedUser,
+    Warning
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { transactionService } from '../services/transactionService';
@@ -232,9 +233,44 @@ function AssetHistoryPage() {
                     <CardContent>
                         <Grid container spacing={2} alignItems="center">
                             <Grid item xs={12} md={8}>
-                                <Typography variant="h6" gutterBottom>
-                                    {asset.criticalMetadata?.name || 'Untitled Asset'}
-                                </Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                    <Typography variant="h6">
+                                        {asset.criticalMetadata?.name || 'Untitled Asset'}
+                                    </Typography>
+                                    {asset.verification?.verified && !asset.verification?.recoveryNeeded && (
+                                        <Tooltip title="Asset critical metadata authenticity verified. No integrity issues detected.">
+                                            <Chip
+                                                icon={<VerifiedUser />}
+                                                label="Verified"
+                                                color="success"
+                                                size="small"
+                                                variant="outlined"
+                                            />
+                                        </Tooltip>
+                                    )}
+                                    {asset.verification?.recoveryNeeded && asset.verification?.recoverySuccessful && (
+                                        <Tooltip title="Asset metadata was automatically restored from blockchain due to potential tampering. View recovery details in transaction history below.">
+                                            <Chip
+                                                icon={<Warning />}
+                                                label="Metadata Restored"
+                                                color="warning"
+                                                size="small"
+                                                variant="outlined"
+                                            />
+                                        </Tooltip>
+                                    )}
+                                    {asset.verification?.recoveryNeeded && !asset.verification?.recoverySuccessful && (
+                                        <Tooltip title="Asset integrity could not be verified and recovery failed. Contact support for assistance. View recovery details in transaction history below.">
+                                            <Chip
+                                                icon={<Warning />}
+                                                label="Integrity Compromised"
+                                                color="error"
+                                                size="small"
+                                                variant="outlined"
+                                            />
+                                        </Tooltip>
+                                    )}
+                                </Box>
                                 <Typography variant="body2" color="text.secondary" gutterBottom>
                                     Asset ID: {assetId}
                                 </Typography>
@@ -416,7 +452,9 @@ function AssetHistoryPage() {
                                                     color={getActionColor(transaction.action)}
                                                     size="small"
                                                     variant="outlined"
-                                                    icon={transaction.action === 'INTEGRITY_RECOVERY' ? <VerifiedUser /> : undefined}
+                                                    icon={transaction.action === 'INTEGRITY_RECOVERY' ? 
+                                                        (transaction.metadata?.error_message || transaction.metadata?.reason?.includes('failed') ? <Warning /> : <VerifiedUser />) 
+                                                        : undefined}
                                                 />
                                             </TableCell>
                                             <TableCell>
@@ -465,7 +503,7 @@ function AssetHistoryPage() {
                                                             </Typography>
                                                         )}
                                                         <Typography variant="caption" display="block">
-                                                            Status: {transaction.metadata.auto_recover ? 'Automatically recovered' : 'Not recovered'}
+                                                            Status: {transaction.metadata?.error_message || transaction.metadata?.reason?.includes('failed') ? 'Recovery failed' : 'Successfully recovered'}
                                                         </Typography>
                                                     </Box>
                                                 ) : (

@@ -331,6 +331,34 @@ class RetrieveHandler:
                     if not authentic_metadata or "critical_metadata" not in authentic_metadata:
                         logger.error(f"Failed to retrieve valid metadata from IPFS for CID {authentic_cid}")
                         verification_result.recovery_successful = False
+                        
+                        # Record failed recovery attempt as transaction
+                        if self.transaction_service:
+                            performed_by = initiator_address if initiator_address and initiator_address.lower() != wallet_address.lower() else wallet_address
+                            
+                            await self.transaction_service.record_transaction(
+                                asset_id=asset_id,
+                                action="INTEGRITY_RECOVERY",
+                                wallet_address=wallet_address,
+                                performed_by=performed_by,
+                                metadata={
+                                    "previous_doc_id": doc_id,
+                                    "previous_version": doc_version,
+                                    "previous_ipfs_version": ipfs_version,
+                                    "blockchain_cid": authentic_cid,
+                                    "computed_cid": computed_cid,
+                                    "recovery_source": "enhanced_recovery_with_fallback",
+                                    "tx_sender_verified": verification_result.tx_sender_verified,
+                                    "auto_recover": auto_recover,
+                                    "reason": "Recovery failed - retrieved metadata from IPFS is invalid"
+                                }
+                            )
+                        
+                        # Set detailed error information but don't throw exception
+                        verification_result.recovery_successful = False
+                        verification_result.message = "Recovery failed - retrieved metadata from IPFS is invalid"
+                        
+                        # Return original metadata as-is - the red chip will indicate the issue
                     else:
                         # Extract authentic critical metadata
                         authentic_critical_metadata = authentic_metadata.get("critical_metadata", {})
@@ -384,6 +412,35 @@ class RetrieveHandler:
                 except Exception as e:
                     logger.error(f"Error recovering metadata from IPFS: {str(e)}")
                     verification_result.recovery_successful = False
+                    
+                    # Record failed recovery attempt as transaction
+                    if self.transaction_service:
+                        performed_by = initiator_address if initiator_address and initiator_address.lower() != wallet_address.lower() else wallet_address
+                        
+                        await self.transaction_service.record_transaction(
+                            asset_id=asset_id,
+                            action="INTEGRITY_RECOVERY",
+                            wallet_address=wallet_address,
+                            performed_by=performed_by,
+                            metadata={
+                                "previous_doc_id": doc_id,
+                                "previous_version": doc_version,
+                                "previous_ipfs_version": ipfs_version,
+                                "blockchain_cid": verification_result.blockchain_cid,
+                                "computed_cid": computed_cid,
+                                "recovery_source": "enhanced_recovery_with_fallback",
+                                "tx_sender_verified": verification_result.tx_sender_verified,
+                                "auto_recover": auto_recover,
+                                "error_message": str(e),
+                                "reason": "Recovery failed - both transaction and event methods failed"
+                            }
+                        )
+                    
+                    # Set detailed error information but don't throw exception
+                    verification_result.recovery_successful = False
+                    verification_result.message = f"Recovery failed: {str(e)}"
+                    
+                    # Return original metadata as-is - the red chip will indicate the issue
             
             # Set new version created flag in verification result
             verification_result.new_version_created = new_version_created
