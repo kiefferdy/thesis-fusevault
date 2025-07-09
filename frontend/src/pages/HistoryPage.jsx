@@ -195,11 +195,12 @@ function HistoryPage() {
                 <MenuItem value="VERSION_CREATE">VERSION_CREATE</MenuItem>
                 <MenuItem value="UPDATE">UPDATE</MenuItem>
                 <MenuItem value="DELETE">DELETE</MenuItem>
-                <MenuItem value="TRANSFER">TRANSFER</MenuItem>
-                <MenuItem value="VERIFY">VERIFY</MenuItem>
-                <MenuItem value="INTEGRITY">INTEGRITY</MenuItem>
-                <MenuItem value="RECREATE">RECREATE</MenuItem>
-                <MenuItem value="RESTORE">RESTORE</MenuItem>
+                <MenuItem value="RECREATE_DELETED">RECREATE_DELETED</MenuItem>
+                <MenuItem value="INTEGRITY_RECOVERY">INTEGRITY_RECOVERY</MenuItem>
+                <MenuItem value="TRANSFER_INITIATED">TRANSFER_INITIATED</MenuItem>
+                <MenuItem value="TRANSFER_COMPLETED">TRANSFER_COMPLETED</MenuItem>
+                <MenuItem value="TRANSFER_CANCELLED">TRANSFER_CANCELLED</MenuItem>
+                <MenuItem value="DELETION_STATUS_RESTORED">DELETION_STATUS_RESTORED</MenuItem>
               </TextField>
             </Grid>
           </Grid>

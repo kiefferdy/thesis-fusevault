@@ -40,7 +40,6 @@ function TransactionsList({ transactions, isLoading }) {
     if (normalizedAction.includes('UPDATE')) return 'primary';
     if (normalizedAction.includes('DELETE')) return 'error';
     if (normalizedAction.includes('TRANSFER')) return 'secondary';
-    if (normalizedAction.includes('VERIFY')) return 'primary';
     if (normalizedAction.includes('INTEGRITY')) return 'secondary';
     if (normalizedAction.includes('RESTORE')) return 'primary';
     
@@ -57,7 +56,8 @@ function TransactionsList({ transactions, isLoading }) {
             <TableCell>Date</TableCell>
             <TableCell>Asset ID</TableCell>
             <TableCell>Action</TableCell>
-            <TableCell>Wallet</TableCell>
+            <TableCell>Owner</TableCell>
+            <TableCell>Initiator</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -84,6 +84,11 @@ function TransactionsList({ transactions, isLoading }) {
                 />
               </TableCell>
               <TableCell>{formatWalletAddress(tx.walletAddress)}</TableCell>
+              <TableCell>
+                {tx.performedBy ? 
+                  formatWalletAddress(tx.performedBy) : 
+                  formatWalletAddress(tx.walletAddress)}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>

@@ -130,14 +130,14 @@ function AssetHistoryPage() {
         switch (action) {
             case 'CREATE': return 'success';
             case 'VERSION_CREATE': return 'info';
-            case 'UPDATE': return 'warning';
+            case 'UPDATE': return 'info';
             case 'DELETE': return 'error';
-            case 'TRANSFER': return 'secondary';
-            case 'VERIFY': return 'primary';
-            case 'INTEGRITY': return 'default';
+            case 'RECREATE_DELETED': return 'success';
             case 'INTEGRITY_RECOVERY': return 'warning';
-            case 'RECREATE': return 'info';
-            case 'RESTORE': return 'success';
+            case 'TRANSFER_INITIATED': return 'secondary';
+            case 'TRANSFER_COMPLETED': return 'success';
+            case 'TRANSFER_CANCELLED': return 'error';
+            case 'DELETION_STATUS_RESTORED': return 'warning';
             default: return 'default';
         }
     };

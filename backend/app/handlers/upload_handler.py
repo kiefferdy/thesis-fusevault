@@ -977,7 +977,8 @@ class UploadHandler:
                     "cid": upload_result["cid"],
                     "owner_address": asset_data["owner_address"],
                     "critical_metadata": asset_data["critical_metadata"],
-                    "non_critical_metadata": asset_data["non_critical_metadata"]
+                    "non_critical_metadata": asset_data["non_critical_metadata"],
+                    "was_deleted": asset_data["was_deleted"]
                 })
             
             logger.info(f"IPFS uploads completed for batch {batch_id}, preparing blockchain transaction")
@@ -1082,9 +1083,12 @@ class UploadHandler:
                             
                             # Record transaction for audit trail
                             if self.transaction_service:
+                                # Determine action based on whether asset was deleted
+                                action = "RECREATE_DELETED" if ipfs_result.get("was_deleted", False) else "CREATE"
+                                
                                 await self.transaction_service.record_transaction(
                                     asset_id=asset_id,
-                                    action="CREATE",
+                                    action=action,
                                     wallet_address=owner_address,
                                     performed_by=initiator_address,
                                     metadata={
@@ -1092,7 +1096,8 @@ class UploadHandler:
                                         "smartContractTxId": blockchain_tx_hash,
                                         "ipfsVersion": 1,
                                         "ownerAddress": owner_address,
-                                        "batchId": batch_id
+                                        "batchId": batch_id,
+                                        "wasDeleted": ipfs_result.get("was_deleted", False)
                                     }
                                 )
                             
@@ -1238,11 +1243,23 @@ class UploadHandler:
                         raise ValueError(f"Asset at index {idx} missing asset_id")
                     
                     # Check if asset already exists and is not deleted
-                    existing_doc = await self.asset_service.get_asset(
-                        asset_id=asset_id
-                    )
+                    existing_doc = None
+                    was_deleted = False
+                    try:
+                        # First check for non-deleted assets
+                        existing_doc = await self.asset_service.get_asset(asset_id)
+                        
+                        # If not found, check if there's a deleted asset with this ID
+                        if not existing_doc:
+                            deleted_doc = await self.asset_service.get_asset_with_deleted(asset_id)
+                            if deleted_doc and deleted_doc.get("isDeleted", False):
+                                existing_doc = deleted_doc
+                                was_deleted = True
+                    except Exception as e:
+                        logger.error(f"Error checking for existing document: {str(e)}")
+                        raise ValueError(f"Error checking for existing document: {str(e)}")
                     
-                    if existing_doc and not existing_doc.get("isDeleted"):
+                    if existing_doc and not existing_doc.get("isDeleted", False):
                         raise ValueError(f"Asset {asset_id} already exists")
                     
                     validated_assets.append({
@@ -1250,6 +1267,7 @@ class UploadHandler:
                         "owner_address": owner_address,
                         "critical_metadata": critical_metadata,
                         "non_critical_metadata": non_critical_metadata,
+                        "was_deleted": was_deleted,
                         "index": idx
                     })
                     
@@ -1379,9 +1397,12 @@ class UploadHandler:
                     if self.transaction_service:
                         performed_by = initiator_address if initiator_address.lower() != asset_data["owner_address"].lower() else asset_data["owner_address"]
                         
+                        # Determine action based on whether asset was deleted
+                        action = "RECREATE_DELETED" if asset_data.get("was_deleted", False) else "CREATE"
+                        
                         await self.transaction_service.record_transaction(
                             asset_id=asset_data["asset_id"],
-                            action="CREATE",
+                            action=action,
                             wallet_address=asset_data["owner_address"],
                             performed_by=performed_by,
                             metadata={
@@ -1390,7 +1411,8 @@ class UploadHandler:
                                 "batchUpload": True,
                                 "batchId": pending_tx_id,
                                 "ipfsVersion": 1,
-                                "ownerAddress": asset_data["owner_address"]
+                                "ownerAddress": asset_data["owner_address"],
+                                "wasDeleted": asset_data.get("was_deleted", False)
                             }
                         )
                     
