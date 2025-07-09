@@ -1658,9 +1658,9 @@ class BlockchainService:
             logger.error(f"Blockchain error batch deleting assets for another owner: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Blockchain transaction failed: {str(e)}")
 
-    async def get_cid_from_events(self, asset_id: str, owner_address: str) -> str:
+    async def recover_data_from_events(self, asset_id: str, owner_address: str) -> dict:
         """
-        Fallback recovery: Get CID from blockchain event logs with tiered search.
+        Fallback recovery: Get CID and transaction hash from blockchain event logs with tiered search.
         
         This method uses an intelligent search strategy:
         1. Search recent blocks first (most likely to contain the event)
@@ -1668,11 +1668,13 @@ class BlockchainService:
         3. Use chunked queries to avoid RPC provider limits
         
         Args:
-            asset_id: The asset ID to get CID for
+            asset_id: The asset ID to recover data for
             owner_address: The owner's address
             
         Returns:
-            The authentic CID string from blockchain events
+            Dictionary containing:
+            - "cid": The authentic CID string from blockchain events
+            - "tx_hash": The correct transaction hash that emitted the event
             
         Raises:
             ValueError: If no valid events are found
@@ -1709,9 +1711,10 @@ class BlockchainService:
                             # Get event with highest ipfsVersion (latest update)
                             latest_event = max(update_events, key=lambda e: e['args']['ipfsVersion'])
                             authentic_cid = latest_event['args']['cid']
+                            correct_tx_hash = latest_event['transactionHash'].hex()
                             
-                            logger.info(f"Successfully recovered CID from events: {authentic_cid} for asset {asset_id}")
-                            return authentic_cid
+                            logger.info(f"Successfully recovered CID from events: {authentic_cid} for asset {asset_id}, correct TX hash: {correct_tx_hash}")
+                            return {"cid": authentic_cid, "tx_hash": correct_tx_hash}
                 
                 except Exception as e:
                     logger.warning(f"Search range {from_block}-{latest_block} failed: {str(e)}")
@@ -1753,8 +1756,8 @@ class BlockchainService:
             try:
                 # Create event filter for this chunk
                 event_filter = self.contract.events.IPFSUpdated.create_filter(
-                    fromBlock=current_from,
-                    toBlock=current_to,
+                    from_block=current_from,
+                    to_block=current_to,
                     argument_filters={
                         'owner': Web3.to_checksum_address(owner_address),
                         'assetId': asset_id

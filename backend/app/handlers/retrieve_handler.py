@@ -42,14 +42,14 @@ class RetrieveHandler:
         self.transaction_service = transaction_service
         self.auth_context = auth_context
     
-    async def get_authentic_cid(
+    async def recover_authentic_data(
         self,
         blockchain_tx_id: str,
         asset_id: str,
         wallet_address: str
-    ) -> str:
+    ) -> dict:
         """
-        Get authentic CID with multiple fallback methods.
+        Recover authentic CID and correct transaction hash with multiple fallback methods.
         
         This method provides redundant recovery mechanisms to handle cases where
         the transaction ID stored in MongoDB has been tampered with or is invalid.
@@ -60,7 +60,9 @@ class RetrieveHandler:
             wallet_address: The wallet address of the asset owner
             
         Returns:
-            The authentic CID string
+            Dictionary containing:
+            - "cid": The authentic CID string
+            - "tx_hash": The correct transaction hash (may be same as input if first method succeeds)
             
         Raises:
             Exception: If all recovery methods fail
@@ -71,15 +73,15 @@ class RetrieveHandler:
             cid = tx_data.get("cid")
             if cid and cid != "unknown":
                 logger.info(f"CID recovered from transaction: {cid}")
-                return cid
+                return {"cid": cid, "tx_hash": blockchain_tx_id}  # TX ID was correct
         except Exception as e:
             logger.warning(f"Transaction recovery failed for asset {asset_id}: {str(e)}, trying event logs")
         
         # Method 2: Fallback to event logs
         try:
-            cid = await self.blockchain_service.get_cid_from_events(asset_id, wallet_address)
-            logger.info(f"CID recovered from events: {cid}")
-            return cid
+            recovery_data = await self.blockchain_service.recover_data_from_events(asset_id, wallet_address)
+            logger.info(f"CID recovered from events: {recovery_data['cid']}, correct TX hash: {recovery_data['tx_hash']}")
+            return recovery_data
         except Exception as e:
             logger.error(f"Event recovery also failed for asset {asset_id}: {str(e)}")
             raise Exception(f"Unable to recover authentic CID for asset {asset_id}: Transaction method failed, Event method failed")
@@ -268,6 +270,8 @@ class RetrieveHandler:
             
             # 6. If verification failed and auto-recover is enabled, try to recover
             new_version_created = False
+            final_ipfs_hash = verification_result.blockchain_cid  # Default to original CID
+            final_tx_id = blockchain_tx_id  # Default to original TX ID
             
             # Special handling for deletion status tampering
             if verification_result.deletion_status_tampered and auto_recover:
@@ -320,7 +324,9 @@ class RetrieveHandler:
                 try:
                     # Use enhanced recovery to get authentic CID with fallback mechanism
                     try:
-                        authentic_cid = await self.get_authentic_cid(blockchain_tx_id, asset_id, wallet_address)
+                        recovery_data = await self.recover_authentic_data(blockchain_tx_id, asset_id, wallet_address)
+                        authentic_cid = recovery_data["cid"]
+                        correct_tx_hash = recovery_data["tx_hash"]
                         authentic_metadata = await self.ipfs_service.retrieve_metadata(authentic_cid)
                     except Exception as recovery_error:
                         logger.error(f"Failed to recover authentic CID and retrieve metadata: {str(recovery_error)}")
@@ -350,6 +356,9 @@ class RetrieveHandler:
                                     "recovery_source": "enhanced_recovery_with_fallback",
                                     "tx_sender_verified": verification_result.tx_sender_verified,
                                     "auto_recover": auto_recover,
+                                    "previous_tx_hash": blockchain_tx_id,
+                                    "corrected_tx_hash": correct_tx_hash,
+                                    "tx_hash_corrected": correct_tx_hash != blockchain_tx_id,
                                     "reason": "Recovery failed - retrieved metadata from IPFS is invalid"
                                 }
                             )
@@ -363,11 +372,11 @@ class RetrieveHandler:
                         # Extract authentic critical metadata
                         authentic_critical_metadata = authentic_metadata.get("critical_metadata", {})
                         
-                        # 7. Create new version with authentic data
+                        # 7. Create new version with authentic data and corrected transaction hash
                         new_doc_id = await self.asset_service.create_new_version(
                             asset_id=asset_id,
                             wallet_address=wallet_address,
-                            smart_contract_tx_id=blockchain_tx_id,
+                            smart_contract_tx_id=correct_tx_hash,
                             ipfs_hash=authentic_cid,
                             critical_metadata=authentic_critical_metadata,
                             non_critical_metadata=non_critical_metadata,
@@ -398,7 +407,10 @@ class RetrieveHandler:
                                     "computed_cid": computed_cid,
                                     "recovery_source": "enhanced_recovery_with_fallback",
                                     "tx_sender_verified": verification_result.tx_sender_verified,
-                                    "auto_recover": auto_recover
+                                    "auto_recover": auto_recover,
+                                    "previous_tx_hash": blockchain_tx_id,
+                                    "corrected_tx_hash": correct_tx_hash,
+                                    "tx_hash_corrected": correct_tx_hash != blockchain_tx_id
                                 }
                             )
                         
@@ -406,6 +418,8 @@ class RetrieveHandler:
                         doc_id = new_doc_id["document_id"]
                         doc_version = new_version
                         critical_metadata = authentic_critical_metadata
+                        final_ipfs_hash = authentic_cid  # Use authentic CID for response
+                        final_tx_id = correct_tx_hash  # Use corrected TX hash for response
                         new_version_created = True
                         verification_result.recovery_successful = True
                         
@@ -453,8 +467,8 @@ class RetrieveHandler:
                 non_critical_metadata=non_critical_metadata,
                 verification=verification_result,
                 document_id=doc_id,
-                ipfs_hash=verification_result.blockchain_cid,
-                blockchain_tx_id=blockchain_tx_id
+                ipfs_hash=final_ipfs_hash,
+                blockchain_tx_id=final_tx_id
             )
             
         except HTTPException:
