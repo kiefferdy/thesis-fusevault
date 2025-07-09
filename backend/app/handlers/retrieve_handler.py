@@ -41,6 +41,48 @@ class RetrieveHandler:
         self.ipfs_service = ipfs_service
         self.transaction_service = transaction_service
         self.auth_context = auth_context
+    
+    async def get_authentic_cid(
+        self,
+        blockchain_tx_id: str,
+        asset_id: str,
+        wallet_address: str
+    ) -> str:
+        """
+        Get authentic CID with multiple fallback methods.
+        
+        This method provides redundant recovery mechanisms to handle cases where
+        the transaction ID stored in MongoDB has been tampered with or is invalid.
+        
+        Args:
+            blockchain_tx_id: Transaction ID from MongoDB
+            asset_id: The asset ID
+            wallet_address: The wallet address of the asset owner
+            
+        Returns:
+            The authentic CID string
+            
+        Raises:
+            Exception: If all recovery methods fail
+        """
+        # Method 1: Try transaction details (existing approach)
+        try:
+            tx_data = await self.blockchain_service.get_transaction_details(blockchain_tx_id, asset_id)
+            cid = tx_data.get("cid")
+            if cid and cid != "unknown":
+                logger.info(f"CID recovered from transaction: {cid}")
+                return cid
+        except Exception as e:
+            logger.warning(f"Transaction recovery failed for asset {asset_id}: {str(e)}, trying event logs")
+        
+        # Method 2: Fallback to event logs
+        try:
+            cid = await self.blockchain_service.get_cid_from_events(asset_id, wallet_address)
+            logger.info(f"CID recovered from events: {cid}")
+            return cid
+        except Exception as e:
+            logger.error(f"Event recovery also failed for asset {asset_id}: {str(e)}")
+            raise Exception(f"Unable to recover authentic CID for asset {asset_id}: Transaction method failed, Event method failed")
         
     async def retrieve_metadata(
         self,
@@ -276,17 +318,18 @@ class RetrieveHandler:
             # Regular recovery for other types of tampering
             elif verification_result.recovery_needed and auto_recover and is_latest_version and not verification_result.deletion_status_tampered:
                 try:
-                    # Retrieve authentic metadata from IPFS using blockchain CID
+                    # Use enhanced recovery to get authentic CID with fallback mechanism
                     try:
-                        authentic_metadata = await self.ipfs_service.retrieve_metadata(verification_result.blockchain_cid)
-                    except Exception as ipfs_error:
-                        logger.error(f"Failed to retrieve metadata from IPFS: {str(ipfs_error)}")
+                        authentic_cid = await self.get_authentic_cid(blockchain_tx_id, asset_id, wallet_address)
+                        authentic_metadata = await self.ipfs_service.retrieve_metadata(authentic_cid)
+                    except Exception as recovery_error:
+                        logger.error(f"Failed to recover authentic CID and retrieve metadata: {str(recovery_error)}")
                         verification_result.recovery_successful = False
-                        raise ipfs_error
+                        raise recovery_error
                     
                     # Ensure we have the required fields
                     if not authentic_metadata or "critical_metadata" not in authentic_metadata:
-                        logger.error(f"Failed to retrieve valid metadata from IPFS for CID {verification_result.blockchain_cid}")
+                        logger.error(f"Failed to retrieve valid metadata from IPFS for CID {authentic_cid}")
                         verification_result.recovery_successful = False
                     else:
                         # Extract authentic critical metadata
@@ -297,7 +340,7 @@ class RetrieveHandler:
                             asset_id=asset_id,
                             wallet_address=wallet_address,
                             smart_contract_tx_id=blockchain_tx_id,
-                            ipfs_hash=verification_result.blockchain_cid,
+                            ipfs_hash=authentic_cid,
                             critical_metadata=authentic_critical_metadata,
                             non_critical_metadata=non_critical_metadata,
                             ipfs_version=verification_result.ipfs_version
@@ -323,9 +366,9 @@ class RetrieveHandler:
                                     "new_version": new_version,
                                     "previous_ipfs_version": ipfs_version,
                                     "new_ipfs_version": verification_result.ipfs_version,
-                                    "blockchain_cid": verification_result.blockchain_cid,
+                                    "blockchain_cid": authentic_cid,
                                     "computed_cid": computed_cid,
-                                    "recovery_source": "ipfs",
+                                    "recovery_source": "enhanced_recovery_with_fallback",
                                     "tx_sender_verified": verification_result.tx_sender_verified,
                                     "auto_recover": auto_recover
                                 }
