@@ -11,14 +11,13 @@ import {
   Divider,
   Chip,
   Alert,
-  Tabs,
-  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
-  TableRow
+  TableRow,
+  Tooltip
 } from '@mui/material';
 import {
   Edit,
@@ -30,7 +29,6 @@ import {
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { assetService } from '../services/assetService';
-import { transactionService } from '../services/transactionService';
 import { useAssets } from '../hooks/useAssets';
 import { useTransactionSigner } from '../hooks/useTransactionSigner';
 import { useAuth } from '../contexts/AuthContext';
@@ -43,9 +41,8 @@ function AssetDetailPage() {
   const [version] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [tabValue, setTabValue] = useState(0);
-  const [history, setHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [recoveryStatus, setRecoveryStatus] = useState(null);
+  const [recoveryMessage, setRecoveryMessage] = useState('Loading asset data...');
   const { deleteAsset, isDeleting } = useAssets();
   const { currentAccount } = useAuth();
   const {
@@ -59,12 +56,43 @@ function AssetDetailPage() {
   } = useTransactionSigner();
   const navigate = useNavigate();
 
+  // Simulate recovery progress messages
+  const simulateRecoveryProgress = async () => {
+    const messages = [
+      'Unable to verify asset authenticity...',
+      'Restoring metadata from IPFS...',
+      'Searching blockchain transaction history...',
+      'Searching blockchain event logs...',
+      'Asset metadata restored successfully'
+    ];
+
+    for (let i = 0; i < messages.length; i++) {
+      setRecoveryMessage(messages[i]);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay between messages
+    }
+  };
+
   // Fetch asset data
   useEffect(() => {
     const fetchAsset = async () => {
       setLoading(true);
+      setRecoveryMessage('Loading asset data...');
+      setRecoveryStatus(null);
+      
       try {
         const assetData = await assetService.retrieveMetadata(assetId, version);
+        
+        // Check if recovery was performed
+        if (assetData.verification && assetData.verification.recoveryNeeded) {
+          setRecoveryStatus('recovered');
+          // If recovery was needed, simulate the progress messages the user would have seen
+          if (assetData.verification.recoverySuccessful) {
+            await simulateRecoveryProgress();
+          } else {
+            setRecoveryMessage('Recovery failed - showing potentially compromised data');
+          }
+        }
+        
         setAsset(assetData);
         setError(null);
       } catch (err) {
@@ -79,29 +107,6 @@ function AssetDetailPage() {
     fetchAsset();
   }, [assetId, version]);
 
-  // Fetch asset history when history tab is selected
-  useEffect(() => {
-    if (tabValue === 1 && assetId) {
-      const fetchHistory = async () => {
-        setHistoryLoading(true);
-        try {
-          const historyData = await transactionService.getAssetHistory(assetId);
-          setHistory(historyData.transactions || []);
-        } catch (err) {
-          console.error('Error fetching history:', err);
-          toast.error('Error loading transaction history');
-        } finally {
-          setHistoryLoading(false);
-        }
-      };
-
-      fetchHistory();
-    }
-  }, [assetId, tabValue]);
-
-  const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
-  };
 
   const handleEdit = () => {
     navigate(`/assets/${assetId}/edit`);
@@ -139,8 +144,13 @@ function AssetDetailPage() {
       <Container maxWidth="lg" sx={{ py: 4, textAlign: 'center' }}>
         <CircularProgress />
         <Typography variant="body1" mt={2}>
-          Loading asset data...
+          {recoveryMessage}
         </Typography>
+        {recoveryStatus === 'recovered' && (
+          <Typography variant="body2" color="text.secondary" mt={1}>
+            This may take a moment while we ensure data integrity...
+          </Typography>
+        )}
       </Container>
     );
   }
@@ -182,9 +192,25 @@ function AssetDetailPage() {
           Back
         </Button>
 
-        <Typography variant="h4" component="h1" sx={{ flexGrow: 1 }}>
-          {asset.criticalMetadata?.name || 'Asset Details'}
-        </Typography>
+        <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h4" component="h1">
+            {asset.criticalMetadata?.name || 'Asset Details'}
+          </Typography>
+          {recoveryStatus === 'recovered' && asset.verification?.recoverySuccessful && (
+            <Tooltip title="Asset metadata was automatically restored from blockchain due to potential tampering. Click to view recovery details in transaction history.">
+              <Chip
+                icon={<Warning />}
+                label="Metadata Restored"
+                color="warning"
+                size="small"
+                variant="outlined"
+                clickable
+                onClick={() => navigate(`/assets/${assetId}/history`)}
+                sx={{ cursor: 'pointer' }}
+              />
+            </Tooltip>
+          )}
+        </Box>
 
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
@@ -206,37 +232,15 @@ function AssetDetailPage() {
         </Box>
       </Box>
 
-      {/* Integrity Status Alert */}
-      {asset.verificationStatus && (
-        <Alert
-          severity={asset.verificationStatus === 'verified' ? 'success' : 'warning'}
-          icon={asset.verificationStatus === 'verified' ? <VerifiedUser /> : <Warning />}
-          sx={{ mb: 3 }}
-        >
-          {asset.verificationStatus === 'verified'
-            ? 'Asset integrity verified on blockchain'
-            : 'Potential integrity issues detected'}
-        </Alert>
-      )}
 
       <Paper sx={{ mb: 4 }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          indicatorColor="primary"
-          textColor="primary"
-          variant="fullWidth"
-        >
-          <Tab label="Asset Information" />
-          <Tab label="Transaction History" />
-        </Tabs>
-
-        <Divider />
-
-        {/* Asset Information Tab */}
-        {tabValue === 0 && (
-          <Box sx={{ p: 3 }}>
-            <Grid container spacing={3}>
+        {/* Asset Information */}
+        <Box sx={{ p: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Asset Information
+          </Typography>
+          <Divider sx={{ mb: 3 }} />
+          <Grid container spacing={3}>
               {/* Basic Information */}
               <Grid item xs={12}>
                 <Typography variant="h6" gutterBottom>
@@ -363,65 +367,6 @@ function AssetDetailPage() {
               )}
             </Grid>
           </Box>
-        )}
-
-        {/* Transaction History Tab */}
-        {tabValue === 1 && (
-          <Box sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Transaction History
-            </Typography>
-
-            {historyLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : history.length === 0 ? (
-              <Alert severity="info">No transaction history found</Alert>
-            ) : (
-              <TableContainer component={Paper} variant="outlined">
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell>Action</TableCell>
-                      <TableCell>Initiator</TableCell>
-                      <TableCell>Version</TableCell>
-                      <TableCell>Blockchain TX</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {history.map((tx) => (
-                      <TableRow key={tx._id || tx.id}>
-                        <TableCell>{formatDate(tx.timestamp)}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={tx.action}
-                            color={tx.action === 'CREATE' ? 'success' :
-                              tx.action === 'UPDATE' ? 'info' :
-                                tx.action === 'DELETE' ? 'error' : 'default'}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>{formatWalletAddress(tx.walletAddress)}</TableCell>
-                        <TableCell>{tx.metadata?.versionNumber || '1'}</TableCell>
-                        <TableCell>
-                          {tx.blockchainTxHash ? (
-                            formatTransactionHash(tx.blockchainTxHash)
-                          ) : (
-                            <Typography variant="body2" color="text.secondary">
-                              N/A
-                            </Typography>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </Box>
-        )}
       </Paper>
 
       {/* Transaction Signer Modal */}

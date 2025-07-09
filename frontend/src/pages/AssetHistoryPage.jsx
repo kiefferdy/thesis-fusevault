@@ -36,7 +36,8 @@ import {
     Search,
     FilterList,
     Visibility,
-    Edit
+    Edit,
+    VerifiedUser
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { transactionService } from '../services/transactionService';
@@ -133,6 +134,7 @@ function AssetHistoryPage() {
             case 'TRANSFER': return 'secondary';
             case 'VERIFY': return 'primary';
             case 'INTEGRITY': return 'default';
+            case 'INTEGRITY_RECOVERY': return 'warning';
             case 'RECREATE': return 'info';
             case 'RESTORE': return 'success';
             default: return 'default';
@@ -296,11 +298,11 @@ function AssetHistoryPage() {
                 <Grid item xs={12} sm={4}>
                     <Card>
                         <CardContent sx={{ textAlign: 'center' }}>
-                            <Typography variant="h4" color="info.main">
-                                {history.filter(tx => tx.action === 'CREATE' || tx.action === 'VERSION_CREATE').length}
+                            <Typography variant="h4" color="warning.main">
+                                {history.filter(tx => tx.action === 'INTEGRITY_RECOVERY').length}
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                                Versions Created
+                                Integrity Recoveries
                             </Typography>
                         </CardContent>
                     </Card>
@@ -414,11 +416,15 @@ function AssetHistoryPage() {
                                                     color={getActionColor(transaction.action)}
                                                     size="small"
                                                     variant="outlined"
+                                                    icon={transaction.action === 'INTEGRITY_RECOVERY' ? <VerifiedUser /> : undefined}
                                                 />
                                             </TableCell>
                                             <TableCell>
                                                 <Typography variant="body2" fontFamily="monospace">
-                                                    {transaction.version || 'N/A'}
+                                                    {transaction.version || 
+                                                     transaction.metadata?.versionNumber || 
+                                                     transaction.metadata?.new_version || 
+                                                     'N/A'}
                                                 </Typography>
                                             </TableCell>
                                             <TableCell>
@@ -440,11 +446,35 @@ function AssetHistoryPage() {
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                <Typography variant="body2">
-                                                    {transaction.metadata?.reason ||
-                                                        transaction.metadata?.description ||
-                                                        'No additional details'}
-                                                </Typography>
+                                                {transaction.action === 'INTEGRITY_RECOVERY' && transaction.metadata ? (
+                                                    <Box>
+                                                        <Typography variant="body2" gutterBottom>
+                                                            <strong>Recovery Details:</strong>
+                                                        </Typography>
+                                                        <Typography variant="caption" display="block">
+                                                            Method: {transaction.metadata.recovery_source || 'Enhanced recovery with fallback'}
+                                                        </Typography>
+                                                        {transaction.metadata.blockchain_cid && transaction.metadata.computed_cid && (
+                                                            <Typography variant="caption" display="block">
+                                                                CID Mismatch: Restored authentic metadata from blockchain
+                                                            </Typography>
+                                                        )}
+                                                        {transaction.metadata.tx_sender_verified === false && (
+                                                            <Typography variant="caption" display="block">
+                                                                Transaction sender verification failed
+                                                            </Typography>
+                                                        )}
+                                                        <Typography variant="caption" display="block">
+                                                            Status: {transaction.metadata.auto_recover ? 'Automatically recovered' : 'Not recovered'}
+                                                        </Typography>
+                                                    </Box>
+                                                ) : (
+                                                    <Typography variant="body2">
+                                                        {transaction.metadata?.reason ||
+                                                            transaction.metadata?.description ||
+                                                            'No additional details'}
+                                                    </Typography>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))
