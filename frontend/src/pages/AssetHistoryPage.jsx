@@ -403,7 +403,8 @@ function AssetHistoryPage() {
                                 <TableCell>Date & Time</TableCell>
                                 <TableCell>Action</TableCell>
                                 <TableCell>Version</TableCell>
-                                <TableCell>Wallet Address</TableCell>
+                                <TableCell>Owner</TableCell>
+                                <TableCell>Initiator</TableCell>
                                 <TableCell>Transaction Hash</TableCell>
                                 <TableCell>Details</TableCell>
                             </TableRow>
@@ -411,7 +412,7 @@ function AssetHistoryPage() {
                         <TableBody>
                             {filteredHistory.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                                         <Typography variant="body2" color="text.secondary">
                                             {history.length === 0
                                                 ? 'No transaction history found for this asset.'
@@ -469,6 +470,15 @@ function AssetHistoryPage() {
                                                 <Tooltip title={transaction.walletAddress}>
                                                     <Typography variant="body2" fontFamily="monospace">
                                                         {formatWalletAddress(transaction.walletAddress)}
+                                                    </Typography>
+                                                </Tooltip>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Tooltip title={transaction.performedBy || transaction.walletAddress}>
+                                                    <Typography variant="body2" fontFamily="monospace">
+                                                        {transaction.performedBy ? 
+                                                            formatWalletAddress(transaction.performedBy) : 
+                                                            formatWalletAddress(transaction.walletAddress)}
                                                     </Typography>
                                                 </Tooltip>
                                             </TableCell>
