@@ -486,25 +486,37 @@ function AssetHistoryPage() {
                                             <TableCell>
                                                 {transaction.action === 'INTEGRITY_RECOVERY' && transaction.metadata ? (
                                                     <Box>
-                                                        <Typography variant="body2" gutterBottom>
-                                                            <strong>Recovery Details:</strong>
-                                                        </Typography>
-                                                        <Typography variant="caption" display="block">
-                                                            Method: {transaction.metadata.recovery_source || 'Enhanced recovery with fallback'}
-                                                        </Typography>
-                                                        {transaction.metadata.blockchain_cid && transaction.metadata.computed_cid && (
+                                                        {!(transaction.metadata?.error_message || transaction.metadata?.reason?.includes('failed')) && transaction.metadata.blockchain_cid && transaction.metadata.computed_cid && (
                                                             <Typography variant="caption" display="block">
-                                                                CID Mismatch: Restored authentic metadata from blockchain
+                                                                Restored critical metadata from IPFS
                                                             </Typography>
                                                         )}
-                                                        {transaction.metadata.tx_sender_verified === false && (
+                                                        {!(transaction.metadata?.error_message || transaction.metadata?.reason?.includes('failed')) && transaction.metadata.tx_hash_corrected && (
                                                             <Typography variant="caption" display="block">
-                                                                Transaction sender verification failed
+                                                                Original TX ID restored from blockchain
                                                             </Typography>
                                                         )}
-                                                        <Typography variant="caption" display="block">
-                                                            Status: {transaction.metadata?.error_message || transaction.metadata?.reason?.includes('failed') ? 'Recovery failed' : 'Successfully recovered'}
-                                                        </Typography>
+                                                        {transaction.metadata?.error_message || transaction.metadata?.reason?.includes('failed') ? (
+                                                            <Box>
+                                                                {transaction.metadata?.reason?.includes('transaction and event methods failed') && (
+                                                                    <Typography variant="caption" display="block">
+                                                                        Unable to retrieve original TX ID
+                                                                    </Typography>
+                                                                )}
+                                                                {transaction.metadata?.reason?.includes('retrieved metadata from IPFS is invalid') && (
+                                                                    <Typography variant="caption" display="block">
+                                                                        Unable to restore critical metadata from IPFS
+                                                                    </Typography>
+                                                                )}
+                                                                <Typography variant="caption" display="block">
+                                                                    Status: Recovery failed
+                                                                </Typography>
+                                                            </Box>
+                                                        ) : (
+                                                            <Typography variant="caption" display="block">
+                                                                Status: Successfully recovered
+                                                            </Typography>
+                                                        )}
                                                     </Box>
                                                 ) : (
                                                     <Typography variant="body2">
