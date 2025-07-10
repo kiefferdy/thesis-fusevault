@@ -26,7 +26,9 @@ import {
     MenuItem,
     FormControl,
     InputLabel,
-    Select
+    Select,
+    Pagination,
+    Stack
 } from '@mui/material';
 import {
     ArrowBack,
@@ -57,6 +59,8 @@ function AssetHistoryPage() {
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [actionFilter, setActionFilter] = useState('all');
+    const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(25);
 
     // Fetch asset details and history
     useEffect(() => {
@@ -142,10 +146,76 @@ function AssetHistoryPage() {
         }
     };
 
-    // Handle export (placeholder for future implementation)
+    // Handle export to CSV
     const handleExport = () => {
-        toast.info('Export functionality coming soon!');
+        try {
+            // Create CSV headers
+            const headers = [
+                'Date & Time',
+                'Action',
+                'Version',
+                'Owner',
+                'Initiator',
+                'Transaction Hash',
+                'Details'
+            ];
+
+            // Convert transactions to CSV rows
+            const csvData = filteredHistory.map(tx => [
+                formatDate(tx.timestamp),
+                tx.action || '',
+                tx.version || tx.metadata?.versionNumber || tx.metadata?.new_version || 
+                    (tx.action === 'CREATE' || tx.action === 'RECREATE_DELETED' ? '1' : 'N/A'),
+                tx.walletAddress || '',
+                tx.performedBy || tx.walletAddress || '',
+                tx.metadata?.smartContractTxId || 
+                    (['UPDATE', 'INTEGRITY_RECOVERY', 'DELETION_STATUS_RESTORED'].includes(tx.action) ? 'N/A' : 'Pending'),
+                tx.metadata?.reason || tx.metadata?.description || 'No additional details'
+            ]);
+
+            // Combine headers and data
+            const allRows = [headers, ...csvData];
+            
+            // Convert to CSV string
+            const csvContent = allRows
+                .map(row => row.map(field => `"${field}"`).join(','))
+                .join('\n');
+
+            // Create and download file
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `asset-history-${assetId}-${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            toast.success(`Exported ${filteredHistory.length} transactions to CSV`);
+        } catch (error) {
+            console.error('Export error:', error);
+            toast.error('Failed to export asset history');
+        }
     };
+
+    // Handle pagination
+    const handlePageChange = (event, newPage) => {
+        setPage(newPage);
+    };
+
+    const handleRowsPerPageChange = (event) => {
+        setRowsPerPage(parseInt(event.target.value, 10));
+        setPage(1); // Reset to first page when changing rows per page
+    };
+
+    // Calculate pagination
+    const totalPages = Math.ceil(filteredHistory.length / rowsPerPage);
+    const startIndex = (page - 1) * rowsPerPage;
+    const endIndex = startIndex + rowsPerPage;
+    const paginatedHistory = filteredHistory
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .slice(startIndex, endIndex);
 
     // Loading state
     if (loading) {
@@ -386,9 +456,24 @@ function AssetHistoryPage() {
                             </Select>
                         </FormControl>
                     </Grid>
-                    <Grid item xs={12} md={4}>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <FormControl fullWidth size="small">
+                            <InputLabel>Per Page</InputLabel>
+                            <Select
+                                value={rowsPerPage}
+                                label="Per Page"
+                                onChange={handleRowsPerPageChange}
+                            >
+                                <MenuItem value={10}>10</MenuItem>
+                                <MenuItem value={25}>25</MenuItem>
+                                <MenuItem value={50}>50</MenuItem>
+                                <MenuItem value={100}>100</MenuItem>
+                            </Select>
+                        </FormControl>
+                    </Grid>
+                    <Grid item xs={12} md={2}>
                         <Typography variant="body2" color="text.secondary">
-                            Showing {filteredHistory.length} of {history.length} transactions
+                            Showing {startIndex + 1}-{Math.min(endIndex, filteredHistory.length)} of {filteredHistory.length} transactions
                         </Typography>
                     </Grid>
                 </Grid>
@@ -410,13 +495,13 @@ function AssetHistoryPage() {
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {filteredHistory.length === 0 ? (
+                            {paginatedHistory.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                                         <Typography variant="body2" color="text.secondary">
-                                            {history.length === 0
-                                                ? 'No transaction history found for this asset.'
-                                                : 'No transactions match your current filters.'
+                                            {filteredHistory.length === 0
+                                                ? (history.length === 0 ? 'No transaction history found for this asset.' : 'No transactions match your current filters.')
+                                                : 'No transactions on this page.'
                                             }
                                         </Typography>
                                         {history.length > 0 && filteredHistory.length === 0 && (
@@ -434,9 +519,7 @@ function AssetHistoryPage() {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredHistory
-                                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)) // Sort by newest first
-                                    .map((transaction, index) => (
+                                paginatedHistory.map((transaction, index) => (
                                         <TableRow
                                             key={transaction.id || transaction._id || index}
                                             hover
@@ -550,13 +633,26 @@ function AssetHistoryPage() {
                     </Table>
                 </TableContainer>
 
-                {/* Table Footer */}
+                {/* Pagination Controls */}
                 {filteredHistory.length > 0 && (
                     <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-                        <Typography variant="caption" color="text.secondary">
-                            Last updated: {new Date().toLocaleString()}
-                            {refreshing && ' • Refreshing...'}
-                        </Typography>
+                        <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+                            <Typography variant="caption" color="text.secondary">
+                                Last updated: {new Date().toLocaleString()}
+                                {refreshing && ' • Refreshing...'}
+                            </Typography>
+                            {totalPages > 1 && (
+                                <Pagination
+                                    count={totalPages}
+                                    page={page}
+                                    onChange={handlePageChange}
+                                    color="primary"
+                                    size="small"
+                                    showFirstButton
+                                    showLastButton
+                                />
+                            )}
+                        </Stack>
                     </Box>
                 )}
             </Paper>

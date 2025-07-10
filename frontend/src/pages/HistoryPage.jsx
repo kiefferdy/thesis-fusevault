@@ -25,7 +25,9 @@ import {
   FormControl,
   InputLabel,
   Select,
-  Button
+  Button,
+  Pagination,
+  Stack
 } from '@mui/material';
 import {
   Search,
@@ -50,6 +52,8 @@ function HistoryPage() {
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
 
   // Fetch transaction data
   useEffect(() => {
@@ -131,20 +135,84 @@ function HistoryPage() {
     }
   };
 
-  // Handle export (placeholder for future implementation)
+  // Handle export to CSV
   const handleExport = () => {
-    toast.info('Export functionality coming soon!');
+    try {
+      // Create CSV headers
+      const headers = [
+        'Date & Time',
+        'Asset ID', 
+        'Action',
+        'Owner',
+        'Initiator',
+        'Transaction Hash'
+      ];
+
+      // Convert transactions to CSV rows
+      const csvData = filteredTransactions.map(tx => [
+        formatDate(tx.timestamp),
+        tx.assetId || '',
+        tx.action || '',
+        tx.walletAddress || '',
+        tx.performedBy || tx.walletAddress || '',
+        tx.metadata?.smartContractTxId || 'N/A'
+      ]);
+
+      // Combine headers and data
+      const allRows = [headers, ...csvData];
+      
+      // Convert to CSV string
+      const csvContent = allRows
+        .map(row => row.map(field => `"${field}"`).join(','))
+        .join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `transaction-history-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success(`Exported ${filteredTransactions.length} transactions to CSV`);
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export transactions');
+    }
   };
 
   // Handle filter change
   const handleFilterChange = (event) => {
     setFilter(event.target.value);
+    setPage(1); // Reset to first page when filter changes
   };
 
   // Handle search term change
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
+    setPage(1); // Reset to first page when search changes
   };
+
+  // Handle pagination
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage);
+  };
+
+  const handleRowsPerPageChange = (event) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(1); // Reset to first page when changing rows per page
+  };
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredTransactions.length / rowsPerPage);
+  const startIndex = (page - 1) * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const paginatedTransactions = filteredTransactions
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .slice(startIndex, endIndex);
 
   // Loading state
   if (loading) {
@@ -304,9 +372,24 @@ function HistoryPage() {
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} sm={6} md={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Per Page</InputLabel>
+              <Select
+                value={rowsPerPage}
+                label="Per Page"
+                onChange={handleRowsPerPageChange}
+              >
+                <MenuItem value={10}>10</MenuItem>
+                <MenuItem value={25}>25</MenuItem>
+                <MenuItem value={50}>50</MenuItem>
+                <MenuItem value={100}>100</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} md={2}>
             <Typography variant="body2" color="text.secondary">
-              Showing {filteredTransactions.length} of {transactions.length} transactions
+              Showing {startIndex + 1}-{Math.min(endIndex, filteredTransactions.length)} of {filteredTransactions.length} transactions
             </Typography>
           </Grid>
         </Grid>
@@ -327,13 +410,13 @@ function HistoryPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredTransactions.length === 0 ? (
+              {paginatedTransactions.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
                     <Typography variant="body2" color="text.secondary">
-                      {transactions.length === 0
-                        ? 'No transaction history found.'
-                        : 'No transactions match your current filters.'}
+                      {filteredTransactions.length === 0 
+                        ? (transactions.length === 0 ? 'No transaction history found.' : 'No transactions match your current filters.')
+                        : 'No transactions on this page.'}
                     </Typography>
                     {transactions.length > 0 && filteredTransactions.length === 0 && (
                       <Button
@@ -350,9 +433,7 @@ function HistoryPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredTransactions
-                  .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)) // Sort by newest first
-                  .map((transaction, index) => (
+                paginatedTransactions.map((transaction, index) => (
                     <TableRow
                       key={transaction.id || transaction._id || index}
                       hover
@@ -430,13 +511,26 @@ function HistoryPage() {
           </Table>
         </TableContainer>
 
-        {/* Table Footer */}
+        {/* Pagination Controls */}
         {filteredTransactions.length > 0 && (
           <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-            <Typography variant="caption" color="text.secondary">
-              Last updated: {new Date().toLocaleString()}
-              {refreshing && ' • Refreshing...'}
-            </Typography>
+            <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+              <Typography variant="caption" color="text.secondary">
+                Last updated: {new Date().toLocaleString()}
+                {refreshing && ' • Refreshing...'}
+              </Typography>
+              {totalPages > 1 && (
+                <Pagination
+                  count={totalPages}
+                  page={page}
+                  onChange={handlePageChange}
+                  color="primary"
+                  size="small"
+                  showFirstButton
+                  showLastButton
+                />
+              )}
+            </Stack>
           </Box>
         )}
       </Paper>
