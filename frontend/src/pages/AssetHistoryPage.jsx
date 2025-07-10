@@ -114,7 +114,7 @@ function AssetHistoryPage() {
             return (
                 transaction.action?.toLowerCase().includes(searchLower) ||
                 transaction.walletAddress?.toLowerCase().includes(searchLower) ||
-                transaction.blockchainTxHash?.toLowerCase().includes(searchLower) ||
+                transaction.metadata?.smartContractTxId?.toLowerCase().includes(searchLower) ||
                 transaction.metadata?.reason?.toLowerCase().includes(searchLower)
             );
         }
@@ -462,8 +462,8 @@ function AssetHistoryPage() {
                                                 <Typography variant="body2" fontFamily="monospace">
                                                     {transaction.version || 
                                                      transaction.metadata?.versionNumber || 
-                                                     transaction.metadata?.new_version || 
-                                                     'N/A'}
+                                                     transaction.metadata?.new_version ||
+                                                     (transaction.action === 'CREATE' || transaction.action === 'RECREATE_DELETED' ? '1' : 'N/A')}
                                                 </Typography>
                                             </TableCell>
                                             <TableCell>
@@ -483,14 +483,21 @@ function AssetHistoryPage() {
                                                 </Tooltip>
                                             </TableCell>
                                             <TableCell>
-                                                {transaction.blockchainTxHash ? (
-                                                    <Tooltip title={transaction.blockchainTxHash}>
+                                                {transaction.metadata?.smartContractTxId ? (
+                                                    <Tooltip title={transaction.metadata.smartContractTxId}>
                                                         <Typography variant="body2" fontFamily="monospace" color="primary.main">
-                                                            {formatTransactionHash(transaction.blockchainTxHash)}
+                                                            {formatTransactionHash(transaction.metadata.smartContractTxId)}
                                                         </Typography>
                                                     </Tooltip>
                                                 ) : (
-                                                    <Chip label="Pending" size="small" color="warning" variant="outlined" />
+                                                    // Actions that don't involve blockchain writes should show N/A
+                                                    ['UPDATE', 'INTEGRITY_RECOVERY', 'DELETION_STATUS_RESTORED'].includes(transaction.action) ? (
+                                                        <Typography variant="body2" color="text.secondary">
+                                                            N/A
+                                                        </Typography>
+                                                    ) : (
+                                                        <Chip label="Pending" size="small" color="warning" variant="outlined" />
+                                                    )
                                                 )}
                                             </TableCell>
                                             <TableCell>
