@@ -501,10 +501,23 @@ class RetrieveHandler:
             # Set new version created flag in verification result
             verification_result.new_version_created = new_version_created
             
-            # 8. Prepare response
+            # 8. Extract timestamp fields from document
+            created_at = document.get("createdAt", document.get("lastUpdated", ""))
+            updated_at = document.get("lastUpdated", "")
+            
+            # Convert datetime objects to ISO strings if needed
+            if hasattr(created_at, 'isoformat'):
+                created_at = created_at.isoformat()
+            if hasattr(updated_at, 'isoformat'):
+                updated_at = updated_at.isoformat()
+            
+            # 9. Prepare response
             return MetadataRetrieveResponse(
                 asset_id=asset_id,
                 version=doc_version,
+                wallet_address=wallet_address,
+                created_at=created_at,
+                updated_at=updated_at,
                 critical_metadata=critical_metadata,
                 non_critical_metadata=non_critical_metadata,
                 verification=verification_result,
@@ -910,10 +923,23 @@ class RetrieveHandler:
             # Set new version created flag in verification result
             verification_result.new_version_created = new_version_created
             
-            # 8. Prepare response
+            # 8. Extract timestamp fields from document
+            created_at = document.get("createdAt", document.get("lastUpdated", ""))
+            updated_at = document.get("lastUpdated", "")
+            
+            # Convert datetime objects to ISO strings if needed
+            if hasattr(created_at, 'isoformat'):
+                created_at = created_at.isoformat()
+            if hasattr(updated_at, 'isoformat'):
+                updated_at = updated_at.isoformat()
+            
+            # 9. Prepare response
             return MetadataRetrieveResponse(
                 asset_id=asset_id,
                 version=doc_version,
+                wallet_address=wallet_address,
+                created_at=created_at,
+                updated_at=updated_at,
                 critical_metadata=critical_metadata,
                 non_critical_metadata=non_critical_metadata,
                 verification=verification_result,

@@ -39,6 +39,9 @@ class MetadataVerificationResult(BaseModel):
 class MetadataRetrieveResponse(BaseModel):
     asset_id: str = Field(..., description="The asset's unique identifier", alias="assetId")
     version: int = Field(..., description="Version number of the retrieved metadata")
+    wallet_address: str = Field(..., description="Owner wallet address", alias="walletAddress")
+    created_at: Optional[str] = Field(None, description="Asset creation timestamp", alias="createdAt")
+    updated_at: Optional[str] = Field(None, description="Asset last update timestamp", alias="updatedAt")
     critical_metadata: Dict[str, Any] = Field(..., description="Core metadata", alias="criticalMetadata")
     non_critical_metadata: Dict[str, Any] = Field(..., description="Additional metadata", alias="nonCriticalMetadata")
     verification: MetadataVerificationResult = Field(..., description="Verification results")
