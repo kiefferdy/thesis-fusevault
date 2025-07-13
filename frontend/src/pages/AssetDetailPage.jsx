@@ -56,41 +56,75 @@ function AssetDetailPage() {
   } = useTransactionSigner();
   const navigate = useNavigate();
 
-  // Simulate recovery progress messages
-  const simulateRecoveryProgress = async () => {
-    const messages = [
-      'Unable to verify asset authenticity...',
-      'Restoring metadata from IPFS...',
-      'Searching blockchain transaction history...',
-      'Searching blockchain event logs...',
-      'Asset metadata restored successfully'
-    ];
-
-    for (let i = 0; i < messages.length; i++) {
-      setRecoveryMessage(messages[i]);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay between messages
+  // Handle real streaming progress from backend
+  const handleStreamingProgress = (progressData) => {
+    setRecoveryMessage(progressData.message);
+    if (progressData.completed) {
+      if (progressData.error) {
+        setError('Failed to load asset data. Please try again later.');
+        setLoading(false);
+      }
+      // Note: completion with success will be handled in the onComplete callback
     }
   };
 
   // Fetch asset data
   useEffect(() => {
-    const fetchAsset = async () => {
+    let streamConnection = null;
+    
+    const fetchAsset = () => {
       setLoading(true);
       setRecoveryMessage('Loading asset data...');
       setRecoveryStatus(null);
+      setError(null);
       
+      // Try streaming first, with fallback to regular API
+      streamConnection = assetService.retrieveMetadataStream(
+        assetId,
+        version,
+        handleStreamingProgress,
+        (assetData) => {
+          // Success callback
+          console.log('Asset data received via streaming:', assetData);
+          
+          // Check if recovery was performed
+          if (assetData.verification && assetData.verification.recoveryNeeded) {
+            setRecoveryStatus('recovered');
+          }
+          
+          setAsset(assetData);
+          setError(null);
+          setLoading(false);
+        },
+        (error) => {
+          // Error callback - fallback to regular API
+          console.warn('Streaming failed, falling back to regular API:', error);
+          fallbackToRegularAPI();
+        }
+      );
+      
+      // If streaming is not supported or fails immediately, fallback
+      if (!streamConnection) {
+        fallbackToRegularAPI();
+      }
+    };
+    
+    const fallbackToRegularAPI = async () => {
       try {
+        setRecoveryMessage('Loading asset data...');
         const assetData = await assetService.retrieveMetadata(assetId, version);
         
         // Check if recovery was performed
         if (assetData.verification && assetData.verification.recoveryNeeded) {
           setRecoveryStatus('recovered');
-          // If recovery was needed, simulate the progress messages the user would have seen
+          // For fallback, show a simple completion message
           if (assetData.verification.recoverySuccessful) {
-            await simulateRecoveryProgress();
+            setRecoveryMessage('Asset metadata restored successfully');
           } else {
             setRecoveryMessage('Recovery failed - asset integrity could not be verified');
           }
+        } else {
+          setRecoveryMessage('Asset verified successfully');
         }
         
         setAsset(assetData);
@@ -105,6 +139,13 @@ function AssetDetailPage() {
     };
 
     fetchAsset();
+    
+    // Cleanup function to close EventSource on component unmount
+    return () => {
+      if (streamConnection && streamConnection.close) {
+        streamConnection.close();
+      }
+    };
   }, [assetId, version]);
 
 
