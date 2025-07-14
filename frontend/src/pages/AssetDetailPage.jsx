@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -20,7 +20,10 @@ import {
   Fade,
   Zoom,
   useTheme,
-  alpha
+  alpha,
+  TextField,
+  InputAdornment,
+  Stack
 } from '@mui/material';
 import {
   Edit,
@@ -37,7 +40,12 @@ import {
   Schedule,
   Person,
   Fingerprint,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Save,
+  Cancel,
+  Add,
+  Remove,
+  HelpOutline
 } from '@mui/icons-material';
 import { toast } from 'react-hot-toast';
 import { assetService } from '../services/assetService';
@@ -47,8 +55,97 @@ import { useAuth } from '../contexts/AuthContext';
 import TransactionSigner from '../components/TransactionSigner';
 import { formatDate, formatWalletAddress, formatTransactionHash } from '../utils/formatters';
 
+// Define EditableField component outside to prevent re-creation on every render
+const EditableField = React.memo(({ label, value, onChange, onRemove, isCritical = false, theme, alpha }) => {
+  const handleChange = React.useCallback((e) => {
+    if (Array.isArray(value)) {
+      onChange(label, e.target.value.split(', ').filter(item => item.trim()));
+    } else {
+      onChange(label, e.target.value);
+    }
+  }, [label, value, onChange]);
+
+  const handleRemove = React.useCallback(() => {
+    onRemove(label, isCritical);
+  }, [label, isCritical, onRemove]);
+
+  return (
+    <Box 
+      sx={{ 
+        position: 'relative',
+        p: 2,
+        borderRadius: 2,
+        backgroundColor: alpha(theme.palette.background.paper, 0.6),
+        border: `2px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+        transition: 'all 0.2s ease-in-out'
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="subtitle2" sx={{ 
+            fontWeight: 600, 
+            color: theme.palette.text.secondary,
+            mb: 1,
+            textTransform: 'uppercase',
+            fontSize: '0.75rem',
+            letterSpacing: '0.5px'
+          }}>
+            {label}
+          </Typography>
+          {Array.isArray(value) ? (
+            <TextField
+              fullWidth
+              multiline
+              rows={2}
+              variant="outlined"
+              value={Array.isArray(value) ? value.join(', ') : value}
+              onChange={handleChange}
+              placeholder="Enter comma-separated values"
+              size="small"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem'
+                }
+              }}
+            />
+          ) : (
+            <TextField
+              fullWidth
+              variant="outlined"
+              value={value || ''}
+              onChange={handleChange}
+              size="small"
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem'
+                }
+              }}
+            />
+          )}
+        </Box>
+        <Tooltip title="Remove field">
+          <IconButton
+            onClick={handleRemove}
+            sx={{
+              color: theme.palette.error.main,
+              '&:hover': {
+                backgroundColor: alpha(theme.palette.error.main, 0.1),
+              }
+            }}
+          >
+            <Remove fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
+    </Box>
+  );
+});
+
 function AssetDetailPage() {
   const { assetId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [asset, setAsset] = useState(null);
   const [version] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -57,16 +154,27 @@ function AssetDetailPage() {
   const [recoveryMessage, setRecoveryMessage] = useState('Loading asset data...');
   const [progressPercent, setProgressPercent] = useState(0);
   const [copiedField, setCopiedField] = useState(null);
+  
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedCriticalMetadata, setEditedCriticalMetadata] = useState({});
+  const [editedNonCriticalMetadata, setEditedNonCriticalMetadata] = useState({});
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Tag management state
+  const [newTag, setNewTag] = useState('');
   const { deleteAsset, isDeleting } = useAssets();
   const { currentAccount } = useAuth();
   const {
-    isVisible,
-    operation,
-    operationData,
+    isVisible: isTransactionVisible,
+    operation: transactionOperation,
+    operationData: transactionData,
     showDeleteSigner,
+    showEditSigner,
+    checkEditRequiresSignature,
     hideSigner,
-    onSuccess,
-    onError
+    onSuccess: onTransactionSuccess,
+    onError: onTransactionError
   } = useTransactionSigner();
   const navigate = useNavigate();
   const theme = useTheme();
@@ -217,10 +325,218 @@ function AssetDetailPage() {
     };
   }, [assetId, version]);
 
+  // Check for edit mode from URL parameter
+  useEffect(() => {
+    if (asset && searchParams.get('edit') === 'true' && !isEditing) {
+      // Remove the edit parameter from URL to clean it up
+      setSearchParams({});
+      // Automatically enter edit mode
+      setEditedCriticalMetadata({ ...asset.criticalMetadata });
+      setEditedNonCriticalMetadata({ ...asset.nonCriticalMetadata });
+      setIsEditing(true);
+    }
+  }, [asset, searchParams, isEditing, setSearchParams]);
 
-  const handleEdit = () => {
-    navigate(`/assets/${assetId}/edit`);
+  // Initialize edit state with current metadata
+  const handleEditToggle = () => {
+    if (!isEditing) {
+      setEditedCriticalMetadata({ ...asset.criticalMetadata });
+      setEditedNonCriticalMetadata({ ...asset.nonCriticalMetadata });
+    }
+    setIsEditing(!isEditing);
   };
+
+  // Cancel editing and reset to original data
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedCriticalMetadata({});
+    setEditedNonCriticalMetadata({});
+  };
+
+  // Validate metadata before saving
+  const validateMetadata = () => {
+    const errors = [];
+    
+    // Check if critical metadata has required fields (name is required)
+    if (!editedCriticalMetadata.name || editedCriticalMetadata.name.trim() === '') {
+      errors.push('Asset name is required');
+    }
+    
+    // Check for empty field names
+    const allFields = [...Object.keys(editedCriticalMetadata), ...Object.keys(editedNonCriticalMetadata)];
+    const emptyFields = allFields.filter(key => !key || key.trim() === '');
+    if (emptyFields.length > 0) {
+      errors.push('Field names cannot be empty');
+    }
+    
+    // Check for duplicate field names between critical and non-critical
+    const criticalKeys = Object.keys(editedCriticalMetadata);
+    const nonCriticalKeys = Object.keys(editedNonCriticalMetadata);
+    const duplicates = criticalKeys.filter(key => nonCriticalKeys.includes(key));
+    if (duplicates.length > 0) {
+      errors.push(`Duplicate field names found: ${duplicates.join(', ')}`);
+    }
+    
+    return errors;
+  };
+
+  // Check if critical metadata has changed (client-side comparison)
+  const hasCriticalMetadataChanged = (newCriticalMetadata, existingCriticalMetadata) => {
+    if (!existingCriticalMetadata) return true;
+    
+    // Get all keys from both objects
+    const newKeys = Object.keys(newCriticalMetadata || {});
+    const existingKeys = Object.keys(existingCriticalMetadata || {});
+    const allKeys = [...new Set([...newKeys, ...existingKeys])];
+    
+    // Compare each key
+    for (const key of allKeys) {
+      const newValue = newCriticalMetadata[key];
+      const existingValue = existingCriticalMetadata[key];
+      
+      // Handle arrays (like tags)
+      if (Array.isArray(newValue) && Array.isArray(existingValue)) {
+        if (newValue.length !== existingValue.length) return true;
+        if (!newValue.every((val, index) => val === existingValue[index])) return true;
+      }
+      // Handle other values
+      else if (newValue !== existingValue) {
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
+  // Save edited metadata (follows the same pattern as the old edit page)
+  const handleSaveEdit = async () => {
+    try {
+      setIsSaving(true);
+      
+      // Validate metadata before saving
+      const validationErrors = validateMetadata();
+      if (validationErrors.length > 0) {
+        toast.error('Validation failed: ' + validationErrors.join(', '));
+        return;
+      }
+      
+      // Prepare upload data (same format as upload/edit)
+      const uploadData = {
+        assetId: assetId,
+        walletAddress: currentAccount,
+        criticalMetadata: editedCriticalMetadata,
+        nonCriticalMetadata: editedNonCriticalMetadata
+      };
+      
+      // Use the same edit flow as the old edit page
+      // First, do a client-side check to determine if critical metadata changed
+      const criticalMetadataChanged = hasCriticalMetadataChanged(uploadData.criticalMetadata, asset.criticalMetadata);
+      
+      if (criticalMetadataChanged) {
+        // Critical metadata changed - show TransactionSigner modal immediately (no server call needed)
+        console.log('Critical metadata changed, showing MetaMask signer');
+        showEditSigner(
+          uploadData,
+          (result) => {
+            console.log('Edit with signing successful:', result);
+            setIsSaving(false);
+            setIsEditing(false);
+            
+            // Refresh the asset data to show updated values
+            window.location.reload(); // Simple way to refresh and get updated data
+            
+            toast.success('Asset updated successfully!');
+          },
+          (error) => {
+            console.error('Edit with signing failed:', error);
+            setIsSaving(false);
+            
+            let errorMessage = 'Edit failed';
+            if (error?.message) {
+              errorMessage = error.message;
+            }
+            
+            toast.error(errorMessage);
+          }
+        );
+      } else {
+        // Only non-critical metadata changed - complete directly without modal
+        console.log('Only non-critical metadata changed, uploading directly');
+        try {
+          const checkResult = await checkEditRequiresSignature(uploadData);
+          console.log('checkEditRequiresSignature result:', checkResult);
+          
+          setIsSaving(false);
+          setIsEditing(false);
+          
+          // Refresh the asset data to show updated values
+          window.location.reload(); // Simple way to refresh and get updated data
+          
+          toast.success('Asset updated successfully! (Only non-critical metadata changed)');
+        } catch (error) {
+          console.error('Edit failed:', error);
+          setIsSaving(false);
+          
+          let errorMessage = 'Edit failed';
+          if (error?.message) {
+            errorMessage = error.message;
+          } else if (typeof error === 'string') {
+            errorMessage = error;
+          }
+          
+          toast.error(errorMessage);
+        }
+      }
+    } catch (error) {
+      console.error('Error in save process:', error);
+      toast.error('Failed to save changes: ' + (error.message || 'Unknown error'));
+      setIsSaving(false);
+    }
+  };
+
+  // Handle metadata field changes - memoized to prevent re-renders
+  const handleCriticalMetadataChange = useCallback((key, value) => {
+    setEditedCriticalMetadata(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  }, []);
+
+  const handleNonCriticalMetadataChange = useCallback((key, value) => {
+    setEditedNonCriticalMetadata(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  }, []);
+
+  // Add new metadata field
+  const handleAddMetadataField = (isCritical) => {
+    const key = prompt(`Enter new ${isCritical ? 'critical' : 'non-critical'} metadata field name:`);
+    if (key && key.trim()) {
+      if (isCritical) {
+        handleCriticalMetadataChange(key.trim(), '');
+      } else {
+        handleNonCriticalMetadataChange(key.trim(), '');
+      }
+    }
+  };
+
+  // Remove metadata field - memoized to prevent re-renders
+  const handleRemoveMetadataField = useCallback((key, isCritical) => {
+    if (isCritical) {
+      setEditedCriticalMetadata(prev => {
+        const newData = { ...prev };
+        delete newData[key];
+        return newData;
+      });
+    } else {
+      setEditedNonCriticalMetadata(prev => {
+        const newData = { ...prev };
+        delete newData[key];
+        return newData;
+      });
+    }
+  }, []);
 
   const handleDelete = () => {
     if (window.confirm('Are you sure you want to delete this asset?')) {
@@ -409,9 +725,9 @@ function AssetDetailPage() {
     );
   }
 
-  // Helper component for copyable fields
+  // Helper component for view-only fields
   const CopyableField = ({ label, value, icon }) => {
-    const fieldKey = `${label}-${value}`;
+    const fieldKey = `${label}`;
     const isCopied = copiedField === fieldKey;
     
     return (
@@ -498,6 +814,26 @@ function AssetDetailPage() {
         </Box>
       </Box>
     );
+  };
+
+  // Handle adding a new tag
+  const handleAddTag = () => {
+    if (newTag.trim() === '') return;
+
+    setEditedCriticalMetadata(prev => ({
+      ...prev,
+      tags: [...(prev.tags || []), newTag.trim()]
+    }));
+
+    setNewTag('');
+  };
+
+  // Handle removing a tag
+  const handleRemoveTag = (tagToRemove) => {
+    setEditedCriticalMetadata(prev => ({
+      ...prev,
+      tags: (prev.tags || []).filter(tag => tag !== tagToRemove)
+    }));
   };
 
   return (
@@ -597,49 +933,86 @@ function AssetDetailPage() {
               </Box>
 
               <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<Download />}
-                  onClick={handleExportAsset}
-                  sx={{ 
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    fontWeight: 500,
-                    borderColor: alpha(theme.palette.primary.main, 0.5),
-                    '&:hover': {
-                      borderColor: theme.palette.primary.main,
-                      backgroundColor: alpha(theme.palette.primary.main, 0.04)
-                    }
-                  }}
-                >
-                  Export
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<Edit />}
-                  onClick={handleEdit}
-                  sx={{ 
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    fontWeight: 500
-                  }}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<Delete />}
-                  onClick={handleDelete}
-                  disabled={isVisible}
-                  sx={{ 
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    fontWeight: 500
-                  }}
-                >
-                  {isVisible ? 'Processing...' : 'Delete'}
-                </Button>
+                {!isEditing ? (
+                  <>
+                    <Button
+                      variant="outlined"
+                      startIcon={<Download />}
+                      onClick={handleExportAsset}
+                      sx={{ 
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        borderColor: alpha(theme.palette.primary.main, 0.5),
+                        '&:hover': {
+                          borderColor: theme.palette.primary.main,
+                          backgroundColor: alpha(theme.palette.primary.main, 0.04)
+                        }
+                      }}
+                    >
+                      Export
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<Edit />}
+                      onClick={handleEditToggle}
+                      sx={{ 
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 500
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<Delete />}
+                      onClick={handleDelete}
+                      disabled={isTransactionVisible}
+                      sx={{ 
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 500
+                      }}
+                    >
+                      {isTransactionVisible ? 'Processing...' : 'Delete'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="contained"
+                      startIcon={<Save />}
+                      onClick={handleSaveEdit}
+                      disabled={isSaving}
+                      sx={{ 
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        backgroundColor: theme.palette.success.main,
+                        '&:hover': {
+                          backgroundColor: theme.palette.success.dark
+                        }
+                      }}
+                    >
+                      {isSaving ? 'Saving...' : 'Save'}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<Cancel />}
+                      onClick={handleCancelEdit}
+                      disabled={isSaving}
+                      sx={{ 
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 500
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </>
+                )}
               </Box>
             </Box>
           </Box>
@@ -673,7 +1046,7 @@ function AssetDetailPage() {
                     <Grid item xs={12} md={6}>
                       <CopyableField 
                         label="Version" 
-                        value={asset.versionNumber || 1}
+                        value={asset.version !== undefined && asset.version !== null ? asset.version : 1}
                         icon={<History fontSize="small" />}
                       />
                     </Grid>
@@ -735,12 +1108,329 @@ function AssetDetailPage() {
                   }}
                 />
                 <CardContent sx={{ p: 3 }}>
-                  <Grid container spacing={2}>
-                    {asset.criticalMetadata && Object.entries(asset.criticalMetadata).map(([key, value]) => (
-                      <Grid item xs={12} md={6} key={key}>
-                        <CopyableField label={key} value={value} />
-                      </Grid>
-                    ))}
+                  <Grid container spacing={3}>
+                    {isEditing ? (
+                      <>
+                        {/* Special section for core fields */}
+                        <Grid item xs={12}>
+                          <Typography variant="subtitle1" sx={{ 
+                            fontWeight: 600, 
+                            color: theme.palette.text.primary,
+                            mb: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1
+                          }}>
+                            Display Fields
+                            <Tooltip title="These metadata fields appear on asset cards to help users quickly identify assets.">
+                              <HelpOutline 
+                                sx={{ 
+                                  fontSize: '1rem', 
+                                  color: theme.palette.text.secondary,
+                                  cursor: 'help'
+                                }} 
+                              />
+                            </Tooltip>
+                          </Typography>
+                          
+                          <Grid container spacing={2}>
+                            {/* Name field - required */}
+                            <Grid item xs={12}>
+                              <Box 
+                                sx={{ 
+                                  position: 'relative',
+                                  p: 2,
+                                  borderRadius: 2,
+                                  backgroundColor: alpha(theme.palette.background.paper, 0.6),
+                                  border: `2px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+                                  transition: 'all 0.2s ease-in-out'
+                                }}
+                              >
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <Typography variant="subtitle2" sx={{ 
+                                      fontWeight: 600, 
+                                      color: theme.palette.text.secondary,
+                                      mb: 1,
+                                      textTransform: 'uppercase',
+                                      fontSize: '0.75rem',
+                                      letterSpacing: '0.5px'
+                                    }}>
+                                      Name *
+                                    </Typography>
+                                    <TextField
+                                      fullWidth
+                                      variant="outlined"
+                                      value={editedCriticalMetadata.name || ''}
+                                      onChange={(e) => handleCriticalMetadataChange('name', e.target.value)}
+                                      placeholder="Enter asset name..."
+                                      size="small"
+                                      sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                          fontFamily: 'monospace',
+                                          fontSize: '0.875rem'
+                                        }
+                                      }}
+                                    />
+                                  </Box>
+                                </Box>
+                              </Box>
+                            </Grid>
+                            
+                            {/* Description field */}
+                            <Grid item xs={12}>
+                              <Box 
+                                sx={{ 
+                                  position: 'relative',
+                                  p: 2,
+                                  borderRadius: 2,
+                                  backgroundColor: alpha(theme.palette.background.paper, 0.6),
+                                  border: `2px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+                                  transition: 'all 0.2s ease-in-out'
+                                }}
+                              >
+                                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                                    <Typography variant="subtitle2" sx={{ 
+                                      fontWeight: 600, 
+                                      color: theme.palette.text.secondary,
+                                      mb: 1,
+                                      textTransform: 'uppercase',
+                                      fontSize: '0.75rem',
+                                      letterSpacing: '0.5px'
+                                    }}>
+                                      Description
+                                    </Typography>
+                                    <TextField
+                                      fullWidth
+                                      multiline
+                                      rows={3}
+                                      variant="outlined"
+                                      value={editedCriticalMetadata.description || ''}
+                                      onChange={(e) => handleCriticalMetadataChange('description', e.target.value)}
+                                      placeholder="Enter asset description..."
+                                      size="small"
+                                      sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                          fontFamily: 'monospace',
+                                          fontSize: '0.875rem'
+                                        }
+                                      }}
+                                    />
+                                  </Box>
+                                </Box>
+                              </Box>
+                            </Grid>
+                            
+                            {/* Tags field */}
+                            <Grid item xs={12}>
+                              <Box 
+                                sx={{ 
+                                  position: 'relative',
+                                  p: 2,
+                                  borderRadius: 2,
+                                  backgroundColor: alpha(theme.palette.background.paper, 0.6),
+                                  border: `2px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+                                  transition: 'all 0.2s ease-in-out'
+                                }}
+                              >
+                                <Typography variant="subtitle2" sx={{ 
+                                  fontWeight: 600, 
+                                  color: theme.palette.text.secondary,
+                                  mb: 2,
+                                  textTransform: 'uppercase',
+                                  fontSize: '0.75rem',
+                                  letterSpacing: '0.5px'
+                                }}>
+                                  Tags
+                                </Typography>
+                                
+                                {/* Tag input */}
+                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                  <TextField
+                                    label="Add Tag"
+                                    value={newTag}
+                                    onChange={(e) => setNewTag(e.target.value)}
+                                    fullWidth
+                                    size="small"
+                                    onKeyPress={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddTag();
+                                      }
+                                    }}
+                                    sx={{
+                                      '& .MuiOutlinedInput-root': {
+                                        fontFamily: 'monospace',
+                                        fontSize: '0.875rem'
+                                      }
+                                    }}
+                                  />
+                                  <Button
+                                    variant="contained"
+                                    startIcon={<Add />}
+                                    onClick={handleAddTag}
+                                    sx={{ ml: 1 }}
+                                    size="small"
+                                  >
+                                    Add
+                                  </Button>
+                                </Box>
+                                
+                                {/* Display tags */}
+                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                  {(editedCriticalMetadata.tags || []).map((tag, index) => (
+                                    <Chip
+                                      key={index}
+                                      label={tag}
+                                      onDelete={() => handleRemoveTag(tag)}
+                                      size="small"
+                                      sx={{ 
+                                        backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                                        color: theme.palette.primary.main,
+                                        fontWeight: 500
+                                      }}
+                                    />
+                                  ))}
+                                </Box>
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </Grid>
+                        
+                        {/* Other critical metadata fields */}
+                        {Object.entries(editedCriticalMetadata)
+                          .filter(([key]) => !['name', 'description', 'tags'].includes(key))
+                          .length > 0 && (
+                          <Grid item xs={12}>
+                            <Divider sx={{ my: 2 }} />
+                            <Typography variant="subtitle1" sx={{ 
+                              fontWeight: 600, 
+                              color: theme.palette.text.primary,
+                              mb: 2
+                            }}>
+                              Custom Fields
+                            </Typography>
+                            
+                            <Grid container spacing={2}>
+                              {Object.entries(editedCriticalMetadata)
+                                .filter(([key]) => !['name', 'description', 'tags'].includes(key))
+                                .map(([key, value]) => (
+                                <Grid item xs={12} md={6} key={key}>
+                                  <EditableField 
+                                    label={key} 
+                                    value={value} 
+                                    onChange={handleCriticalMetadataChange}
+                                    onRemove={handleRemoveMetadataField}
+                                    isCritical={true}
+                                    theme={theme}
+                                    alpha={alpha}
+                                  />
+                                </Grid>
+                              ))}
+                            </Grid>
+                          </Grid>
+                        )}
+                        
+                        {/* Add new field button */}
+                        <Grid item xs={12}>
+                          <Button
+                            variant="outlined"
+                            startIcon={<Add />}
+                            onClick={() => handleAddMetadataField(true)}
+                            sx={{ 
+                              borderRadius: 2,
+                              textTransform: 'none',
+                              fontWeight: 500,
+                              borderStyle: 'dashed',
+                              color: theme.palette.success.main,
+                              borderColor: theme.palette.success.main,
+                              '&:hover': {
+                                backgroundColor: alpha(theme.palette.success.main, 0.04),
+                                borderColor: theme.palette.success.dark
+                              }
+                            }}
+                          >
+                            Add Critical Metadata Field
+                          </Button>
+                        </Grid>
+                      </>
+                    ) : (
+                      /* View mode - show core fields section first, then other critical metadata */
+                      <>
+                        {/* Core Information Section - View Mode */}
+                        <Grid item xs={12}>
+                          <Typography variant="subtitle1" sx={{ 
+                            fontWeight: 600, 
+                            color: theme.palette.text.primary,
+                            mb: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1
+                          }}>
+                            Display Fields
+                            <Tooltip title="These metadata fields appear on asset cards to help users quickly identify assets.">
+                              <HelpOutline 
+                                sx={{ 
+                                  fontSize: '1rem', 
+                                  color: theme.palette.text.secondary,
+                                  cursor: 'help'
+                                }} 
+                              />
+                            </Tooltip>
+                          </Typography>
+                          
+                          <Grid container spacing={2}>
+                            {/* Name field - view mode */}
+                            {asset.criticalMetadata?.name && (
+                              <Grid item xs={12}>
+                                <CopyableField label="Name" value={asset.criticalMetadata.name} />
+                              </Grid>
+                            )}
+                            
+                            {/* Description field - view mode */}
+                            {asset.criticalMetadata?.description && (
+                              <Grid item xs={12}>
+                                <CopyableField label="Description" value={asset.criticalMetadata.description} />
+                              </Grid>
+                            )}
+                            
+                            {/* Tags field - view mode */}
+                            {asset.criticalMetadata?.tags && asset.criticalMetadata.tags.length > 0 && (
+                              <Grid item xs={12}>
+                                <CopyableField label="Tags" value={asset.criticalMetadata.tags} />
+                              </Grid>
+                            )}
+                          </Grid>
+                        </Grid>
+                        
+                        {/* Additional Critical Metadata Fields - View Mode */}
+                        {asset.criticalMetadata && Object.entries(asset.criticalMetadata)
+                          .filter(([key]) => !['name', 'description', 'tags'].includes(key))
+                          .length > 0 && (
+                          <Grid item xs={12}>
+                            <Divider sx={{ my: 2 }} />
+                            <Typography variant="subtitle1" sx={{ 
+                              fontWeight: 600, 
+                              color: theme.palette.text.primary,
+                              mb: 2
+                            }}>
+                              Custom Fields
+                            </Typography>
+                            
+                            <Grid container spacing={2}>
+                              {Object.entries(asset.criticalMetadata)
+                                .filter(([key]) => !['name', 'description', 'tags'].includes(key))
+                                .map(([key, value]) => (
+                                <Grid item xs={12} md={6} key={key}>
+                                  <CopyableField label={key} value={value} />
+                                </Grid>
+                              ))}
+                            </Grid>
+                          </Grid>
+                        )}
+                      </>
+                    )}
                   </Grid>
                 </CardContent>
               </Card>
@@ -756,7 +1446,7 @@ function AssetDetailPage() {
                 }}>
                   <CardHeader 
                     avatar={<Storage sx={{ color: theme.palette.info.main }} />}
-                    title="Additional Metadata"
+                    title="Non-Critical Metadata"
                     subheader="Supplementary information"
                     titleTypographyProps={{ variant: 'h6', fontWeight: 600 }}
                     sx={{ 
@@ -766,11 +1456,49 @@ function AssetDetailPage() {
                   />
                   <CardContent sx={{ p: 3 }}>
                     <Grid container spacing={2}>
-                      {Object.entries(asset.nonCriticalMetadata).map(([key, value]) => (
-                        <Grid item xs={12} md={6} key={key}>
-                          <CopyableField label={key} value={value} />
+                      {isEditing 
+                        ? Object.entries(editedNonCriticalMetadata).map(([key, value]) => (
+                            <Grid item xs={12} md={6} key={key}>
+                              <EditableField 
+                                label={key} 
+                                value={value} 
+                                onChange={handleNonCriticalMetadataChange}
+                                onRemove={handleRemoveMetadataField}
+                                isCritical={false}
+                                theme={theme}
+                                alpha={alpha}
+                              />
+                            </Grid>
+                          ))
+                        : Object.entries(asset.nonCriticalMetadata).map(([key, value]) => (
+                            <Grid item xs={12} md={6} key={key}>
+                              <CopyableField label={key} value={value} />
+                            </Grid>
+                          ))
+                      }
+                      {isEditing && (
+                        <Grid item xs={12}>
+                          <Button
+                            variant="outlined"
+                            startIcon={<Add />}
+                            onClick={() => handleAddMetadataField(false)}
+                            sx={{ 
+                              borderRadius: 2,
+                              textTransform: 'none',
+                              fontWeight: 500,
+                              borderStyle: 'dashed',
+                              color: theme.palette.info.main,
+                              borderColor: theme.palette.info.main,
+                              '&:hover': {
+                                backgroundColor: alpha(theme.palette.info.main, 0.04),
+                                borderColor: theme.palette.info.dark
+                              }
+                            }}
+                          >
+                            Add Non-Critical Metadata Field
+                          </Button>
                         </Grid>
-                      ))}
+                      )}
                     </Grid>
                   </CardContent>
                 </Card>
@@ -780,12 +1508,16 @@ function AssetDetailPage() {
 
           {/* Transaction Signer Modal */}
           <TransactionSigner
-            operation={operation}
-            operationData={operationData}
-            onSuccess={onSuccess}
-            onError={onError}
-            onCancel={hideSigner}
-            isVisible={isVisible}
+            operation={transactionOperation}
+            operationData={transactionData}
+            onSuccess={onTransactionSuccess}
+            onError={onTransactionError}
+            onCancel={() => {
+              // Reset editing state when modal is cancelled
+              setIsSaving(false);
+              hideSigner();
+            }}
+            isVisible={isTransactionVisible}
           />
         </Box>
       </Fade>

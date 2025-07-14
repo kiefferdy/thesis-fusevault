@@ -502,7 +502,37 @@ class RetrieveHandler:
             verification_result.new_version_created = new_version_created
             
             # 8. Extract timestamp fields from document
-            created_at = document.get("createdAt", document.get("lastUpdated", ""))
+            # Get creation time from version 1 of this asset
+            try:
+                first_version = await self.asset_service.asset_repository.find_asset({
+                    "assetId": asset_id,
+                    "versionNumber": 1
+                })
+                
+                if first_version:
+                    # Handle case where _id might be a string (convert to ObjectId)
+                    version_id = first_version["_id"]
+                    if isinstance(version_id, str):
+                        try:
+                            from bson import ObjectId
+                            version_id = ObjectId(version_id)
+                        except Exception:
+                            version_id = None
+                    
+                    if version_id and hasattr(version_id, 'generation_time'):
+                        created_at = version_id.generation_time.isoformat()
+                    else:
+                        created_at = document.get("lastUpdated", "")
+                else:
+                    created_at = document.get("lastUpdated", "")
+            except Exception as e:
+                logger.warning(f"Could not find version 1 for asset {asset_id}: {e}")
+                # Fallback to current document's ObjectId or lastUpdated
+                if hasattr(document["_id"], 'generation_time'):
+                    created_at = document["_id"].generation_time.isoformat()
+                else:
+                    created_at = document.get("lastUpdated", "")
+            
             updated_at = document.get("lastUpdated", "")
             
             # Convert datetime objects to ISO strings if needed
@@ -924,7 +954,37 @@ class RetrieveHandler:
             verification_result.new_version_created = new_version_created
             
             # 8. Extract timestamp fields from document
-            created_at = document.get("createdAt", document.get("lastUpdated", ""))
+            # Get creation time from version 1 of this asset
+            try:
+                first_version = await self.asset_service.asset_repository.find_asset({
+                    "assetId": asset_id,
+                    "versionNumber": 1
+                })
+                
+                if first_version:
+                    # Handle case where _id might be a string (convert to ObjectId)
+                    version_id = first_version["_id"]
+                    if isinstance(version_id, str):
+                        try:
+                            from bson import ObjectId
+                            version_id = ObjectId(version_id)
+                        except Exception:
+                            version_id = None
+                    
+                    if version_id and hasattr(version_id, 'generation_time'):
+                        created_at = version_id.generation_time.isoformat()
+                    else:
+                        created_at = document.get("lastUpdated", "")
+                else:
+                    created_at = document.get("lastUpdated", "")
+            except Exception as e:
+                logger.warning(f"Could not find version 1 for asset {asset_id}: {e}")
+                # Fallback to current document's ObjectId or lastUpdated
+                if hasattr(document["_id"], 'generation_time'):
+                    created_at = document["_id"].generation_time.isoformat()
+                else:
+                    created_at = document.get("lastUpdated", "")
+            
             updated_at = document.get("lastUpdated", "")
             
             # Convert datetime objects to ISO strings if needed

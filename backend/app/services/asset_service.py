@@ -273,6 +273,46 @@ class AssetService:
             # Format assets for frontend compatibility
             formatted_assets = []
             for asset in assets:
+                # Get creation time from version 1 of this asset
+                asset_id_val = asset.get("assetId")
+                try:
+                    first_version = await self.asset_repository.find_asset({
+                        "assetId": asset_id_val,
+                        "versionNumber": 1
+                    })
+                    
+                    if first_version:
+                        # Handle case where _id might be a string (convert to ObjectId)
+                        version_id = first_version["_id"]
+                        if isinstance(version_id, str):
+                            try:
+                                version_id = ObjectId(version_id)
+                            except Exception:
+                                version_id = None
+                        
+                        if version_id and hasattr(version_id, 'generation_time'):
+                            created_at = version_id.generation_time.isoformat()
+                        else:
+                            created_at = asset.get("lastUpdated", "")
+                    else:
+                        created_at = asset.get("lastUpdated", "")
+                except Exception as e:
+                    logger.warning(f"Could not find version 1 for asset {asset_id_val}: {e}")
+                    # Fallback to current document's ObjectId or lastUpdated
+                    if hasattr(asset["_id"], 'generation_time'):
+                        created_at = asset["_id"].generation_time.isoformat()
+                    else:
+                        created_at = asset.get("lastUpdated", "")
+                
+                # Convert datetime objects to ISO strings if needed
+                if hasattr(created_at, 'isoformat'):
+                    created_at = created_at.isoformat()
+                
+                # Handle updated_at conversion
+                updated_at = asset.get("lastUpdated", "")
+                if hasattr(updated_at, 'isoformat'):
+                    updated_at = updated_at.isoformat()
+                
                 # Format the asset data to match frontend expectations
                 formatted_asset = {
                     "_id": asset["_id"],
@@ -282,8 +322,8 @@ class AssetService:
                     "nonCriticalMetadata": asset.get("nonCriticalMetadata", {}),
                     "ipfsCid": asset.get("ipfsHash", ""),
                     "versionNumber": asset.get("versionNumber", 1),
-                    "createdAt": asset.get("createdAt", asset.get("lastUpdated", "")),
-                    "updatedAt": asset.get("lastUpdated", "")
+                    "createdAt": created_at,
+                    "updatedAt": updated_at
                 }
                 formatted_assets.append(formatted_asset)
             
