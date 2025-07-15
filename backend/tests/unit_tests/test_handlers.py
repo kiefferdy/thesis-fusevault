@@ -260,6 +260,24 @@ class TestRetrieveHandlerLogic:
         }
         mock_blockchain_service.wallet_address = "0x9876543210987654321098765432109876543210"
         
+        # Mock blockchain service methods needed for authorization and verification
+        mock_blockchain_service.check_delegation.return_value = True  # Allow access
+        mock_blockchain_service.get_ipfs_info.return_value = {
+            "ipfs_version": 1,
+            "is_deleted": False
+        }
+        mock_blockchain_service.verify_cid_on_chain.return_value = {
+            "is_valid": False,
+            "actual_version": 1,
+            "is_deleted": False,
+            "message": "CID verification failed"
+        }
+        mock_blockchain_service.get_transaction_details.return_value = {
+            "cid": "QmBlockchain456",
+            "tx_sender": "0x9876543210987654321098765432109876543210"
+        }
+        mock_blockchain_service.get_server_wallet_address.return_value = "0x9876543210987654321098765432109876543210"
+        
         # Mock ipfs service to return a computed CID that doesn't match blockchain
         mock_ipfs_service.compute_cid.return_value = "QmComputed789"  # Different from both
         
@@ -272,7 +290,8 @@ class TestRetrieveHandlerLogic:
         )
         
         # Test 1: Call with auto_recover=False - shouldn't attempt recovery
-        result_no_recovery = await handler.retrieve_metadata(asset_id, auto_recover=False)
+        initiator_address = "0x1234567890123456789012345678901234567890"  # Same as asset owner
+        result_no_recovery = await handler.retrieve_metadata(asset_id, auto_recover=False, initiator_address=initiator_address)
         
         # Verify no recovery was attempted
         assert result_no_recovery.verification.recovery_needed is True

@@ -1242,7 +1242,7 @@ class BlockchainService:
                 Web3.to_checksum_address(delegate_address)
             ).call()
             
-            logger.info(
+            logger.debug(
                 f"Delegation check: {owner_address} -> {delegate_address} = {is_delegated}"
             )
             

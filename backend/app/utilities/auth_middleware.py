@@ -63,7 +63,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         """
         path = request.url.path
         method = request.method
-        logger.info(f"Received {method} request for path: {path}")
+        logger.debug(f"Received {method} request for path: {path}")
         
         # Special logging for batch upload completion calls
         if path == "/upload/batch/complete":
@@ -115,7 +115,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # Add auth context to request state
         self._set_auth_state(request, auth_context)
 
-        logger.info(
+        logger.debug(
             f"User {auth_context.get('wallet_address')} authenticated for {path} "
             f"via {auth_context.get('auth_method')}"
         )

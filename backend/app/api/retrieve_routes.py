@@ -67,7 +67,9 @@ async def retrieve_metadata(
     Returns:
         MetadataRetrieveResponse containing the verified metadata
     """
-    result = await retrieve_handler.retrieve_metadata(asset_id, version, auto_recover)
+    # Get initiator address for authorization
+    initiator_address = current_user.get("walletAddress")
+    result = await retrieve_handler.retrieve_metadata(asset_id, version, auto_recover, initiator_address)
     return result
 
 
@@ -117,8 +119,10 @@ async def retrieve_metadata_stream(
         async def retrieval_task():
             """Task that performs the actual metadata retrieval with progress reporting."""
             try:
+                # Get initiator address for authorization
+                initiator_address = current_user.get("walletAddress")
                 result = await retrieve_handler.retrieve_metadata_with_progress(
-                    asset_id, progress_callback, version, auto_recover
+                    asset_id, progress_callback, version, auto_recover, initiator_address
                 )
                 result_container["result"] = result
                 # Send completion message
