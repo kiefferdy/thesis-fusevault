@@ -33,7 +33,7 @@ import TransactionSigner from './TransactionSigner';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 
-const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null, isDelegateMode = false, originalOwner = null }) => {
+const UploadFormWithSigning = ({ onUploadSuccess }) => {
   const { currentAccount, isAuthenticated } = useAuth();
 
 
@@ -47,21 +47,14 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null, isDelega
 
   // State initialization function
   const getInitialFormData = () => ({
-    assetId: existingAsset?.assetId || uuidv4(),
-    walletAddress: isDelegateMode ? originalOwner : currentAccount,
+    assetId: uuidv4(),
+    walletAddress: currentAccount,
     criticalMetadata: {
-      name: existingAsset?.criticalMetadata?.name || '',
-      description: existingAsset?.criticalMetadata?.description || '',
-      tags: existingAsset?.criticalMetadata?.tags || [],
-      ...(existingAsset?.criticalMetadata ?
-        Object.fromEntries(
-          Object.entries(existingAsset.criticalMetadata).filter(
-            ([key]) => !['name', 'description', 'tags'].includes(key)
-          )
-        ) : {}
-      )
+      name: '',
+      description: '',
+      tags: []
     },
-    nonCriticalMetadata: existingAsset?.nonCriticalMetadata || {}
+    nonCriticalMetadata: {}
   });
 
   // Initialize form state
@@ -79,8 +72,6 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null, isDelega
     operation,
     operationData,
     showUploadSigner,
-    showEditSigner,
-    checkEditRequiresSignature,
     hideSigner,
     onSuccess,
     onError
@@ -94,26 +85,6 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null, isDelega
     }));
   }, [currentAccount]);
 
-  // Update form data when existingAsset changes
-  useEffect(() => {
-    if (existingAsset) {
-      const newFormData = getInitialFormData();
-      setFormData(newFormData);
-
-      // Set template based on existing asset structure
-      if (existingAsset.criticalMetadata) {
-        const assetFields = Object.keys(existingAsset.criticalMetadata);
-        const matchingTemplate = templates.find(template => {
-          const templateFields = Object.keys(template.fields);
-          return templateFields.some(field => assetFields.includes(field));
-        });
-
-        if (matchingTemplate) {
-          setSelectedTemplate(matchingTemplate.name);
-        }
-      }
-    }
-  }, [existingAsset, currentAccount]);
 
   // Handle form field changes for critical metadata
   const handleCriticalMetadataChange = (field) => (event) => {
@@ -210,33 +181,6 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null, isDelega
     }));
   };
 
-  // Check if critical metadata has changed (client-side comparison)
-  const hasCriticalMetadataChanged = (newCriticalMetadata, existingCriticalMetadata) => {
-    if (!existingCriticalMetadata) return true;
-    
-    // Get all keys from both objects
-    const newKeys = Object.keys(newCriticalMetadata || {});
-    const existingKeys = Object.keys(existingCriticalMetadata || {});
-    const allKeys = [...new Set([...newKeys, ...existingKeys])];
-    
-    // Compare each key
-    for (const key of allKeys) {
-      const newValue = newCriticalMetadata[key];
-      const existingValue = existingCriticalMetadata[key];
-      
-      // Handle arrays (like tags)
-      if (Array.isArray(newValue) && Array.isArray(existingValue)) {
-        if (newValue.length !== existingValue.length) return true;
-        if (!newValue.every((val, index) => val === existingValue[index])) return true;
-      }
-      // Handle other values
-      else if (newValue !== existingValue) {
-        return true;
-      }
-    }
-    
-    return false;
-  };
 
   // Form validation
   const validateForm = () => {
@@ -283,93 +227,34 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null, isDelega
       nonCriticalMetadata: formData.nonCriticalMetadata
     };
 
-    const isEditMode = !!existingAsset;
-    
-    if (isEditMode) {
-      // For edits, do a client-side check first to determine if critical metadata changed
-      const criticalMetadataChanged = hasCriticalMetadataChanged(uploadData.criticalMetadata, existingAsset.criticalMetadata);
-      
-      if (criticalMetadataChanged) {
-        // Critical metadata changed - show TransactionSigner modal first, upload happens when user clicks "Initiate Transaction"
-        console.log('Critical metadata changed, showing MetaMask signer');
-        showEditSigner(
-          uploadData, // Don't pass editResult - let the modal do the upload when user clicks
-          (result) => {
-            console.log('Edit with signing successful:', result);
-            setIsUploading(false);
-            
-            if (onUploadSuccess) {
-              // Mark this as a critical metadata update
-              onUploadSuccess({ ...result, criticalMetadataUpdated: true });
-            }
-          },
-          (error) => {
-            console.error('Edit with signing failed:', error);
-            setIsUploading(false);
-            
-            let errorMessage = 'Edit failed';
-            if (error?.message) {
-              errorMessage = error.message;
-            }
-            
-            toast.error(errorMessage);
-          }
-        );
-      } else {
-        // Only non-critical metadata changed - complete directly without modal
-        console.log('Only non-critical metadata changed, uploading directly');
-        checkEditRequiresSignature(uploadData)
-          .then(({ result }) => {
-            setIsUploading(false);
-            
-            if (onUploadSuccess) {
-              // Mark this as a non-critical metadata update
-              onUploadSuccess({ ...result, criticalMetadataUpdated: false });
-            }
-          })
-          .catch((error) => {
-            console.error('Edit failed:', error);
-            setIsUploading(false);
-            
-            let errorMessage = 'Edit failed';
-            if (error?.message) {
-              errorMessage = error.message;
-            }
-            
-            toast.error(errorMessage);
-          });
-      }
-    } else {
-      // For uploads, use the UI-based transaction signer
-      showUploadSigner(
-        uploadData,
-        (result) => {
-          console.log('Upload successful:', result);
-          setIsUploading(false);
-          hideSigner();
-          
-          // Reset form for create mode
-          setFormData(getInitialFormData());
-          setSelectedTemplate('Custom');
-          
-          if (onUploadSuccess) {
-            onUploadSuccess(result);
-          }
-        },
-        (error) => {
-          console.error('Upload failed:', error);
-          setIsUploading(false);
-          hideSigner();
-          
-          let errorMessage = 'Upload failed';
-          if (error?.message) {
-            errorMessage = error.message;
-          }
-          
-          toast.error(errorMessage);
+    // Show transaction signer for upload
+    showUploadSigner(
+      uploadData,
+      (result) => {
+        console.log('Upload successful:', result);
+        setIsUploading(false);
+        hideSigner();
+        
+        // Reset form for next asset
+        setFormData(getInitialFormData());
+        setSelectedTemplate('Custom');
+        
+        if (onUploadSuccess) {
+          onUploadSuccess(result);
         }
-      );
-    }
+      },
+      (error) => {
+        console.error('Upload failed:', error);
+        setIsUploading(false);
+        
+        let errorMessage = 'Upload failed';
+        if (error?.message) {
+          errorMessage = error.message;
+        }
+        
+        toast.error(errorMessage);
+      }
+    );
   };
 
   // Show wallet connection warning if not connected
@@ -387,17 +272,8 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null, isDelega
     <Paper sx={{ p: 3, position: 'relative' }}>
 
       <Typography variant="h5" gutterBottom>
-        {existingAsset ? 'Edit Asset' : 'Create New Asset'}
+        Create New Asset
       </Typography>
-
-      {isDelegateMode && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          <Typography variant="body2">
-            ⚡ <strong>Delegation Mode:</strong> You are editing this asset on behalf of {originalOwner}. 
-            The original ownership will be preserved.
-          </Typography>
-        </Alert>
-      )}
 
       <form onSubmit={handleSubmit}>
         <Grid container spacing={3}>
@@ -661,8 +537,6 @@ const UploadFormWithSigning = ({ onUploadSuccess, existingAsset = null, isDelega
               >
                 {isUploading ? (
                   <CircularProgress size={24} />
-                ) : existingAsset ? (
-                  'Update Asset'
                 ) : (
                   'Create Asset'
                 )}

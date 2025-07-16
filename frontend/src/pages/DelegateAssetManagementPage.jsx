@@ -236,7 +236,7 @@ const DelegateAssetManagementPage = () => {
                           onClick={(e) => {
                             e.stopPropagation();
                             // Navigate to edit page or open edit modal
-                            navigate(`/upload?edit=${asset.assetId}&delegate=${ownerInfo.address}`);
+                            navigate(`/assets/${asset.assetId}?edit=true&delegate=${ownerInfo.address}`);
                           }}
                         >
                           Edit Metadata

@@ -161,6 +161,19 @@ function AssetDetailPage() {
   const [editedNonCriticalMetadata, setEditedNonCriticalMetadata] = useState({});
   const [isSaving, setIsSaving] = useState(false);
   
+  // Delegation mode state
+  const [isDelegateMode, setIsDelegateMode] = useState(false);
+  const [originalOwner, setOriginalOwner] = useState(null);
+
+  // Check for delegation parameters on component mount
+  useEffect(() => {
+    const delegateOwner = searchParams.get('delegate');
+    if (delegateOwner) {
+      setIsDelegateMode(true);
+      setOriginalOwner(delegateOwner);
+    }
+  }, [searchParams]);
+  
   // Tag management state
   const [newTag, setNewTag] = useState('');
   const { deleteAsset, isDeleting } = useAssets();
@@ -423,7 +436,7 @@ function AssetDetailPage() {
       // Prepare upload data (same format as upload/edit)
       const uploadData = {
         assetId: assetId,
-        walletAddress: currentAccount,
+        walletAddress: currentAccount, // Current user signs the transaction
         criticalMetadata: editedCriticalMetadata,
         nonCriticalMetadata: editedNonCriticalMetadata
       };
@@ -562,7 +575,20 @@ function AssetDetailPage() {
   };
 
   const handleBack = () => {
-    navigate('/dashboard');
+    // Check if we're viewing someone else's asset (delegation context)
+    const isViewingOthersAsset = asset && asset.walletAddress && 
+                                 currentAccount && 
+                                 asset.walletAddress.toLowerCase() !== currentAccount.toLowerCase();
+    
+    if (isDelegateMode && originalOwner) {
+      // Explicit delegation mode with URL parameter
+      navigate(`/delegation/manage/${originalOwner}`);
+    } else if (isViewingOthersAsset) {
+      // Viewing someone else's asset (implicit delegation)
+      navigate(`/delegation/manage/${asset.walletAddress}`);
+    } else {
+      navigate('/dashboard');
+    }
   };
 
   if (loading) {
@@ -682,7 +708,7 @@ function AssetDetailPage() {
                 startIcon={<ArrowBack />}
                 sx={{ borderRadius: 2 }}
               >
-                Back to Dashboard
+Back to Dashboard
               </Button>
             </CardContent>
           </Card>
@@ -716,7 +742,7 @@ function AssetDetailPage() {
                 startIcon={<ArrowBack />}
                 sx={{ borderRadius: 2 }}
               >
-                Back to Dashboard
+Back to Dashboard
               </Button>
             </CardContent>
           </Card>
@@ -1016,6 +1042,16 @@ function AssetDetailPage() {
               </Box>
             </Box>
           </Box>
+
+          {/* Delegation Mode Alert */}
+          {isDelegateMode && (
+            <Alert severity="info" sx={{ mb: 3 }}>
+              <Typography variant="body2">
+                <strong>Delegation Mode:</strong> You are viewing/editing this asset on behalf of {originalOwner}. 
+                The original ownership will be preserved.
+              </Typography>
+            </Alert>
+          )}
 
           <Grid container spacing={3}>
             {/* Basic Information Card */}

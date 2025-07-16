@@ -364,7 +364,7 @@ function AssetHistoryPage() {
                                         variant="outlined"
                                         size="small"
                                         startIcon={<Edit />}
-                                        onClick={() => navigate(`/assets/${assetId}/edit`)}
+                                        onClick={() => navigate(`/assets/${assetId}?edit=true`)}
                                     >
                                         Edit Asset
                                     </Button>
@@ -677,7 +677,7 @@ function AssetHistoryPage() {
                         <Button
                             variant="contained"
                             startIcon={<Edit />}
-                            onClick={() => navigate(`/assets/${assetId}/edit`)}
+                            onClick={() => navigate(`/assets/${assetId}?edit=true`)}
                         >
                             Edit Asset
                         </Button>
