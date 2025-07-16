@@ -211,7 +211,7 @@ class DeleteHandler:
                 
                 metadata = {
                     "reason": reason if reason else "User requested deletion",
-                    "blockchain_tx_hash": blockchain_tx_hash,
+                    "smartContractTxId": blockchain_tx_hash,
                     "ownerAddress": asset_owner
                 }
                 
@@ -290,7 +290,7 @@ class DeleteHandler:
                 
                 metadata = {
                     "reason": reason if reason else "User requested deletion",
-                    "blockchain_tx_hash": blockchain_tx_hash,
+                    "smartContractTxId": blockchain_tx_hash,
                     "owner_address": owner_address
                 }
                 
@@ -759,7 +759,7 @@ class DeleteHandler:
                                                 performed_by=performed_by,
                                                 metadata={
                                                     "reason": reason or "Batch deletion via API key",
-                                                    "blockchain_tx_hash": blockchain_result.get("tx_hash"),
+                                                    "smartContractTxId": blockchain_result.get("tx_hash"),
                                                     "owner_address": owner_address
                                                 }
                                             )
@@ -942,7 +942,7 @@ class DeleteHandler:
                                 performed_by=performed_by,
                                 metadata={
                                     "reason": reason or "Batch deletion via MetaMask",
-                                    "blockchain_tx_hash": blockchain_tx_hash,
+                                    "smartContractTxId": blockchain_tx_hash,
                                     "batch_deletion": True,
                                     "batch_id": pending_tx_id,
                                     "owner_address": owner_address

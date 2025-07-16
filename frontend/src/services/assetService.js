@@ -339,5 +339,137 @@ export const assetService = {
       
       throw error;
     }
+  },
+
+  // Stream metadata retrieval with real-time progress updates
+  retrieveMetadataStream: (assetId, version = null, onProgress, onComplete, onError) => {
+    // Validate input data
+    if (!assetId || typeof assetId !== 'string' || !assetId.trim()) {
+      const error = new Error('Asset ID is required and must be a non-empty string');
+      if (onError) onError(error);
+      return null;
+    }
+
+    if (typeof onProgress !== 'function') {
+      const error = new Error('Progress callback is required and must be a function');
+      if (onError) onError(error);
+      return null;
+    }
+
+    try {
+      // Build streaming URL
+      let url = `/retrieve/${encodeURIComponent(assetId.trim())}/stream`;
+      const params = new URLSearchParams();
+      
+      if (version !== null && version !== undefined) {
+        if (typeof version !== 'number' || version < 0) {
+          const error = new Error('Version must be a non-negative number');
+          if (onError) onError(error);
+          return null;
+        }
+        params.append('version', version.toString());
+      }
+      
+      // Check for API key authentication
+      const apiKey = localStorage.getItem('apiKey');
+      if (apiKey) {
+        params.append('key', apiKey);
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+
+      // Get the base URL and construct full URL for EventSource
+      const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const fullUrl = `${baseURL}${url}`;
+      
+      // EventSource will automatically include cookies for session-based auth
+      // API key auth is handled via query parameter for EventSource compatibility
+      const eventSource = new EventSource(fullUrl, { withCredentials: true });
+      let finalResult = null;
+      let progressReceived = false;
+      
+      // Set up a timeout to detect if streaming is not working
+      const streamTimeout = setTimeout(() => {
+        if (!progressReceived) {
+          console.warn('No progress received within 10 seconds, closing stream');
+          eventSource.close();
+          if (onError) onError(new Error('Streaming timeout - no progress received'));
+        }
+      }, 10000); // 10 second timeout
+      
+      eventSource.onmessage = (event) => {
+        progressReceived = true;
+        clearTimeout(streamTimeout);
+        
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Check if this is a progress message or final result
+          if (data.step !== undefined && data.totalSteps !== undefined) {
+            // This is a progress message
+            onProgress(data);
+            
+            if (data.completed) {
+              clearTimeout(streamTimeout);
+              if (data.error) {
+                // Progress completed with error
+                eventSource.close();
+                if (onError) onError(new Error(data.error));
+              } else if (finalResult) {
+                // Progress completed successfully and we have the final result
+                eventSource.close();
+                if (onComplete) onComplete(finalResult);
+              }
+            }
+          } else if (data.assetId !== undefined) {
+            // This is the final result data
+            finalResult = data;
+            clearTimeout(streamTimeout);
+            // If progress is already completed, call onComplete immediately
+            if (onComplete) onComplete(finalResult);
+            eventSource.close();
+          }
+        } catch (parseError) {
+          console.error('Error parsing SSE data:', parseError, 'Raw data:', event.data);
+          // Don't close connection for parsing errors, might be keepalive
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error('EventSource error:', error);
+        clearTimeout(streamTimeout);
+        eventSource.close();
+        
+        // Provide user-friendly error message based on readyState
+        let errorMessage = 'Connection error during asset retrieval. Please try again.';
+        if (eventSource.readyState === EventSource.CONNECTING) {
+          errorMessage = 'Unable to connect to server. Please check your connection and try again.';
+        } else if (eventSource.readyState === EventSource.CLOSED) {
+          errorMessage = 'Connection was closed unexpectedly. Please try again.';
+        }
+        
+        if (onError) onError(new Error(errorMessage));
+      };
+
+      eventSource.onopen = () => {
+        console.log('EventSource connection opened');
+      };
+
+      // Return an object with EventSource and cleanup function
+      return {
+        eventSource,
+        close: () => {
+          clearTimeout(streamTimeout);
+          eventSource.close();
+        }
+      };
+      
+    } catch (error) {
+      console.error('Error setting up metadata streaming:', error);
+      if (onError) onError(error);
+      return null;
+    }
   }
 };

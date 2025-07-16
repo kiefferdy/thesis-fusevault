@@ -43,7 +43,7 @@ function AssetCard({ asset }) {
   };
 
   const handleEdit = () => {
-    navigate(`/assets/${asset.assetId}/edit`);
+    navigate(`/assets/${asset.assetId}?edit=true`);
   };
 
   const handleHistory = () => {
@@ -103,8 +103,11 @@ function AssetCard({ asset }) {
         )}
         
         <Box sx={{ mt: 2 }}>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="text.secondary" display="block">
             Created: {formatDate(asset.createdAt)}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" display="block">
+            Updated: {formatDate(asset.updatedAt)}
           </Typography>
         </Box>
         

@@ -125,14 +125,6 @@ function App() {
                   }
                 />
 
-                <Route
-                  path="/assets/:assetId/edit"
-                  element={
-                    <ProtectedRoute>
-                      <UploadPage />
-                    </ProtectedRoute>
-                  }
-                />
 
                 <Route
                   path="/history"

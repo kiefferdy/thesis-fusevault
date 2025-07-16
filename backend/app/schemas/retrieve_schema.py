@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Protocol, runtime_checkable
+import json
 
 class MetadataRetrieveRequest(BaseModel):
     asset_id: str = Field(..., description="The asset's unique identifier", alias="assetId")
@@ -38,6 +39,9 @@ class MetadataVerificationResult(BaseModel):
 class MetadataRetrieveResponse(BaseModel):
     asset_id: str = Field(..., description="The asset's unique identifier", alias="assetId")
     version: int = Field(..., description="Version number of the retrieved metadata")
+    wallet_address: str = Field(..., description="Owner wallet address", alias="walletAddress")
+    created_at: Optional[str] = Field(None, description="Asset creation timestamp", alias="createdAt")
+    updated_at: Optional[str] = Field(None, description="Asset last update timestamp", alias="updatedAt")
     critical_metadata: Dict[str, Any] = Field(..., description="Core metadata", alias="criticalMetadata")
     non_critical_metadata: Dict[str, Any] = Field(..., description="Additional metadata", alias="nonCriticalMetadata")
     verification: MetadataVerificationResult = Field(..., description="Verification results")
@@ -46,3 +50,36 @@ class MetadataRetrieveResponse(BaseModel):
     blockchain_tx_id: str = Field(..., description="Blockchain transaction hash", alias="blockchainTxId")
 
     model_config = {"populate_by_name": True}
+
+
+class ProgressMessage(BaseModel):
+    """Schema for progress messages sent via Server-Sent Events."""
+    step: int = Field(..., description="Current step number (1-based)")
+    total_steps: int = Field(..., description="Total number of steps", alias="totalSteps")
+    message: str = Field(..., description="Human-readable progress message")
+    completed: bool = Field(False, description="Whether the operation is complete")
+    error: Optional[str] = Field(None, description="Error message if operation failed")
+    
+    model_config = {"populate_by_name": True}
+    
+    def to_sse_data(self) -> str:
+        """Convert progress message to Server-Sent Events data format."""
+        return f"data: {self.model_dump_json(by_alias=True)}\n\n"
+
+
+@runtime_checkable
+class ProgressCallback(Protocol):
+    """Protocol for progress callback functions used in streaming operations."""
+    
+    async def __call__(self, step: int, total_steps: int, message: str, completed: bool = False, error: Optional[str] = None) -> None:
+        """
+        Send a progress update.
+        
+        Args:
+            step: Current step number (1-based)
+            total_steps: Total number of steps
+            message: Human-readable progress message
+            completed: Whether the operation is complete
+            error: Error message if operation failed
+        """
+        ...

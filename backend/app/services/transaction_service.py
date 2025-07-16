@@ -168,7 +168,7 @@ class TransactionService:
             # Validate action type
             valid_actions = [
                 "CREATE", "UPDATE", "VERSION_CREATE", "DELETE", 
-                "VERIFY", "INTEGRITY_RECOVERY", "RECREATE_DELETED",
+                "INTEGRITY_RECOVERY", "RECREATE_DELETED",
                 "TRANSFER_INITIATED", "TRANSFER_COMPLETED", "TRANSFER_CANCELLED",
                 "DELETION_STATUS_RESTORED"
             ]

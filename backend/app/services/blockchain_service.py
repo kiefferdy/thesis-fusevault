@@ -1242,7 +1242,7 @@ class BlockchainService:
                 Web3.to_checksum_address(delegate_address)
             ).call()
             
-            logger.info(
+            logger.debug(
                 f"Delegation check: {owner_address} -> {delegate_address} = {is_delegated}"
             )
             
@@ -1657,3 +1657,123 @@ class BlockchainService:
         except Exception as e:
             logger.error(f"Blockchain error batch deleting assets for another owner: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Blockchain transaction failed: {str(e)}")
+
+    async def recover_data_from_events(self, asset_id: str, owner_address: str) -> dict:
+        """
+        Fallback recovery: Get CID and transaction hash from blockchain event logs with tiered search.
+        
+        This method uses an intelligent search strategy:
+        1. Search recent blocks first (most likely to contain the event)
+        2. If not found, expand search to older blocks
+        3. Use chunked queries to avoid RPC provider limits
+        
+        Args:
+            asset_id: The asset ID to recover data for
+            owner_address: The owner's address
+            
+        Returns:
+            Dictionary containing:
+            - "cid": The authentic CID string from blockchain events
+            - "tx_hash": The correct transaction hash that emitted the event
+            
+        Raises:
+            ValueError: If no valid events are found
+            HTTPException: If blockchain query fails
+        """
+        try:
+            latest_block = self.web3.eth.get_block('latest')['number']
+            
+            # Tiered search strategy - start recent, expand if needed
+            search_ranges = [
+                50000,   # ~7 days (most likely)
+                200000,  # ~1 month  
+                500000,  # ~2.5 months
+                1000000, # ~5 months
+                latest_block  # Full history (last resort)
+            ]
+            
+            for max_blocks in search_ranges:
+                from_block = max(0, latest_block - max_blocks)
+                
+                logger.info(f"Searching for CID in events for asset {asset_id} from block {from_block} to {latest_block}")
+                
+                try:
+                    # Use chunked queries for large ranges to avoid RPC limits
+                    events = await self._query_events_chunked(
+                        asset_id, owner_address, from_block, latest_block
+                    )
+                    
+                    if events:
+                        # Filter out deletion events and get valid updates
+                        update_events = [e for e in events if not e['args']['isDeleted']]
+                        
+                        if update_events:
+                            # Get event with highest ipfsVersion (latest update)
+                            latest_event = max(update_events, key=lambda e: e['args']['ipfsVersion'])
+                            authentic_cid = latest_event['args']['cid']
+                            correct_tx_hash = latest_event['transactionHash'].hex()
+                            
+                            logger.info(f"Successfully recovered CID from events: {authentic_cid} for asset {asset_id}, correct TX hash: {correct_tx_hash}")
+                            return {"cid": authentic_cid, "tx_hash": correct_tx_hash}
+                
+                except Exception as e:
+                    logger.warning(f"Search range {from_block}-{latest_block} failed: {str(e)}")
+                    continue
+            
+            # If we get here, no events were found in any range
+            raise ValueError(f"No IPFSUpdated events found for asset {asset_id} in entire blockchain history")
+            
+        except ValueError:
+            # Re-raise ValueError with original message
+            raise
+        except Exception as e:
+            logger.error(f"Error recovering CID from events for asset {asset_id}: {str(e)}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Failed to recover CID from events: {str(e)}"
+            )
+    
+    async def _query_events_chunked(self, asset_id: str, owner_address: str, from_block: int, to_block: int) -> list:
+        """
+        Query events in chunks to avoid RPC provider limits.
+        
+        Args:
+            asset_id: The asset ID to search for
+            owner_address: The owner's address
+            from_block: Starting block number
+            to_block: Ending block number
+            
+        Returns:
+            List of matching events from all chunks
+        """
+        CHUNK_SIZE = 10000  # Conservative chunk size for most RPC providers
+        all_events = []
+        
+        current_from = from_block
+        while current_from <= to_block:
+            current_to = min(current_from + CHUNK_SIZE - 1, to_block)
+            
+            try:
+                # Create event filter for this chunk
+                event_filter = self.contract.events.IPFSUpdated.create_filter(
+                    from_block=current_from,
+                    to_block=current_to,
+                    argument_filters={
+                        'owner': Web3.to_checksum_address(owner_address),
+                        'assetId': asset_id
+                    }
+                )
+                
+                # Get events for this chunk
+                chunk_events = event_filter.get_all_entries()
+                all_events.extend(chunk_events)
+                
+                logger.debug(f"Chunk {current_from}-{current_to}: found {len(chunk_events)} events")
+                
+            except Exception as e:
+                logger.warning(f"Failed to query chunk {current_from}-{current_to}: {str(e)}")
+                # Continue with next chunk instead of failing entirely
+            
+            current_from = current_to + 1
+        
+        return all_events

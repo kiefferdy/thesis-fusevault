@@ -195,7 +195,18 @@ export const AuthProvider = ({ children, queryClient }) => {
     } catch (error) {
       console.error('Error during authentication:', error);
       setIsLoading(false);
-      toast.error(error.message || 'Authentication failed');
+      
+      // Check if user rejected the signing request
+      const errorMessage = error.message?.toLowerCase() || '';
+      if (errorMessage.includes('user rejected') || 
+          errorMessage.includes('user denied') || 
+          errorMessage.includes('rejected') || 
+          error.code === 'ACTION_REJECTED' ||
+          error.info?.error?.code === 4001) {
+        toast.error('Sign-in canceled. Please try again to access your account.');
+      } else {
+        toast.error(error.message || 'Authentication failed');
+      }
       return false;
     }
   };

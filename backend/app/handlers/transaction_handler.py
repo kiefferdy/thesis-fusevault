@@ -30,7 +30,8 @@ class TransactionHandler:
     async def get_asset_history(
         self, 
         asset_id: str, 
-        version: Optional[int] = None
+        version: Optional[int] = None,
+        initiator_address: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Get transaction history for a specific asset.
@@ -38,12 +39,13 @@ class TransactionHandler:
         Args:
             asset_id: The asset ID to get history for
             version: Optional specific version to filter by
+            initiator_address: Address of the user performing the operation (for authorization)
             
         Returns:
             Dict containing transaction history for the asset
             
         Raises:
-            HTTPException: If there's an error retrieving the history
+            HTTPException: If there's an error retrieving the history or access is denied
         """
         try:
             # First verify the asset exists
@@ -59,6 +61,50 @@ class TransactionHandler:
                     raise e
                 logger.error(f"Error verifying asset existence: {str(e)}")
                 raise HTTPException(status_code=500, detail=str(e))
+            
+            # Authorization check - verify user can access this asset's transaction history
+            if initiator_address:
+                wallet_address = asset.get("walletAddress")
+                
+                # Check if the user owns the asset
+                is_owner = initiator_address.lower() == wallet_address.lower()
+                
+                if not is_owner:
+                    # For transaction history, we need the blockchain service to check delegation
+                    # Import here to avoid circular imports
+                    from app.services.blockchain_service import BlockchainService
+                    blockchain_service = BlockchainService()
+                    
+                    try:
+                        is_delegated = await blockchain_service.check_delegation(
+                            owner_address=wallet_address,
+                            delegate_address=initiator_address
+                        )
+                        
+                        if not is_delegated:
+                            logger.warning(f"Transaction history access denied: {initiator_address} is not owner or delegate of asset {asset_id} (owner: {wallet_address})")
+                            raise HTTPException(
+                                status_code=403,
+                                detail="Access denied: you are not the owner or delegate of this asset"
+                            )
+                        
+                        logger.debug(f"Delegation verified for transaction history: {wallet_address} -> {initiator_address} for asset {asset_id}")
+                    except HTTPException:
+                        raise
+                    except Exception as e:
+                        logger.error(f"Error checking delegation for asset transaction history {asset_id}: {str(e)}")
+                        raise HTTPException(
+                            status_code=500,
+                            detail="Error verifying asset access permissions"
+                        )
+                else:
+                    logger.debug(f"Owner access granted for transaction history: {initiator_address} accessing own asset {asset_id}")
+            else:
+                logger.warning(f"No initiator_address provided for asset {asset_id} transaction history")
+                raise HTTPException(
+                    status_code=401,
+                    detail="Authentication required: unable to verify asset access"
+                )
             
             # Get the transaction history
             transactions = await self.transaction_service.get_asset_history(

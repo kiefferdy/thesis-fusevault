@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import fs from 'fs';
+import { randomUUID } from 'crypto';
 import { uploadFile, getFileUrl, displayFileContents } from './backend.js';
 import { computeCID } from './utilities.js';
 
@@ -23,7 +24,8 @@ const storage = multer.diskStorage({
     cb(null, UPLOAD_DIR);
   },
   filename: (req, file, cb) => {
-    const uniqueName = `${Date.now()}-${file.originalname}`;
+    // Use UUID + timestamp for guaranteed uniqueness even with concurrent requests
+    const uniqueName = `${randomUUID()}-${Date.now()}-${file.originalname}`;
     cb(null, uniqueName);
   }
 });

@@ -8,8 +8,6 @@ import {
   Button,
   TextField,
   CircularProgress,
-  Tabs,
-  Tab,
   Card,
   CardContent,
   Divider,
@@ -46,13 +44,14 @@ import {
   Twitter,
   LinkedIn,
   Work,
+  LocationOn,
   SelectAll,
   CheckBox,
   CheckBoxOutlineBlank
 } from '@mui/icons-material';
 import AssetCard from '../components/AssetCard';
 import BatchDeleteModal from '../components/BatchDeleteModal';
-import TransactionsList from '../components/TransactionsList';
+import RecentActivityFeed from '../components/RecentActivityFeed';
 import UsernameInput from '../components/UsernameInput';
 import { useAssets } from '../hooks/useAssets';
 import { useTransactions } from '../hooks/useTransactions';
@@ -61,7 +60,6 @@ import { useUser } from '../hooks/useUser';
 import { formatWalletAddress } from '../utils/formatters';
 
 function DashboardPage() {
-  const [tabValue, setTabValue] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [openSetupDialog, setOpenSetupDialog] = useState(false);
   const [email, setEmail] = useState('');
@@ -154,11 +152,6 @@ function DashboardPage() {
     }
   };
 
-  // Handle tab change
-  const handleTabChange = (event, newValue) => {
-    setTabValue(newValue);
-  };
-
   // Handle search input change
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
@@ -247,40 +240,62 @@ function DashboardPage() {
           <Card sx={{ height: 'fit-content' }}>
             <CardHeader
               avatar={
-                <Avatar sx={{ bgcolor: 'primary.main' }}>
+                <Avatar 
+                  sx={{ 
+                    bgcolor: 'primary.main', 
+                    width: 56, 
+                    height: 56,
+                    fontSize: '1.5rem',
+                    fontWeight: 600
+                  }}
+                  src={user?.profile_image}
+                >
                   {user?.name ? user.name.charAt(0).toUpperCase() : <Person />}
                 </Avatar>
               }
-              title={user?.name || 'FuseVault User'}
+              title={
+                <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1.1rem' }}>
+                  {user?.name || 'FuseVault User'}
+                </Typography>
+              }
               subheader={
                 <Box>
                   {user?.username && (
-                    <Typography variant="body2" color="primary.main" component="div">
+                    <Typography variant="body2" color="primary.main" component="div" sx={{ fontWeight: 500 }}>
                       @{user.username}
                     </Typography>
                   )}
-                  <Typography variant="body2" color="text.secondary" component="div">
+                  <Typography variant="body2" color="text.secondary" component="div" sx={{ fontSize: '0.85rem' }}>
                     {formatWalletAddress(currentAccount)}
                   </Typography>
                 </Box>
               }
             />
-            <CardContent>
+            <CardContent sx={{ pt: 1.5, pb: 1 }}>
               {userLoading ? (
                 <CircularProgress size={24} />
               ) : (
                 <>
                   {user?.bio && (
-                    <Typography variant="body2" color="text.secondary" paragraph>
+                    <Typography variant="body2" color="text.secondary" paragraph sx={{ mb: 2.5, fontSize: '0.9rem' }}>
                       {user.bio}
                     </Typography>
                   )}
 
                   {user?.organization && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                      <Work sx={{ mr: 1, fontSize: 16 }} />
-                      <Typography variant="body2">
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <Work sx={{ mr: 1.5, fontSize: 18, color: 'text.secondary' }} />
+                      <Typography variant="body2" sx={{ fontSize: '0.9rem' }}>
                         {user.job_title ? `${user.job_title} at ${user.organization}` : user.organization}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {user?.location && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <LocationOn sx={{ mr: 1.5, fontSize: 18, color: 'text.secondary' }} />
+                      <Typography variant="body2" sx={{ fontSize: '0.9rem' }}>
+                        {user.location}
                       </Typography>
                     </Box>
                   )}
@@ -289,39 +304,42 @@ function DashboardPage() {
                     {user?.github && (
                       <Tooltip title="GitHub">
                         <IconButton
-                          size="small"
+                          size="medium"
                           component="a"
                           href={user.github.startsWith('http') ? user.github : `https://github.com/${user.github}`}
                           target="_blank"
                           rel="noopener noreferrer"
+                          sx={{ p: 1 }}
                         >
-                          <GitHub fontSize="small" />
+                          <GitHub fontSize="medium" />
                         </IconButton>
                       </Tooltip>
                     )}
                     {user?.twitter && (
                       <Tooltip title="Twitter">
                         <IconButton
-                          size="small"
+                          size="medium"
                           component="a"
                           href={user.twitter.startsWith('http') ? user.twitter : `https://twitter.com/${user.twitter}`}
                           target="_blank"
                           rel="noopener noreferrer"
+                          sx={{ p: 1 }}
                         >
-                          <Twitter fontSize="small" />
+                          <Twitter fontSize="medium" />
                         </IconButton>
                       </Tooltip>
                     )}
                     {user?.linkedin && (
                       <Tooltip title="LinkedIn">
                         <IconButton
-                          size="small"
+                          size="medium"
                           component="a"
                           href={user.linkedin.startsWith('http') ? user.linkedin : `https://linkedin.com/in/${user.linkedin}`}
                           target="_blank"
                           rel="noopener noreferrer"
+                          sx={{ p: 1 }}
                         >
-                          <LinkedIn fontSize="small" />
+                          <LinkedIn fontSize="medium" />
                         </IconButton>
                       </Tooltip>
                     )}
@@ -329,7 +347,7 @@ function DashboardPage() {
                 </>
               )}
             </CardContent>
-            <CardActions>
+            <CardActions sx={{ pt: 0.5 }}>
               <Button
                 size="small"
                 onClick={() => navigate('/profile')}
@@ -420,6 +438,15 @@ function DashboardPage() {
                 </CardContent>
               </Card>
             </Grid>
+
+            {/* Recent Activity Feed - spans across both metric card columns */}
+            <Grid item xs={12} sm={12} sx={{ mt: 1 }}>
+              <RecentActivityFeed
+                transactions={recentTransactions}
+                isLoading={isRecentLoading}
+                maxItems={8}
+              />
+            </Grid>
           </Grid>
         </Grid>
       </Grid>
@@ -451,202 +478,167 @@ function DashboardPage() {
         </Grid>
       </Paper>
 
-      {/* Main Content Area */}
+      {/* Assets Section */}
       <Paper sx={{ mt: 4 }}>
-        <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tab label="My Assets" />
-          <Tab label="Recent Activity" />
-        </Tabs>
-
-        {/* Assets Tab */}
-        {tabValue === 0 && (
-          <Box id="assets-section" sx={{ p: 3 }}>
-            <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              mb: 2,
-              position: 'sticky',
-              top: 0,
-              left: 0,
-              right: 0,
-              zIndex: 10,
-              backgroundColor: 'background.paper',
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              py: 2,
-              px: 3,
-              mx: -3,
-              mt: -1
-            }}>
-              <Typography variant="h6">
-                Your Assets ({assets.length})
-                {selectionMode && (
-                  <Chip 
-                    label={`${selectedAssets.size} selected`} 
-                    size="small" 
-                    sx={{ ml: 1 }}
-                    color={selectedAssets.size > 0 ? "primary" : "default"}
-                  />
-                )}
-              </Typography>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <TextField
-                  size="small"
-                  placeholder="Search assets..."
-                  value={searchTerm}
-                  onChange={handleSearchChange}
-                  InputProps={{
-                    startAdornment: <Search sx={{ color: 'action.active', mr: 1 }} />
-                  }}
+        <Box id="assets-section" sx={{ p: 3 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            mb: 2,
+            position: 'sticky',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 10,
+            backgroundColor: 'background.paper',
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            py: 2,
+            px: 3,
+            mx: -3,
+            mt: -1
+          }}>
+            <Typography variant="h6">
+              Your Assets ({assets.length})
+              {selectionMode && (
+                <Chip 
+                  label={`${selectedAssets.size} selected`} 
+                  size="small" 
+                  sx={{ ml: 1 }}
+                  color={selectedAssets.size > 0 ? "primary" : "default"}
                 />
-                
-                {/* Batch selection controls */}
-                {selectionMode ? (
-                  <>
-                    <Button
-                      size="small"
-                      onClick={handleSelectAll}
-                      startIcon={selectedAssets.size === filteredAssets.length ? <CheckBox /> : <CheckBoxOutlineBlank />}
-                    >
-                      {selectedAssets.size === filteredAssets.length ? 'Deselect All' : 'Select All'}
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="error"
-                      size="small"
-                      onClick={handleBatchDelete}
-                      disabled={selectedAssets.size === 0}
-                      startIcon={<DeleteOutline />}
-                    >
-                      Delete ({selectedAssets.size})
-                    </Button>
+              )}
+            </Typography>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <TextField
+                size="small"
+                placeholder="Search assets..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                InputProps={{
+                  startAdornment: <Search sx={{ color: 'action.active', mr: 1 }} />
+                }}
+              />
+              
+              {/* Batch selection controls */}
+              {selectionMode ? (
+                <>
+                  <Button
+                    size="small"
+                    onClick={handleSelectAll}
+                    startIcon={selectedAssets.size === filteredAssets.length ? <CheckBox /> : <CheckBoxOutlineBlank />}
+                  >
+                    {selectedAssets.size === filteredAssets.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="error"
+                    size="small"
+                    onClick={handleBatchDelete}
+                    disabled={selectedAssets.size === 0}
+                    startIcon={<DeleteOutline />}
+                  >
+                    Delete ({selectedAssets.size})
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={toggleSelectionMode}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {assets.length > 0 && (
                     <Button
                       variant="outlined"
                       size="small"
                       onClick={toggleSelectionMode}
+                      startIcon={<SelectAll />}
                     >
-                      Cancel
+                      Select
                     </Button>
-                  </>
-                ) : (
-                  <>
-                    {assets.length > 0 && (
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={toggleSelectionMode}
-                        startIcon={<SelectAll />}
-                      >
-                        Select
-                      </Button>
-                    )}
-                    <Button
-                      variant="contained"
-                      startIcon={<AddCircleOutline />}
-                      onClick={() => navigate('/upload')}
-                    >
-                      Create Asset
-                    </Button>
-                  </>
-                )}
-              </Box>
-            </Box>
-
-            {assetsLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : filteredAssets.length === 0 ? (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <Typography variant="body1" paragraph>
-                  No assets found.
-                </Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<AddCircleOutline />}
-                  onClick={() => navigate('/upload')}
-                >
-                  Create Your First Asset
-                </Button>
-              </Box>
-            ) : (
-              <Grid container spacing={3}>
-                {filteredAssets.map((asset) => (
-                  <Grid item xs={12} sm={6} md={4} key={asset._id || asset.id}>
-                    <Box 
-                      sx={{ 
-                        position: 'relative',
-                        cursor: selectionMode ? 'pointer' : 'default'
-                      }}
-                      onClick={selectionMode ? () => handleAssetSelect(asset.assetId) : undefined}
-                    >
-                      {selectionMode && (
-                        <Box
-                          sx={{
-                            position: 'absolute',
-                            bottom: 8,
-                            right: 8,
-                            zIndex: 1,
-                            backgroundColor: 'white',
-                            borderRadius: '4px',
-                            padding: '2px'
-                          }}
-                        >
-                          {selectedAssets.has(asset.assetId) ? (
-                            <CheckBox color="primary" />
-                          ) : (
-                            <CheckBoxOutlineBlank />
-                          )}
-                        </Box>
-                      )}
-                      <AssetCard 
-                        asset={asset} 
-                        sx={{ 
-                          border: selectionMode && selectedAssets.has(asset.assetId) 
-                            ? '2px solid' 
-                            : '1px solid transparent',
-                          borderColor: selectionMode && selectedAssets.has(asset.assetId) 
-                            ? 'primary.main' 
-                            : 'transparent',
-                          opacity: selectionMode && !selectedAssets.has(asset.assetId) ? 0.7 : 1
-                        }}
-                      />
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-            )}
-          </Box>
-        )}
-
-        {/* Recent Activity Tab */}
-        {tabValue === 1 && (
-          <Box sx={{ p: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">
-                Recent Transactions
-              </Typography>
-
-              {recentTransactions.length > 0 && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  endIcon={<Timeline />}
-                  onClick={() => navigate('/history')}
-                >
-                  View Full History
-                </Button>
+                  )}
+                  <Button
+                    variant="contained"
+                    startIcon={<AddCircleOutline />}
+                    onClick={() => navigate('/upload')}
+                  >
+                    Create Asset
+                  </Button>
+                </>
               )}
             </Box>
-
-            <TransactionsList
-              transactions={recentTransactions}
-              isLoading={isRecentLoading}
-            />
           </Box>
-        )}
+
+          {assetsLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : filteredAssets.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body1" paragraph>
+                No assets found.
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddCircleOutline />}
+                onClick={() => navigate('/upload')}
+              >
+                Create Your First Asset
+              </Button>
+            </Box>
+          ) : (
+            <Grid container spacing={3}>
+              {filteredAssets.map((asset) => (
+                <Grid item xs={12} sm={6} md={4} key={asset._id || asset.id}>
+                  <Box 
+                    sx={{ 
+                      position: 'relative',
+                      cursor: selectionMode ? 'pointer' : 'default'
+                    }}
+                    onClick={selectionMode ? () => handleAssetSelect(asset.assetId) : undefined}
+                  >
+                    {selectionMode && (
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          bottom: 8,
+                          right: 8,
+                          zIndex: 1,
+                          backgroundColor: 'white',
+                          borderRadius: '4px',
+                          padding: '2px'
+                        }}
+                      >
+                        {selectedAssets.has(asset.assetId) ? (
+                          <CheckBox color="primary" />
+                        ) : (
+                          <CheckBoxOutlineBlank />
+                        )}
+                      </Box>
+                    )}
+                    <AssetCard 
+                      asset={asset} 
+                      sx={{ 
+                        border: selectionMode && selectedAssets.has(asset.assetId) 
+                          ? '2px solid' 
+                          : '1px solid transparent',
+                        borderColor: selectionMode && selectedAssets.has(asset.assetId) 
+                          ? 'primary.main' 
+                          : 'transparent',
+                        opacity: selectionMode && !selectedAssets.has(asset.assetId) ? 0.7 : 1
+                      }}
+                    />
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        </Box>
       </Paper>
 
       {/* User Setup Dialog */}

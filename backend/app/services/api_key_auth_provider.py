@@ -37,8 +37,13 @@ class APIKeyAuthProvider:
             return None
         
         try:
-            # Check for API key in header
+            # Check for API key in header first
             api_key = request.headers.get("X-API-Key")
+            
+            # If not in header, check query parameter (for EventSource compatibility)
+            if not api_key:
+                api_key = request.query_params.get("key")
+            
             if not api_key:
                 return None
             

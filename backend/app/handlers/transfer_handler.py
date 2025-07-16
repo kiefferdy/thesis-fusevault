@@ -115,7 +115,7 @@ class TransferHandler:
                     "from": current_owner,
                     "to": new_owner,
                     "transaction_type": "TRANSFER_INITIATED",
-                    "blockchain_tx_hash": blockchain_tx_hash,
+                    "smartContractTxId": blockchain_tx_hash,
                     "notes": notes
                 }
                 
@@ -246,7 +246,7 @@ class TransferHandler:
                     "from": previous_owner,
                     "to": new_owner,
                     "transaction_type": "TRANSFER_COMPLETED",
-                    "blockchain_tx_hash": blockchain_tx_hash,
+                    "smartContractTxId": blockchain_tx_hash,
                     "notes": notes,
                     "new_document_id": version_result["document_id"],
                     "new_version": version_result["version_number"]
@@ -350,7 +350,7 @@ class TransferHandler:
                     "from": current_owner,
                     "to": pending_to,
                     "transaction_type": "TRANSFER_CANCELLED",
-                    "blockchain_tx_hash": blockchain_tx_hash,
+                    "smartContractTxId": blockchain_tx_hash,
                     "notes": notes
                 }
                 

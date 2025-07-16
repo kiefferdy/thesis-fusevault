@@ -35,30 +35,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAssets } from '../hooks/useAssets';
 import { toast } from 'react-hot-toast';
 
-// Function to check edit mode and delegation parameters
-function getEditModeInfo() {
-  const pathname = window.location.pathname;
-  const searchParams = new URLSearchParams(window.location.search);
-  
-  // Check if editing via URL path (/assets/:assetId/edit)
-  const isEditModeFromPath = pathname.includes('/edit');
-  const assetIdFromPath = isEditModeFromPath ? pathname.split('/')[2] : null;
-  
-  // Check if editing via URL params (?edit=assetId&delegate=ownerAddress)
-  const assetIdFromParams = searchParams.get('edit');
-  const delegateOwner = searchParams.get('delegate');
-  
-  // Determine if we're in edit mode
-  const isEditMode = isEditModeFromPath || assetIdFromParams;
-  const assetId = assetIdFromPath || assetIdFromParams;
-  
-  return { 
-    isEditMode, 
-    assetId, 
-    isDelegateMode: !!delegateOwner,
-    originalOwner: delegateOwner 
-  };
-}
 
 function UploadPage() {
   const [tabValue, setTabValue] = useState(0);
@@ -78,10 +54,6 @@ function UploadPage() {
   });
 
 
-  // Edit mode state
-  const [existingAsset, setExistingAsset] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   
   // Template creation ref
   const createTemplateRef = useRef(null);
@@ -93,44 +65,8 @@ function UploadPage() {
   const { uploadBatch, isBatchUploading } = useAssets();
   const navigate = useNavigate();
 
-  // Get edit mode info
-  const { isEditMode, assetId, isDelegateMode, originalOwner } = getEditModeInfo();
-
-  // Fetch existing asset data when in edit mode
-  useEffect(() => {
-    if (!isEditMode || !assetId) return;
-
-    const fetchAsset = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-        const response = await fetch(`${apiUrl}/retrieve/${assetId}`, {
-          credentials: 'include'
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch asset');
-        }
-
-        const data = await response.json();
-        setExistingAsset(data);
-      } catch (err) {
-        console.error('Error fetching asset:', err);
-        setError('Failed to load asset data');
-        toast.error('Error loading asset data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchAsset();
-  }, [isEditMode, assetId]);
 
   const handleTabChange = (event, newValue) => {
-    // Don't allow tab changes in edit mode
-    if (isEditMode) return;
     setTabValue(newValue);
   };
 
@@ -251,112 +187,61 @@ function UploadPage() {
   };
 
 
-  // Show loading state when fetching asset data for edit
-  if (isEditMode && loading) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4, textAlign: 'center' }}>
-        <CircularProgress />
-        <Typography variant="body1" mt={2}>
-          Loading asset data for editing...
-        </Typography>
-      </Container>
-    );
-  }
-
-  // Show error state if asset couldn't be loaded
-  if (isEditMode && error) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Alert severity="error">{error}</Alert>
-        <Box sx={{ mt: 2, textAlign: 'center' }}>
-          <Button variant="contained" onClick={() => navigate('/dashboard')}>
-            Back to Dashboard
-          </Button>
-        </Box>
-      </Container>
-    );
-  }
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Typography variant="h4" component="h1" gutterBottom>
-        {isEditMode ? 'Edit Asset' : 'Upload Assets'}
+        Upload Assets
       </Typography>
 
 
       <Paper sx={{ mb: 4 }}>
-        {/* Only show tabs when not in edit mode */}
-        {!isEditMode && (
-          <>
-            <Tabs
-              value={tabValue}
-              onChange={handleTabChange}
-              indicatorColor="primary"
-              textColor="primary"
-              variant="fullWidth"
-            >
-              <Tab label="Create Single Asset" />
-              <Tab label="Batch Upload" />
-            </Tabs>
-            <Divider />
-          </>
-        )}
+        <Tabs
+          value={tabValue}
+          onChange={handleTabChange}
+          indicatorColor="primary"
+          textColor="primary"
+          variant="fullWidth"
+        >
+          <Tab label="Create Single Asset" />
+          <Tab label="Batch Upload" />
+        </Tabs>
+        <Divider />
 
-        {/* Single Asset Form (or Edit Mode) */}
-        {(tabValue === 0 || isEditMode) && (
+        {/* Single Asset Form */}
+        {tabValue === 0 && (
           <Box sx={{ p: 3 }}>
-            {isEditMode ? (
-              <Alert severity="info" sx={{ mb: 3 }}>
-                You are editing an existing asset. Make your changes and click "Update Asset" to save.
-              </Alert>
-            ) : tabValue === 0 ? (
-              <Alert severity="info" sx={{ mb: 3 }}>
-                <Box>
-                  <Typography variant="body2" fontWeight="bold" gutterBottom>
-                    Creating an asset involves five phases:
-                  </Typography>
-                  <Box component="ol" sx={{ pl: 2, m: 0 }}>
-                    <li>
-                      <Typography variant="body2">The metadata is parsed and validated.</Typography>
-                    </li>
-                    <li>
-                      <Typography variant="body2">Critical metadata is stored on decentralized storage (IPFS).</Typography>
-                    </li>
-                    <li>
-                      <Typography variant="body2">The asset is logged on the blockchain.</Typography>
-                    </li>
-                    <li>
-                      <Typography variant="body2">The asset is stored on the database.</Typography>
-                    </li>
-                    <li>
-                      <Typography variant="body2">The transaction is recorded.</Typography>
-                    </li>
-                  </Box>
-                  <Typography variant="body2" sx={{ mt: 1.5, fontStyle: 'italic' }}>
-                    This process can take 1-3 minutes. Please wait for the confirmation.
-                  </Typography>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              <Box>
+                <Typography variant="body2" fontWeight="bold" gutterBottom>
+                  Creating an asset involves five phases:
+                </Typography>
+                <Box component="ol" sx={{ pl: 2, m: 0 }}>
+                  <li>
+                    <Typography variant="body2">The metadata is parsed and validated.</Typography>
+                  </li>
+                  <li>
+                    <Typography variant="body2">Critical metadata is stored on decentralized storage (IPFS).</Typography>
+                  </li>
+                  <li>
+                    <Typography variant="body2">The asset is logged on the blockchain.</Typography>
+                  </li>
+                  <li>
+                    <Typography variant="body2">The asset is stored on the database.</Typography>
+                  </li>
+                  <li>
+                    <Typography variant="body2">The transaction is recorded.</Typography>
+                  </li>
                 </Box>
-              </Alert>
-            ) : null}
+                <Typography variant="body2" sx={{ mt: 1.5, fontStyle: 'italic' }}>
+                  This process can take 1-3 minutes. Please wait for the confirmation.
+                </Typography>
+              </Box>
+            </Alert>
             <Box data-navigate onClick={() => navigate('/dashboard')} style={{ display: 'none' }} />
             <UploadFormWithSigning 
-              existingAsset={isEditMode ? existingAsset : null}
-              isDelegateMode={isDelegateMode}
-              originalOwner={originalOwner}
               onUploadSuccess={(result) => {
-                if (!isEditMode) {
-                  // Asset creation
-                  toast.success('Asset created successfully!');
-                } else {
-                  // Asset editing - use the explicit flag we added
-                  if (result && result.criticalMetadataUpdated === false) {
-                    // Only non-critical metadata changed
-                    toast.success('Asset updated successfully! (Only non-critical metadata changed)');
-                  } else {
-                    // Critical metadata changed or regular asset creation
-                    toast.success('Asset updated successfully!');
-                  }
-                }
+                toast.success('Asset created successfully!');
                 setTimeout(() => {
                   navigate('/dashboard');
                 }, 1000);
@@ -365,8 +250,8 @@ function UploadPage() {
           </Box>
         )}
 
-        {/* Enhanced Batch Upload - only show when not in edit mode and on batch tab */}
-        {!isEditMode && tabValue === 1 && (
+        {/* Enhanced Batch Upload */}
+        {tabValue === 1 && (
           <Box sx={{ p: 3 }}>
             <Alert severity="info" sx={{ mb: 3 }}>
               <div>

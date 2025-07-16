@@ -12,6 +12,7 @@ from app.services.asset_service import AssetService
 from app.repositories.transaction_repo import TransactionRepository
 from app.repositories.asset_repo import AssetRepository
 from app.database import get_db_client
+from app.utilities.auth_middleware import get_current_user, check_permission
 
 # Setup router
 router = APIRouter(
@@ -36,19 +37,26 @@ def get_transaction_handler(db_client=Depends(get_db_client)) -> TransactionHand
 async def get_asset_history(
     asset_id: str,
     version: Optional[int] = None,
-    transaction_handler: TransactionHandler = Depends(get_transaction_handler)
+    transaction_handler: TransactionHandler = Depends(get_transaction_handler),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    read_permission = Depends(check_permission("read"))
 ) -> TransactionHistoryResponse:
     """
     Get transaction history for a specific asset.
+    User must be authenticated with 'read' permission and be the owner or delegate of the asset.
     
     Args:
         asset_id: The asset ID to get history for
         version: Optional specific version to filter by
+        current_user: The authenticated user data
+        read_permission: Validates user has 'read' permission
         
     Returns:
         TransactionHistoryResponse containing transaction history for the asset
     """
-    result = await transaction_handler.get_asset_history(asset_id, version)
+    # Get initiator address for authorization
+    initiator_address = current_user.get("walletAddress")
+    result = await transaction_handler.get_asset_history(asset_id, version, initiator_address)
     return TransactionHistoryResponse(**result)
 
 @router.get("/wallet/{wallet_address}", response_model=WalletHistoryResponse)

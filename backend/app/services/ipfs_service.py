@@ -105,12 +105,23 @@ class IPFSService:
                     try:
                         metadata = json.loads(text_content)
                     except json.JSONDecodeError:
-                        # If we still can't parse it, return a minimal fallback
+                        # Try to fix common corruption patterns (e.g., trailing garbage)
                         logger.warning(f"Retrieved content is not valid JSON: {text_content[:100]}...")
-                        metadata = {
-                            "critical_metadata": {"recovered_content": text_content[:500]},
-                            "retrieval_error": "Content is not valid JSON"
-                        }
+                        
+                        import re
+                        # Attempt to fix trailing garbage by removing extra characters after the final }
+                        fixed_content = re.sub(r'\}[^}]*\}*$', '}', text_content)
+                        
+                        try:
+                            metadata = json.loads(fixed_content)
+                            logger.info(f"Successfully recovered corrupted JSON for CID: {cid}")
+                        except json.JSONDecodeError:
+                            # If all else fails, use fallback but log the full content for debugging
+                            logger.error(f"Cannot recover corrupted JSON. Full content: {text_content}")
+                            metadata = {
+                                "critical_metadata": {"recovered_content": text_content[:500]},
+                                "retrieval_error": "Content is not valid JSON"
+                            }
                 
                 logger.info(f"Successfully retrieved metadata from IPFS with CID: {cid}")
                 return metadata
