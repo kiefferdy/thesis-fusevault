@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any, List
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pymongo import ASCENDING, DESCENDING, IndexModel
 from pymongo.errors import DuplicateKeyError
 
@@ -50,7 +50,7 @@ class DelegationRepository:
             String ID of the upserted delegation
         """
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             
             # Prepare the update document
             update_doc = {
@@ -207,7 +207,7 @@ class DelegationRepository:
         try:
             update_doc = {
                 "isActive": is_active,
-                "updatedAt": datetime.utcnow()
+                "updatedAt": datetime.now(timezone.utc)
             }
             
             if transaction_hash:

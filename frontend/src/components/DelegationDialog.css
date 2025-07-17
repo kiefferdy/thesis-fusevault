@@ -132,8 +132,13 @@
 }
 
 /* Delegation Management (for already delegated users) */
-.delegation-management {
-  space-y: 1.5rem;
+
+.delegation-management > * {
+  margin-bottom: 1.5rem;
+}
+
+.delegation-management > *:last-child {
+  margin-bottom: 0;
 }
 
 .current-status {
@@ -250,7 +255,7 @@
   z-index: 0;
 }
 
-.step-indicator {
+.delegation-step-indicator {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -274,12 +279,12 @@
   transition: all 0.3s ease;
 }
 
-.step-indicator.active .step-number {
+.delegation-step-indicator.active .step-number {
   background-color: #2196f3;
   color: white;
 }
 
-.step-indicator.current .step-number {
+.delegation-step-indicator.current .step-number {
   background-color: #1976d2;
   transform: scale(1.1);
 }
@@ -291,11 +296,11 @@
   font-weight: 500;
 }
 
-.step-indicator.active .step-label {
+.delegation-step-indicator.active .step-label {
   color: #2196f3;
 }
 
-.step-indicator.current .step-label {
+.delegation-step-indicator.current .step-label {
   color: #1976d2;
   font-weight: 600;
 }
@@ -580,7 +585,7 @@
     display: none;
   }
   
-  .step-indicator {
+  .delegation-step-indicator {
     flex-direction: row;
     max-width: none;
     text-align: left;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { toast } from 'react-hot-toast';
 import { useDelegation } from '../hooks/useDelegation';
@@ -385,7 +385,7 @@ const DelegationDialog = ({
                 {steps.map((step, index) => (
                   <div 
                     key={index}
-                    className={`step-indicator ${index <= activeStep ? 'active' : ''} ${index === activeStep ? 'current' : ''}`}
+                    className={`delegation-step-indicator ${index <= activeStep ? 'active' : ''} ${index === activeStep ? 'current' : ''}`}
                   >
                     <div className="step-number">{index + 1}</div>
                     <div className="step-label">{step.label}</div>

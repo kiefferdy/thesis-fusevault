@@ -1,3 +1,4 @@
+from datetime import timezone
 from typing import Optional, Dict, Any
 import logging
 from fastapi import HTTPException
@@ -575,8 +576,14 @@ class RetrieveHandler:
             
             # Convert datetime objects to ISO strings if needed
             if hasattr(created_at, 'isoformat'):
+                # Ensure timezone consistency - if timezone-naive, assume UTC
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=timezone.utc)
                 created_at = created_at.isoformat()
             if hasattr(updated_at, 'isoformat'):
+                # Ensure timezone consistency - if timezone-naive, assume UTC
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=timezone.utc)
                 updated_at = updated_at.isoformat()
             
             # 9. Prepare response
@@ -1065,8 +1072,14 @@ class RetrieveHandler:
             
             # Convert datetime objects to ISO strings if needed
             if hasattr(created_at, 'isoformat'):
+                # Ensure timezone consistency - if timezone-naive, assume UTC
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=timezone.utc)
                 created_at = created_at.isoformat()
             if hasattr(updated_at, 'isoformat'):
+                # Ensure timezone consistency - if timezone-naive, assume UTC
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=timezone.utc)
                 updated_at = updated_at.isoformat()
             
             # 9. Prepare response

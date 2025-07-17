@@ -306,11 +306,17 @@ class AssetService:
                 
                 # Convert datetime objects to ISO strings if needed
                 if hasattr(created_at, 'isoformat'):
+                    # Ensure timezone consistency - if timezone-naive, assume UTC
+                    if created_at.tzinfo is None:
+                        created_at = created_at.replace(tzinfo=timezone.utc)
                     created_at = created_at.isoformat()
                 
                 # Handle updated_at conversion
                 updated_at = asset.get("lastUpdated", "")
                 if hasattr(updated_at, 'isoformat'):
+                    # Ensure timezone consistency - if timezone-naive, assume UTC
+                    if updated_at.tzinfo is None:
+                        updated_at = updated_at.replace(tzinfo=timezone.utc)
                     updated_at = updated_at.isoformat()
                 
                 # Format the asset data to match frontend expectations

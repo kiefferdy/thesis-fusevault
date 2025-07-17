@@ -175,7 +175,7 @@ async def get_recent_transactions(
     try:
         result = await transaction_handler.get_wallet_history(
             wallet_address=wallet_address, 
-            include_all_versions=False,
+            include_all_versions=True,
             limit=limit
         )
         return WalletHistoryResponse(**result)
