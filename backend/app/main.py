@@ -14,6 +14,8 @@ from app.api.assets_routes import router as assets_router
 from app.api.api_keys_routes import router as api_keys_router
 from app.api.blockchain_routes import router as blockchain_router
 from app.api.delegation_routes import router as delegation_router
+from app.api.performance_routes import router as performance_router
+from app.api.ipfs_baseline_routes import router as ipfs_baseline_router
 from app.utilities.auth_middleware import AuthMiddleware
 
 # Configure logging
@@ -99,7 +101,9 @@ api_routers = [
     assets_router,
     api_keys_router,
     blockchain_router,
-    delegation_router
+    delegation_router,
+    performance_router,
+    ipfs_baseline_router
 ]
 
 # Add all routers to the app
