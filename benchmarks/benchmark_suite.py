@@ -21,7 +21,7 @@ from pymongo import MongoClient
 from dotenv import load_dotenv
 import sys
 from web3 import Web3
-from bigchaindb_simple import BigchainDBBenchmark
+# BigchainDB import will be added after setup
 
 load_dotenv()
 
@@ -416,8 +416,8 @@ class EnhancedFuseVaultBenchmarker:
         # Initialize baseline tester
         self.baseline_tester = BaselinePerformanceTester(config, self.logger)
         
-        # Initialize BigchainDB benchmark
-        self.bigchaindb_benchmark = BigchainDBBenchmark()
+        # BigchainDB benchmark will be initialized after setup
+        self.bigchaindb_benchmark = None
         
         if self.logger:
             self.logger.info(f"Initialized Enhanced FuseVault benchmarker for wallet: {config['wallet_address']}")
