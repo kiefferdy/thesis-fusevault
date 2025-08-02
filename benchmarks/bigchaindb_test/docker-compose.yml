@@ -1,0 +1,48 @@
+version: '3.7'
+
+services:
+  bigchaindb:
+    image: bigchaindb/bigchaindb:2.2.2
+    container_name: bigchaindb_test
+    ports:
+      - "59984:9984"  # BigchainDB API port
+      - "58080:8080"  # BigchainDB WebSocket port
+    environment:
+      BIGCHAINDB_DATABASE_BACKEND: localmongodb
+      BIGCHAINDB_DATABASE_HOST: mongodb
+      BIGCHAINDB_DATABASE_PORT: 27017
+      BIGCHAINDB_DATABASE_NAME: bigchaindb
+      BIGCHAINDB_SERVER_BIND: 0.0.0.0:9984
+      BIGCHAINDB_WSSERVER_HOST: 0.0.0.0
+      BIGCHAINDB_WSSERVER_PORT: 8080
+    depends_on:
+      - mongodb
+      - tendermint
+    volumes:
+      - ./bigchaindb_data:/data
+    command: bigchaindb start
+
+  mongodb:
+    image: mongo:4.4
+    container_name: bigchaindb_mongodb
+    ports:
+      - "27018:27017"  # Different port to avoid conflicts
+    volumes:
+      - ./mongodb_data:/data/db
+    command: mongod --replSet=bigchain-rs
+
+  tendermint:
+    image: tendermint/tendermint:v0.31.12
+    container_name: bigchaindb_tendermint
+    ports:
+      - "26656:26656"
+      - "26657:26657"
+    volumes:
+      - ./tendermint_data:/tendermint
+    command: |
+      sh -c "
+        if [ ! -f /tendermint/config/genesis.json ]; then
+          tendermint init
+        fi
+        tendermint node --consensus.create_empty_blocks=false
+      "

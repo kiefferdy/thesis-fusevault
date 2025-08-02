@@ -21,6 +21,7 @@ from pymongo import MongoClient
 from dotenv import load_dotenv
 import sys
 from web3 import Web3
+from bigchaindb_simple import BigchainDBBenchmark
 
 load_dotenv()
 
@@ -322,11 +323,17 @@ class BaselinePerformanceTester:
                                 # Step 2: Store CID on blockchain (minimal contract)
                                 asset_id = f"baseline_eth_{i}_{uuid.uuid4().hex[:8]}"
                                 
-                                nonce = self.web3.eth.get_transaction_count(self.wallet_address)
+                                # Get fresh nonce and gas price for each transaction
+                                nonce = self.web3.eth.get_transaction_count(self.wallet_address, 'pending')
+                                
+                                # Use higher gas price to avoid "underpriced" errors
+                                base_gas_price = self.web3.eth.gas_price
+                                gas_price = int(base_gas_price * 1.2)  # 20% higher
+                                
                                 tx = self.contract.functions.storeCID(asset_id, cid).build_transaction({
                                     'from': self.wallet_address,
                                     'nonce': nonce,
-                                    'gasPrice': self.web3.eth.gas_price,
+                                    'gasPrice': gas_price,
                                     'gas': 200000,  # Much lower than FuseVault
                                 })
                                 
@@ -336,6 +343,9 @@ class BaselinePerformanceTester:
                                 
                                 tx_hash = self.web3.eth.send_raw_transaction(raw_tx)
                                 receipt = self.web3.eth.wait_for_transaction_receipt(tx_hash)
+                                
+                                # Small delay to prevent nonce collisions
+                                await asyncio.sleep(0.5)
                                 
                                 operation_time = (time.time() - operation_start) * 1000
                                 latencies.append(operation_time)
@@ -406,6 +416,9 @@ class EnhancedFuseVaultBenchmarker:
         # Initialize baseline tester
         self.baseline_tester = BaselinePerformanceTester(config, self.logger)
         
+        # Initialize BigchainDB benchmark
+        self.bigchaindb_benchmark = BigchainDBBenchmark()
+        
         if self.logger:
             self.logger.info(f"Initialized Enhanced FuseVault benchmarker for wallet: {config['wallet_address']}")
             self.logger.debug(f"API Base URL: {self.api_base_url}")
@@ -414,6 +427,7 @@ class EnhancedFuseVaultBenchmarker:
                 self.logger.debug("Baseline testing (IPFS + Ethereum) enabled")
             else:
                 self.logger.debug("Baseline testing limited to IPFS-only (no blockchain config)")
+            self.logger.debug("BigchainDB comparison enabled")
     
     def _get_auth_headers(self) -> Dict[str, str]:
         return {
@@ -899,6 +913,41 @@ class EnhancedFuseVaultBenchmarker:
         else:
             print("   WARNING: Skipping IPFS + Ethereum baseline (blockchain not configured)")
         
+        # BigchainDB baseline
+        print(f"\nBigchainDB Baseline Test ({baseline_operations} operations)")
+        
+        # Create test data for BigchainDB
+        bigchain_test_data = []
+        for i in range(baseline_operations):
+            bigchain_test_data.append({
+                'title': f'BigchainDB Test Asset {i}',
+                'document_type': 'benchmark_test',
+                'category': 'performance_testing',
+                'creation_date': datetime.now().isoformat(),
+                'test_data': 'x' * baseline_data_size,
+                'test_size_bytes': baseline_data_size
+            })
+        
+        bigchain_result = await self.bigchaindb_benchmark.run_upload_test(
+            bigchain_test_data, duration=30
+        )
+        if bigchain_result:
+            # Convert to match our result format
+            bigchain_formatted = {
+                'test_type': 'bigchaindb_baseline',
+                'operations': bigchain_result['completed_operations'],
+                'clients': 1,
+                'data_size_bytes': baseline_data_size,
+                'total_time_seconds': bigchain_result['duration'],
+                'tps': bigchain_result['tps'],
+                'avg_latency_ms': bigchain_result['avg_response_time'] * 1000,  # Convert to ms
+                'success_rate': bigchain_result['success_rate'] / 100,  # Convert to decimal
+                'scenario': 'Baseline',
+                'timestamp': datetime.now().isoformat()
+            }
+            self.results.append(bigchain_formatted)
+            print(f"   TPS: {bigchain_result['tps']:.2f} | Latency: {bigchain_result['avg_response_time']*1000:.0f}ms | Success: {bigchain_result['success_rate']:.1f}%")
+        
         print(f"\nFUSEVAULT PERFORMANCE TESTS")
         print("=" * 40)
         
@@ -975,6 +1024,7 @@ class EnhancedFuseVaultBenchmarker:
         fullstack_results = [r for r in self.results if r['test_type'] == 'full_stack_performance']
         ipfs_baseline_results = [r for r in self.results if r['test_type'] == 'ipfs_baseline_performance']
         eth_baseline_results = [r for r in self.results if r['test_type'] == 'ipfs_ethereum_baseline_performance']
+        bigchain_baseline_results = [r for r in self.results if r['test_type'] == 'bigchaindb_baseline']
         
         # Print performance summary with more numbers
         if query_results:
@@ -1085,6 +1135,34 @@ class EnhancedFuseVaultBenchmarker:
                     print(f"   Business Logic Overhead: ~{overhead_latency:.0f}ms ({overhead_latency/1000:.1f}s)")
                 elif upload_results:
                     print("   Cannot compare: IPFS+Ethereum baseline failed (0 TPS)")
+            
+            if bigchain_baseline_results:
+                bigchain_baseline = bigchain_baseline_results[0]  # Should only be one
+                print(f"\nBigchainDB Baseline:")
+                print(f"   TPS: {bigchain_baseline['tps']:.2f}")
+                print(f"   Latency: {bigchain_baseline['avg_latency_ms']:.0f}ms ({bigchain_baseline['avg_latency_ms']/1000:.1f}s)")
+                print(f"   Success: {bigchain_baseline['success_rate']:.1%}")
+                
+                # Compare to FuseVault upload performance
+                if upload_results and bigchain_baseline['tps'] > 0:
+                    fusevault_avg_tps = statistics.mean([r['tps'] for r in upload_results])
+                    fusevault_avg_latency = statistics.mean([r['avg_latency_ms'] for r in upload_results])
+                    
+                    tps_ratio = fusevault_avg_tps / bigchain_baseline['tps']
+                    latency_ratio = fusevault_avg_latency / bigchain_baseline['avg_latency_ms'] if bigchain_baseline['avg_latency_ms'] > 0 else 0
+                    
+                    print(f"   vs FuseVault Upload: {tps_ratio:.2f}x TPS, {latency_ratio:.2f}x Latency")
+                    
+                    if tps_ratio > 1:
+                        print(f"   SUCCESS: FuseVault is {tps_ratio:.2f}x FASTER than BigchainDB!")
+                    else:
+                        print(f"   NOTE: BigchainDB is {1/tps_ratio:.2f}x faster than FuseVault")
+                    
+                    # Architecture comparison analysis
+                    print(f"   Architecture: Both use MongoDB + Blockchain hybrid design")
+                    print(f"   FuseVault Benefits: IPFS distribution, MetaMask UX, enterprise features")
+                elif upload_results:
+                    print("   Cannot compare: BigchainDB baseline failed (0 TPS)")
         
         # Save detailed results
         full_report = {
@@ -1095,7 +1173,7 @@ class EnhancedFuseVaultBenchmarker:
                 "benchmark_version": "clean_v1.0"
             },
             "performance_results": self.results,
-            "test_focus": "IPFS vs IPFS+Ethereum vs FuseVault comparison"
+            "test_focus": "IPFS vs IPFS+Ethereum vs BigchainDB vs FuseVault comparison"
         }
         
         with open(output_file, 'w') as f:
@@ -1209,6 +1287,33 @@ async def main():
                     benchmarker.results.append(eth_result)
             else:
                 print("WARNING: Blockchain not configured, skipping IPFS+Ethereum baseline")
+            
+            # BigchainDB baseline
+            bigchain_test_data = []
+            for i in range(10):
+                bigchain_test_data.append({
+                    'title': f'BigchainDB Baseline Test Asset {i}',
+                    'test_data': 'x' * 8192,
+                    'test_size_bytes': 8192
+                })
+            
+            bigchain_result = await benchmarker.bigchaindb_benchmark.run_upload_test(
+                bigchain_test_data, duration=20
+            )
+            if bigchain_result:
+                bigchain_formatted = {
+                    'test_type': 'bigchaindb_baseline',
+                    'operations': bigchain_result['completed_operations'],
+                    'clients': 1,
+                    'data_size_bytes': 8192,
+                    'total_time_seconds': bigchain_result['duration'],
+                    'tps': bigchain_result['tps'],
+                    'avg_latency_ms': bigchain_result['avg_response_time'] * 1000,
+                    'success_rate': bigchain_result['success_rate'] / 100,
+                    'scenario': 'Baseline',
+                    'timestamp': datetime.now().isoformat()
+                }
+                benchmarker.results.append(bigchain_formatted)
         
         else:
             # Default: single scenario test
