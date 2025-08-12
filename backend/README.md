@@ -68,8 +68,11 @@ Choose your preferred setup method:
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Install dependencies  
+# Install dependencies
 pip install -r requirements.txt
+
+# Windows users should instead use:
+pip install -r requirements_windows.txt
 
 # Copy environment configuration
 cp .env.example .env
@@ -241,6 +244,37 @@ python -c "from app.database import db_client; print(db_client.admin.command('pi
 3. Implement business logic in service layer
 4. Add repository methods if needed
 5. Define Pydantic schemas for validation
+
+### Adding New Dependencies
+The project uses pip-tools for dependency management:
+
+1. Add the package to `requirements.in`:
+   ```bash
+   # Add your dependency to the appropriate section
+   echo "new-package-name" >> requirements.in
+   ```
+
+2. Compile requirements for both platforms:
+   ```bash
+   # Generate requirements.txt (macOS/Linux)
+   pip-compile requirements.in
+
+   # Generate requirements_windows.txt
+   pip-compile --platform-tag win_amd64 requirements.in -o requirements_windows.txt
+   ```
+
+3. Sync your environment with the updated requirements:
+   ```bash
+   # Install new dependencies and remove unused ones
+   pip-sync requirements.txt
+   
+   # Or use traditional pip install (but pip-sync is recommended)
+   pip install -r requirements.txt
+   ```
+
+**Note**: 
+- `pip-sync` ensures your environment exactly matches the requirements file by removing unused packages
+- Always commit both `requirements.txt` and `requirements_windows.txt` when adding dependencies to ensure cross-platform compatibility
 
 ### Database Migrations
 MongoDB is schemaless, but for consistency:
