@@ -1,83 +1,189 @@
-# FuseVault API
+# FuseVault
 
-FuseVault API combines the power of blockchain, IPFS, and traditional storage to mitigate the limitations of on-chain storage while maintaining security and decentralization.
+FuseVault is a digital asset management platform that uses a hybrid storage approach combining MongoDB, IPFS, and Ethereum blockchain. The system consists of four main components that work together to provide asset storage, authentication, and integrity verification.
 
-## Running the API
+## System Architecture
 
-### For Windows:
-- Make sure Python is installed on your computer
-- Create a virtual environment with `python -m venv venv`
-- Activate the virtual environment by running `venv/Scripts/activate`
-- Install dependencies with `pip install -r requirements_windows.txt`
-- Create a `.env` file in the root project folder, then add the [required environment variables](#required-environment-variables)
-- Run the FastAPI server with `uvicorn app.main:app --reload`
-- Access the server on `http://127.0.0.1:8000/` (default setting)
-- Once finished, run `deactivate` to exit the virtual environment
+The platform uses a microservice architecture with the following components:
 
-### For macOS:
-- Make sure Python is installed on your computer
-- Create a virtual environment with `python3 -m venv venv`
-- Activate the virtual environment by running `source venv/bin/activate`
-- Install dependencies with `pip install -r requirements_mac.txt`
-- Create a `.env` file in the root project folder, then add the [required environment variables](#required-environment-variables)
-- Install SSL certificates on your system using `/Applications/Python\ 3.x/Install\ Certificates.command` (replace 3.x with your Python version)
-- Run the FastAPI server with `uvicorn app.main:app --reload`
-- Access the server on `http://127.0.0.1:8000/` (default setting)
-- Once finished, run `deactivate` to exit the virtual environment
+- **Backend (FastAPI)**: Main API server handling business logic, authentication, and data coordination
+- **Frontend (React)**: Web interface for user interactions and asset management
+- **Web3 Storage Service (Node.js)**: IPFS operations and file storage via Web3.Storage
+- **Blockchain (Solidity)**: Smart contracts for ownership verification and delegation
 
-### To view API documentation and test routes:
-- Access the server on default URL: `http://127.0.0.1:8000/docs`
+### How Components Interact
 
-### To add and install dependencies:
-- Add the new dependency in a new line to `requirements.in`
-- If you are on Windows, run `pip-compile requirements.in -o requirements_windows.txt` (ensure you are in the virtual environment)
-- If you are on macOS, run `pip-compile requirements.in -o requirements_mac.txt` (ensure you are in the virtual environment)
-- Run `pip-sync requirements_windows.txt` or `pip-sync requirements_mac.txt` depending on your OS
+1. **Frontend** connects to **Backend** for all user operations
+2. **Backend** coordinates data across three storage layers:
+   - MongoDB for operational data and queries
+   - IPFS (via Web3 Storage Service) for content storage
+   - Ethereum blockchain for ownership and integrity verification
+3. **Web3 Storage Service** handles IPFS operations independently
+4. **Smart contracts** provide the authoritative source of truth for asset ownership
 
-## Running the Web3.Storage Microservice
-- Make sure Node.js is installed on your computer
-- Navigate to the `web3-storage-service/` directory
-- Install dependencies with `npm install`
-- Create a `.env` file in the root project folder, then add the [required environment variables](#required-environment-variables)
-- Run the microservice with `npm run start`
-- Access the microservice on `http://127.0.0.1:8080/` (default setting)
+## Directory Structure
 
-## Deploying the Smart Contract
+```
+fusevault/
+├── backend/               # FastAPI application
+├── frontend/              # React web application  
+├── web3-storage-service/  # Node.js IPFS service
+├── blockchain/            # Solidity smart contracts
+└── README.md             # This file
+```
 
-Follow these steps to deploy the smart contract:
+## Prerequisites
 
-1. Download MetaMask.
+- Node.js 18+
+- Python 3.9+
+- MongoDB
+- MetaMask browser extension
+- Web3.Storage account
 
-2. Set up your MetaMask wallet:
-   - Switch to the Sepolia Testnet in your MetaMask settings.
-   - Export your private key:
-     - Go to your wallet settings → Security & Privacy → Export Private Key.
-     - Copy your private key.
+## Setup
 
-3. Set up the `.env` file with the [required environment variables](#required-environment-variables).
+Choose your preferred setup method:
 
-4. Open Remix IDE:
-   - In the Deploy & Run Transactions panel:
-     - Choose **Injected Provider - MetaMask** as your environment.
-     - Ensure your MetaMask wallet is connected.
+### Option 1: Local Development Setup
 
-5. Open `CIDstorage.sol`:
-   - Save it and then deploy
-   - Retrieve the Contract Address (After deployment, expand the deployed contract in Remix IDE)
+#### 1. Environment Configuration
 
-6. Copy the contract address and paste it into your `.env` file.
+Each component needs its own `.env` file. Copy the `.env.example` files in each directory and configure them according to your environment.
 
-7. Start the server with `uvicorn app.main:app --reload`.
+#### 2. Backend Setup
 
-**Note to Thesis Team**: If you'd prefer to use the pre-deployed smart contract, use the discussed `.env` variables.
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env
+# Configure your .env file
+uvicorn app.main:app --reload
+```
 
-## Required Environment Variables
+The backend will run on http://localhost:8000
 
-```env
-MONGO_URI=[Insert MongoDB URI]
-WALLET_ADDRESS=[Insert your MetaMask wallet address]
-PRIVATE_KEY=[Insert your private key]
-INFURA_URL=[Insert the Infura URL]
-CONTRACT_ADDRESS=[Insert the smart contract address]
-WEB3_STORAGE_DID_KEY=[Insert the Web3.Storage DID key]
-WEB3_STORAGE_EMAIL=[Insert the Web3.Storage account email]
+#### 3. Web3 Storage Service Setup
+
+```bash
+cd web3-storage-service
+npm install
+cp .env.example .env
+# Configure your .env file with Web3.Storage credentials
+npm start
+```
+
+The service will run on http://localhost:8080
+
+#### 4. Frontend Setup
+
+```bash
+cd frontend
+npm install
+cp .env.example .env
+# Configure your .env file
+npm run dev
+```
+
+The frontend will run on http://localhost:3001
+
+#### 5. Smart Contract Deployment
+
+```bash
+cd blockchain
+npm install
+cp .env.example .env
+# Configure your .env file with wallet and RPC details
+npx hardhat compile
+npx hardhat run scripts/deploy.js --network sepolia
+```
+
+Update your backend `.env` file with the deployed contract address.
+
+### Option 2: Docker Setup
+
+#### Quick Start with Docker Compose
+
+```bash
+# Configure environment files (same as Option 1)
+# Copy .env.example files in each component directory
+
+# Start all services for development
+docker-compose up
+
+# Start specific services
+docker-compose up backend web3-storage
+
+# Production deployment
+docker-compose -f docker-compose.prod.yml up
+```
+
+#### Services Included
+
+- **Backend**: FastAPI service with Hypercorn server (port 8000)
+- **Frontend**: React app served via Nginx (port 3001)
+- **Web3 Storage**: Node.js IPFS service (port 8080)
+- **Redis**: Optional caching and rate limiting (development only)
+
+**Note**: You'll still need to deploy smart contracts separately using the blockchain setup commands from Option 1.
+
+## Configuration
+
+Each service requires specific environment variables. See the `.env.example` files in each directory for required configuration:
+
+- **backend/.env**: Database, blockchain, JWT, and service URLs
+- **frontend/.env**: Backend API URL
+- **web3-storage-service/.env**: Web3.Storage authentication
+- **blockchain/.env**: Wallet and RPC configuration
+
+## Running Tests
+
+```bash
+# Backend tests
+cd backend && python -m pytest
+
+# Frontend tests
+cd frontend && npm test
+
+# Smart contract tests
+cd blockchain && npx hardhat test
+```
+
+## Development Workflow
+
+### Local Development
+1. Start MongoDB locally
+2. Start the Web3 Storage Service
+3. Start the Backend API
+4. Start the Frontend development server
+5. Deploy smart contracts to testnet
+6. Update backend configuration with contract address
+
+### Docker Development
+1. Configure environment files
+2. Run `docker-compose up` to start all services
+3. Deploy smart contracts separately (step 5-6 from local development)
+
+## API Documentation
+
+Once the backend is running, API documentation is available at:
+- http://localhost:8000/docs (Swagger UI)
+- http://localhost:8000/redoc (ReDoc)
+
+## Authentication
+
+The system supports two authentication methods:
+- MetaMask wallet signatures (for web interface)
+- API keys (for programmatic access)
+
+Both methods integrate with the blockchain delegation system for permission management.
+
+## Component Documentation
+
+For detailed setup and configuration instructions for each component:
+
+- [Backend README](backend/README.md) - FastAPI service setup and configuration
+- [Frontend README](frontend/README.md) - React application development and building
+- [Web3 Storage Service README](web3-storage-service/README.md) - IPFS service setup and deployment
+- [Blockchain README](blockchain/README.md) - Smart contract deployment and testing
