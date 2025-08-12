@@ -36,7 +36,7 @@ services:
           ignore:
             - __pycache__/
         - action: rebuild
-          path: ./backend/requirements_mac.txt
+          path: ./backend/requirements.txt
 
   # Web3 Storage Service
   web3-storage:
